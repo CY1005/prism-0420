@@ -4,6 +4,7 @@
 **定稿日期**：—
 **档位**：B
 **关联**：`design/00-architecture/04-layer-architecture.md`、`design/00-architecture/06-design-principles.md`、`design/adr/ADR-001-shadow-prism.md`
+**宏观讲解**（为什么这么定）：知识库 `/root/cy/ai-quality-engineering/02-技术/架构设计/工程规约7条详解-AI时代工程素养基石.md`
 
 ---
 
@@ -574,6 +575,12 @@ def get_module(self, user_id, module_id):
 
 **约定**：[Conventional Commits 1.0](https://www.conventionalcommits.org/)
 
+**本项目的务实调整**（保留与现有仓库一致的中文习惯）：
+- **type + scope 强制必填**（机器可解析的元数据层，不可省）
+- **subject 保留中文为主风格**（延续 prism-0420 仓库现有 commit 历史习惯，单人项目可读性更好）
+- 不强制英文动词原型——中文用动词开头即可
+- 跟随仓库已有风格（如 `docs(arch): 06-design-principles 定稿`）
+
 ### 6.1 格式
 
 ```
@@ -608,10 +615,11 @@ def get_module(self, user_id, module_id):
 ### 6.4 subject 规则
 
 - ≤72 字符
-- 动词原型开头（add / fix / remove，不用 added / fixed）
-- 首字母小写
 - 末尾不加句号
-- **中英文皆可**，但**单个 commit 内统一**（不混用）
+- **中文为主风格**（延续 prism-0420 仓库现有习惯，如 `fix(reviewer-r3): 处理第三轮 reviewer 4 个问题`）
+- 中文时：用动词开头（"新增"/"修复"/"删除"/"重构"），避免名词化
+- 英文时：用动词原型（add / fix / remove，不用 added / fixed）、首字母小写
+- 中英混用允许但不推荐（可读性差）
 
 ### 6.5 breaking change
 
@@ -633,16 +641,22 @@ Migration required for existing data.
 ### 6.7 反例
 
 ```
-# ❌ 无 type
+# ❌ 无 type（缺机器可解析的元数据）
 "add module create API"
+"添加 module create API"
 
-# ❌ type 错
-"update(m01): fix bug"     # update 不在清单
+# ❌ 无 scope（无法按模块过滤）
+"feat: add module create API"
+"feat: 新增模块创建接口"
 
-# ❌ subject 写"什么"不写"做啥"
+# ❌ type 不在清单
+"update(m01): fix bug"
+
+# ❌ subject 名词化（没有动作）
 "feat(m05): module changes"
+"feat(m05): 模块变更"
 
-# ❌ 中英混用
+# ⚠️ 中英混用（不禁止，但可读性差）
 "feat(m05): 添加 module create API"
 ```
 
