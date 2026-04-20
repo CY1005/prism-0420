@@ -31,7 +31,7 @@
 - [x] 03-tech-stack.md（含双 ORM 风险评估）
 - [x] 04-layer-architecture.md（含权限中间件、事务边界）
 - [x] 05-module-catalog.md（建 M 编号体系 + 多人影响标注）
-- [ ] 06-design-principles.md（≤5 条硬约束）
+- [x] 06-design-principles.md（≤5 条硬约束）
 - [ ] adr/ADR-001-shadow-prism.md（基础 4 节）
 - [ ] adr/ADR-001 多人架构核心预设（M1/B1/B2）
 
