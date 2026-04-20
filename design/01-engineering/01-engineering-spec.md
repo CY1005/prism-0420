@@ -1068,11 +1068,187 @@ squash merge 时 squash commit 的 subject 沿用 PR title（不拼接 PR 内部
 ---
 
 ## 9. Git 分支策略（B）
+
+**适用范围**：全部
+
+**呼应**：规约 6（commit）、规约 8（PR 流程）
+
+### 9.1 设计要点
+
+- 分支模型：**GitHub Flow**（main 唯一长命分支 + feature branch 短命）
+- 不用 git-flow：prism-0420 无版本发布周期（不是 SaaS 产品的 rolling release / 也不是软件包的 semver release）
+- main 受保护：禁直推 + PR 必需 + CI 必过 + self-review checklist（规约 8）
+- 分支生命周期短：AI 实现单模块应在 3-5 天内合回 main
+
+### 9.2 分支模型示意
+
+```
+main     o────o────o────o────o────o────o──── ... （唯一长命，只接受 squash merge）
+          \    \         \         \
+           o────o         o────o    o────o
+           feat/m01       fix/m05   docs/adr-002
+           （短命，合并即删）
+```
+
+**禁止的反模式**：
+- ❌ develop / release / staging 等中间分支
+- ❌ 个人长命分支（`feat/my-experiments`）
+- ❌ 按环境分支（`prod` / `dev`——环境用部署配置区分，不用分支）
+
+### 9.3 分支命名
+
+格式：`<type>/<scope>-<slug>` 或 `<type>/<slug>`
+
+| 前缀 | 用途 | 示例 |
+|------|-----|------|
+| `feat/` | 新功能 | `feat/m01-create-module` |
+| `fix/` | bug 修复 | `fix/m05-tenant-filter` |
+| `docs/` | 文档 | `docs/adr-002-queue-choice` |
+| `refactor/` | 重构 | `refactor/m03-extract-validation` |
+| `chore/` | 杂项（依赖升级等） | `chore/bump-arq-0.26` |
+| `test/` | 测试代码 | `test/m02-empty-state-cases` |
+| `hotfix/` | 紧急修复 | `hotfix/m02-tenant-leak` |
+
+**规则**：
+
+- type 与 commit 规约（第 6 条）一致
+- scope 可选；用时必须对应 commit scope（`m01`-`m20` / `api` / `web` / `infra` / `docs` / `design`）
+- slug：kebab-case，2-5 词，说明"做什么决定"
+- 总长度 ≤ 50 字符
+
+**反例**：
+
+```
+❌ my-feature          无 type
+❌ test123             无意义
+❌ fix                 无 slug
+❌ feat/M01            scope 大写（应 m01）
+❌ feat/m01_create     下划线（应 kebab-case）
+❌ feat/m01-and-m05    一分支多模块（违反"一分支一模块"）
+```
+
+### 9.4 分支生命周期
+
+标准流程（6 步）：
+
+1. **拉出**：从最新 main `git checkout -b feat/m01-create-module main`
+2. **推远**：`git push -u origin feat/m01-create-module`（第一次 push 时加 `-u` 追踪）
+3. **开 PR**：可先 Draft（代码未完整）
+4. **迭代**：commit + push，CI 跑，Draft 中持续改
+5. **合并**：checklist 6 项全勾 + CI 绿 + `Ready for review` → squash merge
+6. **清理**：GitHub 开启 `auto-delete head branches`，合并后自动删远端分支；本地 `git branch -d feat/m01-create-module`
+
+**AI 实现节奏参考**：单模块从拉分支到合并 3-5 天收口。
+
+### 9.5 main 分支保护规则
+
+GitHub 仓库 Settings → Branches → Add rule 的强制项：
+
+| 规则 | 启用 | 原因 |
+|------|------|------|
+| Require a pull request before merging | ✅ | 禁止直推，强制 PR（规约 8） |
+| Require status checks to pass before merging | ✅ | CI 必绿（ruff / mypy / eslint / tsc / 分层 lint） |
+| Require branches to be up to date before merging | ✅ | 合并前必须 rebase 到最新 main（减少合并后 CI 红） |
+| Require conversation resolution before merging | ✅ | PR review 评论必须 resolve |
+| Require linear history | ✅ | 配合 squash merge，main 无 merge commit |
+| Do not allow bypassing the above settings | ✅ | 管理员也不例外（单人项目自律关键） |
+| Require signed commits | ❌ | 可选，单人项目先不强制 |
+| Required approving reviewers | **0** | 单人项目用 self-review checklist（规约 8）替代；未来扩多人改为 1 |
+
+**关键差异（与标准 GitHub Flow 的区别）**：
+- Required approving reviewers = 0 是**刻意选择**：单人项目靠 checklist，不是靠人 review
+- 未来扩多人时改 1 即可，流程不变
+
+### 9.6 hotfix 流程
+
+prism-0420 **无 release 分支**，hotfix 走 feature 流程：
+
+1. 从 main 拉 `hotfix/xxx`（不从其他分支拉）
+2. 修 + 测 + PR（PR title 标 `fix` 或 `hotfix` type）
+3. PR description 开头写"紧急"说明（原因、受影响范围、回滚方案）
+4. **checklist 6 项仍全勾 + CI 仍必绿**（紧急不等于绕过质量门）
+5. squash merge
+
+**禁止**：
+- ❌ 紧急修 → 跳 CI 直推 main（branch protection 会拦）
+- ❌ 紧急修 → 跳过 checklist（紧急恰恰是最容易出错的时刻）
+
+### 9.7 长命分支禁令
+
+| 存活时长 | 处理 |
+|---------|------|
+| ≤ 1 周 | 默认正常 |
+| 1-2 周 | PR 描述说明进度 |
+| 2-4 周 | PR 描述"为什么长命"必填 + 拆分可行性评估 |
+| > 4 周 | 应拆分或废弃重建（远离 main 的分支易积累合并冲突） |
+
+**AI 实现场景观察指标**：
+- 单模块分支存活 > 2 周 → AI 卡在某问题 / 设计拆得不够细 / 人工 review 跟不上
+- 这个时长是"AI 开发效率"的**可量化信号**
+
+### 9.8 禁止模式
+
+```
+❌ 直推 main（branch protection 会拦，但禁止尝试）
+git push origin main                    # 在 feature branch 上
+
+❌ force push 到 main
+git push --force origin main
+
+❌ 一分支多模块
+feat/m01-and-m05-rewrite
+
+❌ 在 feature branch 上直接 merge main 回来（制造 merge commit）
+git merge main                          # 应该 rebase：git rebase main
+
+❌ 长期 stash 工作（不可见、易丢）
+git stash; git stash; git stash         # 应该 WIP commit 推远程
+
+❌ 分支命名无 type
+my-cool-feature
+```
+
+### 9.9 强制方式
+
+| 手段 | 覆盖 | 失败后果 |
+|------|------|---------|
+| GitHub branch protection on `main` | 直推 / 非 PR / CI 未过 | push / 合并阻塞 |
+| 分支命名 Action（可选，如 `deepakputhraya/action-branch-name`）| 命名格式校验 | PR 阻塞 |
+| GitHub repo 设置 "Automatically delete head branches" | 合并后远端分支 | 自动删除，无冗余 |
+| `git config --local pull.rebase true` | pull 默认 rebase | 减少 merge commit |
+| PR template 提示长命分支 | 人工自律 | 软提示（未来可加 Action 扫描） |
+
+### 9.10 AI 实现时的分支建议
+
+AI 开单个模块的典型流程：
+
+```
+# 1. 从最新 main 开分支
+git checkout main && git pull
+git checkout -b feat/m01-create-module
+
+# 2. AI 按目录顺序生成（规约 1 的 10 步）
+#    每 2-3 个文件一个 commit（见规约 6）
+
+# 3. 每次 commit 后 push 保持远程同步
+git push
+
+# 4. 开 Draft PR，持续看 CI 反馈
+
+# 5. 模块完成 → checklist 6 项勾过 → Ready for review → squash merge
+```
+
+**关键纪律**：
+- 一个 PR 不跨模块（跨模块 = 对照数据混乱）
+- 分支名 = 模块名 = commit scope，三轴对齐
+
+---
+
 ## 10. 依赖管理（B）
 ## 11. 文档维护规约（B）
 ## 12. 类型安全门槛（B）
 
-> B-09 起待后续填充
+> B-10 起待后续填充
 
 ---
 
