@@ -99,16 +99,130 @@
 
 ---
 
-## 多人架构核心预设（待 #13 填写）
+## 多人架构核心预设（回应 reviewer M1 / B1 / B2）
 
-> 回应 reviewer M1 / B1 / B2 反馈，追加以下节点：
-> - 并发策略（乐观锁 vs last-write-wins）
-> - Redis Queue worker 数（单进程 vs 多进程）
-> - space_id 形态（nullable 外键 vs 预留列）
-> - AI Provider 抽象的统一接口签名 + 失败重试 + 切换条件
-> - Redis Queue 任务失败策略（失败感知 + 重试次数 + 超时）
+这节记录的是 **schema 级 / 架构级决策**——现在不定清楚，未来改动成本极高。
 
-当前状态：占位，待档位 A 的 ADR-001 多人架构预设节填写完成。
+### 预设 1：并发策略 — 乐观锁（version 字段）
+
+- 任何可能并发编辑的实体必须有 `version: int` 字段
+- 更新时 `WHERE version = expected`，影响行数 0 则抛 ConflictError
+- 冲突处理：前端弹窗"数据已被他人修改，请刷新后重试"
+
+**为什么不选悲观锁**：
+- Prism 的维度编辑多人同时发生概率低
+- 悲观锁的"一人编辑时其他人卡住"体验差
+- DB 连接锁耗尽风险高
+
+**适用对象**（示例）：
+- `dimension_records`（Prism 已有 version 字段）
+- `features` / `projects` / `version_records` 等有编辑场景的实体
+
+### 预设 2：Redis Queue Worker 数 — 可配置，本期 = 1
+
+- 配置项 `WORKER_COUNT`（环境变量或 config.py）
+- 本期默认 1（单进程）
+- 未来开放多人 / 负载增加时改成 2+，无需代码改动
+
+```python
+# config.py
+WORKER_COUNT = int(os.getenv("WORKER_COUNT", "1"))
+
+# worker_manager.py
+for i in range(WORKER_COUNT):
+    Worker(queue_name="ai_tasks").start()
+```
+
+### 预设 3：space_id 形态 — 预留列无 FK
+
+- 所有 project 相关表预留 `space_id INT NULL` 字段
+- 本期不建 spaces 表，不加 FK 约束
+- 未来加空间层迁移步骤：
+  1. 建 spaces 表
+  2. 批量为现有记录填 space_id
+  3. Alembic 迁移加 FK 约束
+
+**为什么不选 nullable 外键**：要求 spaces 表现在就存在（即使空的），违反 YAGNI。
+
+```python
+class Project(Base):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    space_id: Mapped[Optional[int]]  # 预留，无 FK
+```
+
+### 预设 4：AI Provider 抽象设计
+
+#### 4.1 接口签名 — 流式 + 同步双支持
+
+```python
+class LLMProvider:
+    def generate(self, prompt: str) -> str:
+        """同步：返回完整结果"""
+        ...
+
+    async def stream(self, prompt: str) -> AsyncIterator[str]:
+        """流式：逐字返回"""
+        ...
+```
+
+- **交互式 AI 功能**（F13 / F12 / F14）用 `stream()`——用户盯着屏幕等，避免空白焦虑
+- **后台任务**（F17 导入 worker）用 `generate()`——用户不在等，不需要流式复杂度
+
+#### 4.2 失败重试 — 3 次指数退避 1s/2s/4s
+
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3),
+       wait=wait_exponential(min=1, max=4))
+def call_provider(provider, prompt):
+    return provider.generate(prompt)
+```
+
+**原因**：业界标准，Claude / OpenAI / Kimi 瞬时错误通常 1-4 秒内恢复。
+
+#### 4.3 Provider 自动切换 — 不自动切换
+
+- 用户配置什么 Provider 就用什么
+- Provider 失败 → 直接抛错给用户
+- 用户手动切换 Provider（UI 里选）
+
+**原因**：自动降级会隐藏真实故障（用户以为 Claude 能用，实际一直在用 DeepSeek）。
+
+### 预设 5：Redis Queue 任务失败策略
+
+#### 5.1 失败感知 — 用户轮询任务状态
+
+- 前端每 5 秒 `GET /api/tasks/{task_id}`
+- 任务状态：`pending` / `processing` / `success` / `failed`
+- 失败时响应带 `error` 信息
+
+**未来扩展**（不在本期）：WebSocket 推送。
+
+#### 5.2 重试策略 — 指数退避 1min/10min/1h
+
+```python
+RETRY_DELAYS = [60, 600, 3600]  # 秒
+# 第 1 次失败 → 等 1 分钟 → 重试
+# 第 2 次失败 → 等 10 分钟 → 重试
+# 第 3 次失败 → 等 1 小时 → 最后一次重试
+# 3 次都失败 → 标记 failed，用户感知
+```
+
+**原因**：AI API 瞬时错误可能需要几分钟到一小时恢复，指数退避给足够窗口。
+
+#### 5.3 超时时间 — 按任务类型配置
+
+```python
+TASK_TIMEOUTS = {
+    "ai_import": 30 * 60,        # 30 分钟：zip 解析 + AI 分析可能长
+    "need_analysis": 5 * 60,     # 5 分钟：单需求分析
+    "ai_snapshot": 10 * 60,      # 10 分钟：版本历史生成
+    "ai_embedding": 15 * 60,     # 15 分钟：批量 embedding
+}
+```
+
+**原因**：统一超时要么浪费（短任务等太久才能重试）要么不够（长任务被截断）。
 
 ---
 
@@ -119,5 +233,5 @@
 - [x] Decision 6 个关键决策点
 - [x] Consequences 正向 4 条 + 负向 4 条（含真实风险）
 - [x] Alternatives 3 方案各有否决理由
-- [ ] 多人架构核心预设节（待 #13 完成）
-- [x] AI 完整性质疑通过（基础 4 节）
+- [x] 多人架构核心预设 5 项（9 个子决策）
+- [x] AI 完整性质疑通过
