@@ -1245,10 +1245,279 @@ git push
 ---
 
 ## 10. 依赖管理（B）
+
+**适用范围**：全部
+
+**呼应**：规约 3（Python 风格 / ruff 选型）、规约 8（PR 审批清单）
+
+### 10.1 设计要点
+
+| 维度 | 选型 | 理由 |
+|------|------|------|
+| Python 包管理 | **uv** + `pyproject.toml` + `uv.lock` | Rust 写，比 pip 快 10-100×；与 ruff 同源（astral-sh）；PEP 621 标准；内建 Python 版本管理（免 pyenv） |
+| TS 包管理 | **pnpm** + `package.json` + `pnpm-lock.yaml` | 严格依赖隔离（禁止幽灵依赖，防 AI 用未显式声明的 transitive dep）；共享 store 省磁盘 5-10×；比 npm 快 2-3× |
+| Lock 文件 | **必须提交** | 可复现性基础 |
+| 依赖扫描 | CI 强制 | 漏洞不等人工发现 |
+
+### 10.2 Python 依赖管理（uv）
+
+**配置**（`pyproject.toml`）：
+
+```toml
+[project]
+name = "prism-0420-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "arq>=0.26",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",  # pytest 下的 TestClient
+]
+
+[tool.uv]
+package = true
+```
+
+**常用命令**：
+
+| 操作 | 命令 |
+|------|------|
+| 安装环境 | `uv sync` |
+| 加依赖 | `uv add fastapi` |
+| 加 dev 依赖 | `uv add --dev pytest` |
+| 升级单个包 | `uv lock --upgrade-package fastapi` |
+| 升级所有 | `uv lock --upgrade` |
+| 运行命令 | `uv run pytest` / `uv run ruff check .` |
+| 安装 Python | `uv python install 3.12` |
+| 生成 requirements | `uv export --no-hashes > requirements.txt`（CI Docker 场景） |
+
+**禁止**：
+- ❌ `pip install xxx`（绕开 uv，lock 失效）
+- ❌ 直接改 `uv.lock` 手工编辑
+- ❌ 提交 `requirements.txt` 作为真相源（应从 pyproject.toml 生成）
+
+### 10.3 TypeScript 依赖管理（pnpm）
+
+**配置**（`web/package.json`）：
+
+```json
+{
+  "name": "prism-0420-web",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": { },
+  "devDependencies": { }
+}
+```
+
+**常用命令**：
+
+| 操作 | 命令 |
+|------|------|
+| 安装 | `pnpm install` |
+| CI 严格安装 | `pnpm install --frozen-lockfile` |
+| 加依赖 | `pnpm add next` |
+| 加 dev 依赖 | `pnpm add -D vitest` |
+| 升级 | `pnpm update` |
+| 升级单个 | `pnpm update next` |
+| 运行脚本 | `pnpm run dev` / `pnpm dev` |
+| 审计 | `pnpm audit --audit-level high` |
+
+**严格依赖隔离**（pnpm 核心价值）：
+
+```
+package.json 只声明了 next
+→ 代码 import "react" 时：
+  - npm：能跑（react 是 next 的 transitive dep，node_modules 里有）
+  - pnpm：报错 Module not found（未显式声明）
+```
+
+这是 AI 代码质量的关键护栏：AI 常写"没装但能用"的 import，pnpm 会在**开发期**就暴露问题，而不是某天依赖树变了才崩。
+
+**禁止**：
+- ❌ `npm install` / `yarn add`（生成不兼容的 lock）
+- ❌ 混用多个包管理器（`package-lock.json` + `pnpm-lock.yaml` 并存）
+- ❌ `pnpm i --no-frozen-lockfile` 在 CI（会默默修改 lock）
+
+### 10.4 新增依赖审批清单
+
+**每次 `uv add` / `pnpm add` 前**，在 PR 描述里勾过以下 5 项（写进 PR template 的"改动点"段附注）：
+
+- [ ] **维护状态**：GitHub 最近 6 个月有 commit / 不是 archived / 不是 unmaintained
+- [ ] **License 合规**：MIT / Apache-2.0 / BSD / ISC 直接 OK；GPL / AGPL / 商用协议需先起 ADR 评估
+- [ ] **安装量**：PyPI `downloads/month > 10k`（边缘 1k-10k 需说明）；npm `weekly downloads > 50k`（边缘 5k-50k 需说明）
+- [ ] **替代品评估**：已有依赖能做吗？30 行手写能做吗？—— 能则不装
+- [ ] **必要性说明**：一句话——"为什么这个依赖值得带来这些维护债"
+
+**触发场景**：
+- `uv add xxx` 或 `pnpm add xxx` 直接依赖
+- 升级 major 版本（等同新增风险）
+- devDependencies 也要走（测试框架切换影响整个项目）
+
+### 10.5 版本约束策略
+
+**Python（`pyproject.toml`）**：
+
+```toml
+dependencies = [
+    "fastapi>=0.115",      # 主流库用下限 + 主版本号自动隐含
+    "sqlalchemy>=2.0,<3",  # 明确主版本边界（防 major 升级意外）
+    "arq>=0.26,<0.27",     # 0.x 包的 minor 视同 major（保守）
+]
+```
+
+规则：
+- 1.x 及以上库：`>=X.Y`（允许 minor + patch 升）
+- 0.x 库：`>=X.Y,<X.(Y+1)`（每个 minor 视同 major，保守锁）
+- `uv.lock` 锁死所有**间接依赖**具体版本
+
+**TypeScript（`package.json`）**：
+
+```json
+{
+  "dependencies": {
+    "next": "^16.2",            // 允许 patch + minor
+    "react": "19.2.4",          // 精确锁（框架级，不随便升）
+    "zod": "^4.3"               // 主流库允许 minor
+  }
+}
+```
+
+规则：
+- 框架层（next / react / typescript）：精确或 minor 锁
+- 工具层（zod / lodash）：允许 minor
+- `pnpm-lock.yaml` 锁死间接依赖
+
+### 10.6 升级策略
+
+| 变更类型 | 频率 | 触发 | 处理 |
+|---------|------|------|------|
+| **安全补丁** | 立即 | Dependabot / audit 报高危 | 自动 PR（dependabot），24h 内合并 |
+| **Patch 升级** | 月度 | 手动 | `uv lock --upgrade` / `pnpm update` |
+| **Minor 升级** | 季度 | 手动 | 读 changelog → 升 → 跑全量测试 |
+| **Major 升级** | 按需 | 需要新 feature / 停维护 | 起 ADR 评估 breaking change → 分离 PR |
+
+**关键纪律**：
+- 绝不"借着加新功能顺手升 major 依赖"——升级必须独立 PR
+- Major 升级 PR 描述必须含：changelog 摘要 / breaking change 清单 / 迁移方案
+
+### 10.7 依赖扫描
+
+**CI 强制项**：
+
+| 扫描 | 命令 | 阻塞级别 |
+|------|------|---------|
+| Lock 一致性（Python） | `uv lock --check` | PR 阻塞 |
+| Lock 一致性（TS） | `pnpm install --frozen-lockfile` | PR 阻塞 |
+| 漏洞扫描（Python） | `uv tool run pip-audit --disable-pip` | high/critical 阻塞 |
+| 漏洞扫描（TS） | `pnpm audit --audit-level high` | high/critical 阻塞 |
+| GitHub Dependency Review | Action | PR 新增依赖含漏洞阻塞 |
+| Dependabot alerts | 自动开 PR | 24h 内合并 |
+
+**建议开启**：
+- GitHub repo Settings → Security → Dependabot alerts + security updates
+- GitHub repo Settings → Security → Dependency graph
+
+### 10.8 禁止模式
+
+```
+❌ 全局安装项目依赖
+pip install fastapi                 # 应 uv add
+npm install -g next                 # 不需要
+
+❌ 绕开包管理器
+pip install xxx                     # 应 uv add
+yarn add xxx                        # 应 pnpm add
+
+❌ 不提交 lock
+.gitignore 里写 uv.lock             # 严重违规
+.gitignore 里写 pnpm-lock.yaml      # 严重违规
+
+❌ 手改 lock 文件
+vim uv.lock                         # 破坏确定性
+
+❌ git 依赖
+"some-pkg": "git+https://..."       # 除非 ADR 明确记录
+
+❌ 混用包管理器
+package-lock.json + pnpm-lock.yaml 并存
+
+❌ CI 用非严格模式
+pnpm install                        # 在 CI 应 --frozen-lockfile
+```
+
+### 10.9 强制方式
+
+| 手段 | 覆盖 | 失败后果 |
+|------|------|---------|
+| CI: `uv lock --check` | Python lock 与 pyproject.toml 一致 | PR 阻塞 |
+| CI: `pnpm install --frozen-lockfile` | TS lock 与 package.json 一致 | PR 阻塞 |
+| CI: `pip-audit` / `pnpm audit` | 已知漏洞 | high/critical 阻塞 |
+| GitHub Dependency Review Action | PR 新增依赖风险评估 | 高危阻塞 |
+| `.gitignore` 显式 **不** 忽略 lock | 强制提交 | 人工 review |
+| `engines` + `packageManager` 字段 | Node/pnpm 版本锁定 | 用错工具会报错 |
+| PR 描述"新增依赖清单" | 5 项审批勾选 | 软强制（review 时核） |
+| Dependabot | 自动 PR 升级 | 手动决定合/不合 |
+
+### 10.10 AI 实现时的依赖纪律
+
+**AI 最常的错误模式**：
+- "为了这个功能，我需要装 `some-helper-lib`"—— 90% 情况不需要
+- 无 License 审查 —— AI 不检查也不会主动提醒
+- 装完就用，不问替代方案
+
+**规约执行时的强制点**：
+1. AI 建议装包 → 人工走审批清单 5 项
+2. 每项打钩 / 叉 / 注明理由，留在 PR 描述
+3. 勾不过 → 不装
+4. 装完 PR → CI 跑漏洞扫描
+
+### 10.11 反例
+
+```python
+# ❌ 代码里 import 一个未在 pyproject.toml 声明的包
+import requests  # 但 pyproject.toml 没 requests（借用 transitive dep）
+# → 应先 uv add requests 再用
+```
+
+```typescript
+// ❌ import 一个 transitive 依赖
+import lodash from "lodash";  // package.json 没 lodash
+// pnpm 会直接报错（幽灵依赖防护生效）
+// → 应先 pnpm add lodash
+```
+
+---
+
 ## 11. 文档维护规约（B）
 ## 12. 类型安全门槛（B）
 
-> B-10 起待后续填充
+> B-11 起待后续填充
 
 ---
 
