@@ -85,26 +85,39 @@ prism-0420/
 │   ├── src/components/
 │   │   ├── ui/                    # shadcn/ui 原子组件
 │   │   └── business/              # 业务组件
-│   ├── src/lib/                   # 工具函数 + 类型
+│   ├── src/lib/                   # 工具函数 + 类型（kebab-case 文件）
 │   ├── src/contexts/              # React Context
 │   ├── src/errors/                # 错误码（从后端 OpenAPI 同步生成）
-│   └── src/types/api.ts           # OpenAPI codegen 输出（不手写）
+│   ├── src/types/api.ts           # OpenAPI codegen 输出（不手写）
+│   ├── src/**/*.test.ts(x)        # vitest 测试文件（与源文件同目录，.test 后缀）
+│   ├── package.json
+│   └── pnpm-lock.yaml             # 依赖锁（必须提交，见规约 10）
 │
-├── docs/                          # 项目文档
-│   ├── adr/                       # 架构决策（ADR-NNN-题目.md）
+├── docs/                          # 项目文档（所有 MD 含 frontmatter，见规约 11.3）
+│   ├── adr/                       # 架构决策（ADR-NNN-题目.md，accepted 后不可改）
 │   ├── architecture/              # 技术架构（arc42 格式）
 │   ├── product/                   # PRD
 │   └── skills/                    # 开发触发型 skills
 │
-├── design/                        # 设计前置文档（本目录）
+├── design/                        # 设计前置文档（所有 MD 含 frontmatter，见规约 11.3）
 │   ├── 00-architecture/           # 档位 A：架构骨架
 │   ├── 01-engineering/            # 档位 B：工程规约
 │   ├── 02-modules/                # 档位 C：模块详细设计（M01-M20）
 │   ├── 99-comparison/             # 与 Prism 对照报告
 │   └── adr/                       # 设计阶段 ADR
 │
+├── .github/                       # GitHub 配置
+│   ├── workflows/                 # CI 工作流（见规约 3/4/10/12 的 CI 强制项）
+│   └── pull_request_template.md   # PR 模板（见规约 8.7）
+│
 ├── scripts/                       # 工具脚本（部署 / 数据迁移 / 验证）
-└── tests/                         # 跨服务集成测试（前后端联调）
+├── tests/                         # 跨服务集成测试（前后端联调）
+│
+├── pyproject.toml                 # Python 项目配置（[project]/[tool.ruff]/[tool.mypy]，见规约 3/10/12）
+├── uv.lock                        # Python 依赖锁（必须提交，见规约 10）
+├── docker-compose.yml             # 本地开发环境（PostgreSQL / Redis）
+├── .gitignore
+└── README.md                      # 项目入口
 ```
 
 **每目录的"禁止做什么"**：
@@ -116,7 +129,9 @@ prism-0420/
 | `api/services/` | 直接 SQL、直接 HTTP（必须经 dao 或 queue）、直接读 env |
 | `api/dao/` | 业务判断（"if 状态 == X then..."）、跨表 JOIN（除非显式标注理由） |
 | `api/models/` | 业务方法（如 `def can_edit()`）—— 业务逻辑放 service |
-| `api/schemas/` | 业务方法、SQLAlchemy import |
+| `api/schemas/` | 业务方法、SQLAlchemy import、从其他层反向 import |
+| `api/queue/` | 业务逻辑（task 体应调 service）、直查 DB（经 dao）、跨 task 直接调用 |
+| `api/errors/` | 业务逻辑、SQLAlchemy / FastAPI import（纯错误定义层） |
 | `web/src/app/` | 直接调 dao / 直接 SQL |
 | `web/src/actions/` | 业务逻辑（必须调 services 或 fetch FastAPI） |
 | `web/src/components/` | 直接调 dao 或写 SQL |
@@ -193,7 +208,7 @@ prism-0420/
 | 表名 | snake_case 复数 | `modules`、`activity_logs` |
 | 字段名 | snake_case | `created_at`、`user_id` |
 | 主键 | `id`（统一） | `id: int` |
-| 外键 | `{表单数}_id` | `module_id`、`user_id` |
+| 外键 | `{表单词}_id` | `module_id`、`user_id` |
 | 时间字段 | `_at` 后缀 | `created_at`、`updated_at`、`deleted_at` |
 | 布尔字段 | `is_` / `has_` 前缀 | `is_archived`、`has_attachment` |
 | JSON 字段 | `_json` 后缀（可选，明确类型时） | `metadata_json` |
@@ -248,11 +263,15 @@ CREATE TABLE Module (id INT, CreatedAt TIMESTAMP);   -- 应 snake_case 复数
 
 **适用范围**：后端
 
-**工具**：**仅用 ruff**（formatter + linter 一体，不引入 black / flake8 / isort）
+**工具**：
+- 格式化 + lint：**仅用 ruff**（formatter + linter 一体，不引入 black / flake8 / isort）
+- 类型检查：**mypy strict**（详见规约 12）—— 本节只覆盖格式/lint；类型注解的静态检查见规约 12.2
 
 理由：ruff 包含 ruff format（black 兼容）+ 所有主流 lint 规则，速度快 10-100 倍，配置一份。
 
 ### 3.1 ruff 配置（`pyproject.toml`）
+
+> **注**：本节只展示 `[tool.ruff]` 节。完整 `pyproject.toml`（含 `[project]` / `[dependency-groups]` / `[tool.mypy]`）见规约 10.2 + 规约 12.2。
 
 ```toml
 [tool.ruff]
@@ -271,15 +290,18 @@ select = [
     "UP",   # pyupgrade（用新语法）
     "S",    # flake8-bandit（安全）
     "ASYNC",# flake8-async（async 误用）
+    "ANN",  # flake8-annotations（类型注解强制，支撑规约 12 mypy strict）
     "RUF",  # ruff 专属规则
 ]
 ignore = [
-    "S101", # 允许 assert（测试用）
-    "E501", # line-length 由 formatter 处理
+    "S101",    # 允许 assert（测试用）
+    "E501",    # line-length 由 formatter 处理
+    "ANN101",  # self 不需要类型注解
+    "ANN102",  # cls 不需要类型注解
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S", "N802"]   # 测试可用 assert / 测试函数命名宽松
+"tests/**/*.py" = ["S", "N802", "ANN"]   # 测试可用 assert / 测试函数命名 + 注解宽松
 
 [tool.ruff.format]
 quote-style = "double"            # 强制双引号
@@ -377,6 +399,7 @@ def create_module(
 ```javascript
 import { FlatCompat } from "@eslint/eslintrc";
 import tseslint from "typescript-eslint";
+import importPlugin from "eslint-plugin-import";
 
 const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 
@@ -384,6 +407,9 @@ export default [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   ...tseslint.configs.recommendedTypeChecked,
   {
+    plugins: {
+      import: importPlugin,
+    },
     rules: {
       "@typescript-eslint/no-explicit-any": "error",        // 禁止 any
       "@typescript-eslint/no-unused-vars": "error",
@@ -395,9 +421,16 @@ export default [
         { selector: "variable", format: ["camelCase", "PascalCase", "UPPER_CASE"] },
         { selector: "function", format: ["camelCase", "PascalCase"] },
         { selector: "typeLike", format: ["PascalCase"] },
+        { selector: "enumMember", format: ["UPPER_CASE"] },   // 枚举值 SCREAMING_SNAKE
       ],
       "no-console": ["error", { allow: ["warn", "error"] }], // 禁止 console.log
       "react-hooks/exhaustive-deps": "error",
+      "import/order": ["error", {                             // 4.3 import 顺序强制
+        "groups": ["builtin", "external", "internal", ["parent", "sibling"], "type"],
+        "newlines-between": "always",
+        "alphabetize": { "order": "asc", "caseInsensitive": true },
+      }],
+      "import/no-duplicates": "error",
     },
   },
 ];
@@ -506,6 +539,27 @@ type = "forbidden"
 source_modules = ["api.routers"]
 forbidden_modules = ["api.models", "api.dao"]
 # Router 必须经 Service 拿数据
+
+[[importlinter.contracts]]
+name = "Schemas are independent data models"
+type = "forbidden"
+source_modules = ["api.schemas"]
+forbidden_modules = ["api.routers", "api.services", "api.dao", "api.models", "api.queue"]
+# schemas 只被 import，不 import 其他层（纯 Pydantic 数据模型层）
+
+[[importlinter.contracts]]
+name = "Queue is only invoked from services"
+type = "forbidden"
+source_modules = ["api.routers"]
+forbidden_modules = ["api.queue"]
+# Router 禁直接调 Queue，必须经 Service（保证事务边界 + activity_log 责任归属）
+
+[[importlinter.contracts]]
+name = "Errors layer is framework-independent"
+type = "forbidden"
+source_modules = ["api.errors"]
+forbidden_modules = ["api.routers", "api.services", "api.dao", "api.models", "api.queue", "fastapi", "sqlalchemy"]
+# errors/ 是纯错误定义层，不 import 任何业务层和框架
 ```
 
 **TypeScript（eslint-plugin-boundaries）**：
@@ -597,6 +651,7 @@ def get_module(self, user_id, module_id):
 |------|------|------|
 | `feat` | 新功能 | `feat(m01): add module create API` |
 | `fix` | bug 修复 | `fix(m05): correct tenant filter in DAO` |
+| `hotfix` | 紧急修复（从 main 拉 `hotfix/` 分支，走加速流程，见规约 9.6）| `hotfix(m02): 紧急修复 tenant 过滤泄漏` |
 | `docs` | 文档变更 | `docs(adr): add ADR-002 queue choice` |
 | `style` | 格式调整（无业务变化） | `style(api): apply ruff format` |
 | `refactor` | 重构（无功能变化） | `refactor(m03): extract validation logic` |
@@ -814,6 +869,39 @@ async def app_error_handler(request, exc: AppError):
         },
     )
 ```
+
+**SQLAlchemy 原生异常的 wrap（IntegrityError 场景）**：
+
+唯一约束冲突、外键约束、NOT NULL 违反等是高频场景，Service 层必须捕获并 wrap：
+
+```python
+from sqlalchemy.exc import IntegrityError
+
+def create_module(self, user_id: int, project_id: int, payload: ModuleCreate) -> Module:
+    try:
+        m = self.dao.create_module(self.db, user_id, project_id, payload)
+        self.db.commit()
+    except IntegrityError as e:
+        self.db.rollback()
+        # 通过约束名或 SQLSTATE 精确分辨冲突类型
+        msg = str(e.orig)
+        if "uq_modules_project_id_name" in msg:     # 业务唯一约束：项目内模块名不重复
+            raise ModuleNameDuplicateError(
+                project_id=project_id, name=payload.name
+            ) from e
+        if "fk_modules_project_id" in msg:          # 外键约束：project 不存在
+            raise ProjectNotFoundError(project_id=project_id) from e
+        # 未识别的完整性错误 → 通用 ConflictError（不要裸 raise）
+        raise ConflictError() from e
+    self.activity.log(user_id, "module.create", m.id)
+    return m
+```
+
+**纪律**：
+- DAO 抛 `IntegrityError` 不 wrap（保留原始栈）
+- Service 捕获 + 根据约束名分辨 + 抛具体 AppError 子类
+- 未识别的 IntegrityError 一律抛 `ConflictError`，禁止裸传到 Router
+- 每个业务唯一约束对应一个 ErrorCode（如 `MODULE_NAME_DUPLICATE`），登记在 `api/errors/codes.py`
 
 ### 7.5 前端错误处理（与后端 1:1 对应）
 
