@@ -1733,7 +1733,377 @@ accepted: 2026-04-18
 
 ## 12. 类型安全门槛（B）
 
-> B-12 待后续填充
+**适用范围**：全部
+
+**呼应**：规约 3（Python 风格）、规约 4（TS 风格）、规约 7（错误处理 / ErrorCode 枚举）、规约 11（OpenAPI 作为前后端类型真相源）
+
+### 12.1 设计要点
+
+| 维度 | 选型 | 理由 |
+|------|------|------|
+| Python 类型检查 | **mypy 全项目 strict**（`tests/` 放宽） | FastAPI + Pydantic + SQLAlchemy 官方对齐；strict 覆盖面广；避免"分级导致的 Any 污染传染" |
+| TS 类型检查 | **tsc strict: true + noUncheckedIndexedAccess + exactOptionalPropertyTypes** | 基线 strict 已含 8 项；额外 2 项拦住 AI 最常犯的 `array[0].method()` 和 optional 字段语义混淆 |
+| 前后端类型闭环 | **OpenAPI → codegen → `web/src/types/api.ts`** | 禁手写；前端 zod 在 Server Action 层二次校验 |
+| Pydantic | API 边界（router 入参 / 出参）必用 | 运行时校验（编译期类型 + 运行期 schema 双重保证） |
+| 逃生口 | `any` / `Any` / `# type: ignore` / `@ts-expect-error` 必须带注释 + TODO | 局部债务必须可追溯 |
+
+### 12.2 Python 类型检查（mypy 全 strict）
+
+**配置**（`pyproject.toml`）：
+
+```toml
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["api"]
+exclude = [
+    "alembic/versions",   # 自动生成，不强制
+]
+plugins = [
+    "pydantic.mypy",       # Pydantic 模型识别
+    "sqlalchemy.ext.mypy.plugin",  # SQLAlchemy 2.0 已内建类型支持，此插件兼容性好
+]
+
+# tests 放宽（测试里 assert 时类型推断常失败，不强制）
+[[tool.mypy.overrides]]
+module = "api.tests.*"
+disallow_untyped_defs = false        # 测试函数允许无返回类型
+disallow_incomplete_defs = false
+check_untyped_defs = true            # 但 body 仍要类型正确
+warn_return_any = false
+```
+
+**strict 模式包含的关键检查**（mypy `--strict`）：
+
+| 检查项 | 作用 |
+|-------|------|
+| `disallow_untyped_defs` | 禁止无类型注解的函数 |
+| `disallow_incomplete_defs` | 禁止部分注解（有参数无返回或反之） |
+| `check_untyped_defs` | 即便函数无注解也检查 body |
+| `disallow_untyped_decorators` | 禁止无类型的装饰器 |
+| `no_implicit_optional` | `def f(x: int = None)` 报错（应 `int \| None`） |
+| `warn_redundant_casts` | 多余 `cast()` 报警 |
+| `warn_unused_ignores` | 多余的 `# type: ignore` 报警 |
+| `warn_return_any` | 返回 Any 报警 |
+| `strict_equality` | `1 == "1"` 不允许（类型不同） |
+
+**运行**：
+```bash
+uv run mypy api/
+# CI 阻塞：返回非 0 → PR 不能合
+```
+
+### 12.3 TypeScript 类型检查（strict + 两个额外严格项）
+
+**配置**（`web/tsconfig.json`）：
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "strict": true,
+
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "jsx": "preserve",
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "next-env.d.ts"]
+}
+```
+
+**`strict: true` 已含的 8 项**（TypeScript 自动启用）：
+- `noImplicitAny` / `strictNullChecks` / `strictFunctionTypes` / `strictBindCallApply`
+- `strictPropertyInitialization` / `noImplicitThis` / `alwaysStrict` / `useUnknownInCatchVariables`
+
+**额外开的两项含义**：
+
+#### noUncheckedIndexedAccess
+
+```typescript
+const items = ["a", "b", "c"];
+
+// 不开
+const first = items[0];           // 类型: string
+first.toUpperCase();              // ✅ 编译过；items[5] 运行时崩
+
+// 开
+const first = items[0];           // 类型: string | undefined
+first.toUpperCase();              // ❌ Object is possibly 'undefined'
+if (first) first.toUpperCase();   // ✅
+
+// Record 同理
+const map: Record<string, User> = {};
+const u = map["missing"];         // 开: User | undefined / 不开: User
+```
+
+**防的是**：AI 最常犯的"数组 / Record 越界访问"运行时 undefined。
+
+#### exactOptionalPropertyTypes
+
+```typescript
+interface User {
+  name: string;
+  email?: string;
+}
+
+// 不开
+const u1: User = { name: "a", email: undefined };   // ✅（与 u2 等价）
+const u2: User = { name: "a" };                     // ✅
+
+// 开
+const u1: User = { name: "a", email: undefined };   // ❌
+const u2: User = { name: "a" };                     // ✅
+// email 要么"有字段且 string"，要么"字段不存在"；不能"字段存在但 undefined"
+```
+
+**防的是**：OpenAPI codegen 生成的 optional 字段被误用 `undefined` 赋值（API 契约层语义精确）。
+
+**运行**：
+```bash
+pnpm tsc --noEmit
+# CI 阻塞：0 errors 才能合
+```
+
+### 12.4 Pydantic 边界校验
+
+**规则**：**API 边界处（router 入参 / 出参）必须用 Pydantic**，内部层可用普通类型或 TypedDict。
+
+```python
+# Router：Pydantic schema 强制
+@router.post("/modules", response_model=ModuleResponse)
+def create_module(
+    payload: ModuleCreate,                      # ← Pydantic 运行时校验 + mypy 编译期校验
+    user: User = Depends(get_current_user),
+    svc: ModuleService = Depends(),
+) -> Module:
+    return svc.create(user.id, user.project_id, payload)
+
+# Service 内部：普通类型 dict 可用（但仍全注解）
+def _build_default_fields(project_id: int) -> dict[str, Any]:
+    return {"project_id": project_id, "status": "draft"}
+```
+
+**双重保证**：
+- 编译期：mypy / tsc 查静态类型
+- 运行期：Pydantic（后端）/ zod（前端 Server Action）查 schema
+
+**例外**（**不算"违反"**）：
+- 内部 helper 函数用 `dict[str, Any]` 转换中间态（带注释说明）
+- 三方库返回 `Any` 时显式 `cast()` 到具体类型
+
+### 12.5 前后端类型闭环（OpenAPI codegen）
+
+**架构**：
+
+```
+api/schemas/*.py (Pydantic)
+         ↓
+  FastAPI OpenAPI 自动生成
+         ↓
+  openapi.json
+         ↓
+openapi-typescript 或 orval codegen
+         ↓
+web/src/types/api.ts     ← 禁手写，每次后端改动重新跑
+         ↓
+web/src/actions/*.ts     ← import type 用
+web/src/services/*.ts    ← fetch 返回值类型
+```
+
+**规则**：
+
+- `web/src/types/api.ts` 头部必有标识：`/* Auto-generated by openapi-typescript. DO NOT EDIT. */`
+- 前端 Server Action 在边界再用 `zod` 做一次运行时校验（防后端契约变化但前端 codegen 未重跑）
+- CI 校验：`openapi.json` 生成后 → `types/api.ts` 重新 codegen → `git diff` 为 0（不 0 阻塞 PR）
+
+**示例**（前端 Server Action）：
+
+```typescript
+"use server";
+import type { ModuleCreate, ModuleResponse } from "@/types/api";
+import { z } from "zod";
+
+// zod schema 与 OpenAPI 独立（但对齐），做运行时二次校验
+const CreateModuleInput = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+});
+
+export async function createModuleAction(
+  input: unknown,
+): Promise<ModuleResponse> {
+  const payload = CreateModuleInput.parse(input) satisfies ModuleCreate;
+  // ... 调 FastAPI
+}
+```
+
+### 12.6 逃生口约束
+
+**`any` / `Any` 原则禁止**。以下情况允许，但必须满足：
+
+1. 必须带注释说明**为什么**需要（三方库无类型 / 复杂泛型推断失败 / 等）
+2. 必须带 TODO 追踪（未来能去掉时去掉）
+3. 禁止在 service / dao / errors 核心层使用（只能在 utils / 边缘层）
+
+**Python 示例**：
+
+```python
+# ✅ 允许：三方库无 stubs，带追踪
+# TODO(M05): feedparser 无 type stubs，等官方 typing 支持后去掉
+from feedparser import parse  # type: ignore[import-untyped]
+
+# ✅ 允许：复杂 JSON 结构边界转换
+raw: Any = json.loads(response.text)  # 来自外部 API
+data = ExternalApiSchema.model_validate(raw)  # 立即转 Pydantic
+
+# ❌ 禁止：核心层偷懒
+def get_user(id: Any) -> Any:  # 核心 service 层，应写 int / User
+    ...
+```
+
+**TypeScript 示例**：
+
+```typescript
+// ✅ 允许：三方库无类型，带追踪
+// TODO(M05): 等 @xyflow/react 官方 type 更精确后去掉
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const flowInstance: any = useReactFlow();
+
+// ✅ 允许：DOM 事件对象复杂推断
+function onChange(e: any) {  // 应尽快改 React.ChangeEvent<HTMLInputElement>
+  // TODO(M03): 改成精确类型
+}
+
+// ❌ 禁止：业务函数参数偷懒
+function updateModule(data: any) { ... }   // 应 ModuleUpdate
+```
+
+**`# type: ignore` / `@ts-expect-error` 规则**：
+
+```python
+# ✅ 带具体 error code + 注释
+result = complex_func()  # type: ignore[attr-defined]  # 三方库返回类型有问题，追踪 issue #123
+
+# ❌ 裸 ignore
+result = complex_func()  # type: ignore                # 不知道 ignore 什么
+```
+
+```typescript
+// ✅ 带注释
+// @ts-expect-error: Next.js 16 的 params 类型定义有 regression，追踪 next#12345
+const { id } = await params;
+
+// ❌ 裸 ignore
+// @ts-ignore
+const x = someFunction();
+```
+
+**mypy 配置**：`warn_unused_ignores = true`（strict 已含）——多余 `ignore` 会报错，强迫定期清理。
+
+### 12.7 强制方式
+
+| 手段 | 覆盖 | 失败后果 |
+|------|------|---------|
+| CI: `uv run mypy api/` | Python 类型 | 0 errors 才合 |
+| CI: `pnpm tsc --noEmit` | TS 类型 | 0 errors 才合 |
+| CI: OpenAPI codegen diff | 前后端契约一致 | PR 阻塞 |
+| pre-commit: mypy + tsc | 本地拦截 | commit 阻塞 |
+| ruff `ANN` 系列规则 | Python 函数参数 / 返回类型注解 | ruff check 阻塞 |
+| eslint `@typescript-eslint/no-explicit-any: error` | TS 禁 `any` | eslint 阻塞 |
+| 定期 `# type: ignore` 密度扫描 | 逃生口累积情况 | 周报（软强制） |
+
+### 12.8 AI 实现时的类型纪律
+
+**AI 最常犯的类型错误**：
+
+| 错误 | 出现频率 | 防御 |
+|------|---------|------|
+| 漏写函数返回类型 | 高 | mypy strict 强制 |
+| 用 `Any` / `any` 偷懒 | 高 | ruff + eslint 阻塞 |
+| `array[0].method()` 不 check | 高 | `noUncheckedIndexedAccess` 拦 |
+| 可选字段赋 `undefined`（TS） | 中 | `exactOptionalPropertyTypes` 拦 |
+| 前后端字段名不一致 | 高 | OpenAPI codegen 闭环 |
+| `# type: ignore` 堆积 | 中 | `warn_unused_ignores` + 密度扫描 |
+
+**AI 实现一个模块时类型的执行顺序**（规约 1.10 步的扩展）：
+
+1. 先写 model（SQLAlchemy 类型自带，强）
+2. 再写 Pydantic schema（运行时 + 编译期双重）
+3. 再写 DAO / Service / Router（参数 + 返回全注解）
+4. 后端 `uv run mypy api/` 跑过
+5. 重新生成 OpenAPI（FastAPI 自动）
+6. 前端重跑 codegen → `types/api.ts`
+7. 写前端 Server Action / Service（import type）
+8. 前端 `pnpm tsc --noEmit` 跑过
+
+**禁止**：任何一步跳过类型检查直接跑通功能——类型必须在功能之前绿。
+
+### 12.9 反例
+
+```python
+# ❌ 无类型注解
+def get_user(id):
+    return db.get(id)
+
+# ❌ 用 Any 偷懒（核心层）
+def create_module(data: Any) -> Any:
+    ...
+
+# ❌ 裸 type: ignore
+result = complex_func()  # type: ignore
+
+# ❌ no_implicit_optional 违反
+def f(x: int = None):   # 应 int | None = None
+    ...
+
+# ❌ 返回 Any（warn_return_any 触发）
+def build() -> dict:    # 应 dict[str, Any] 或更精确
+    ...
+```
+
+```typescript
+// ❌ 显式 any
+function update(data: any) { ... }
+
+// ❌ 非空断言滥用（绕开 null check）
+const name = user.name!;   // 除非逻辑保证非空，带注释
+
+// ❌ as unknown as T 强转
+const x = data as unknown as Module;  // 应走 zod 校验
+
+// ❌ 裸 ts-ignore
+// @ts-ignore
+const result = fetchStuff();
+```
+
+### 12.10 逃生口度量（长期指标）
+
+**目标**：逃生口数量随模块数增长而**非线性增长**（模块加倍，逃生口应增长 < 1.5 倍）。
+
+**度量命令**：
+
+```bash
+# Python
+grep -rn "# type: ignore" api/ | wc -l
+grep -rn ": Any" api/services api/dao api/errors | wc -l   # 核心层应 = 0
+
+# TS
+grep -rn "@ts-expect-error\|@ts-ignore" web/src/ | wc -l
+grep -rn ": any" web/src/ | wc -l
+```
+
+放入月度质量报告，看趋势——这是 AI 输出类型纪律的长期观察窗。
 
 ---
 
@@ -1756,7 +2126,7 @@ accepted: 2026-04-18
 # 完成度判定
 
 - [x] A 档 7 条全部填写
-- [ ] B 档 5 条全部填写
+- [x] B 档 5 条全部填写
 - [ ] C 档 3 条全部填写
 - [ ] 强制清单总览
 - [ ] 与 ADR-001 / 06-design-principles.md 引用关系明确
