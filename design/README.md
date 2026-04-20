@@ -28,7 +28,7 @@
 
 - [x] 01-PRD.md
 - [x] 02-context-diagram.md
-- [ ] 03-tech-stack.md（含双 ORM 风险评估）
+- [x] 03-tech-stack.md（含双 ORM 风险评估）
 - [ ] 04-layer-architecture.md（含权限中间件、事务边界）
 - [ ] 05-module-catalog.md（建 M 编号体系 + 多人影响标注）
 - [ ] 06-design-principles.md（≤5 条硬约束）
