@@ -898,13 +898,181 @@ raise HTTPException(status_code=403, ...)  # 应抛 PermissionDeniedError
 
 # B 档 强制（PR review checklist 必须勾过）
 
-> 待第 2 次填充
-
 ## 8. PR 流程 + 模板（B）
+
+**适用范围**：全部
+
+**呼应**：`design/00-architecture/06-design-principles.md` 原则 5（多人架构）、本规约第 6 条（commit）
+
+### 8.1 设计要点
+
+- prism-0420 是单人实验项目，但 PR 流程仍走完整流——为了：
+  - ① 给 AI 实现的每批代码一道 human gate
+  - ② 留下可回顾的"AI 输出历史"（对照 Prism 做数据化分析的基础）
+  - ③ 未来扩展到多人时不用改流程
+- **合并门**：self-review checklist 勾过 6 项 + CI 绿灯
+- **大小上限**：≤ 400 行 diff（超过需在描述说明原因）
+- **Merge 策略**：squash merge（唯一允许方式）
+
+### 8.2 PR 标题规范
+
+格式与 commit 规约（第 6 条）一致：`<type>(<scope>): <subject>`
+
+| 判断 | 示例 |
+|------|------|
+| ✅ | `feat(m01): 新增模块创建 API` |
+| ✅ | `fix(m05): 修复 DAO tenant 过滤遗漏 project_id` |
+| ✅ | `docs(adr): 新增 ADR-002 queue 选型` |
+| ❌ | `update module`（无 type / scope） |
+| ❌ | `修 bug`（无 type / scope / 无具体信息） |
+| ❌ | `feat: changes`（无 scope） |
+
+squash merge 时 squash commit 的 subject 沿用 PR title（不拼接 PR 内部 commit 列表）。
+
+**强制**：GitHub Action `amannn/action-semantic-pull-request` 校验 PR title，不合规阻塞合并。
+
+### 8.3 PR 描述模板
+
+**文件位置**：`.github/pull_request_template.md`
+
+内容（6 段固定结构）：
+
+1. **背景（为什么做）**—— 关联 ADR / 设计文档 / 需求
+2. **改动点（做了什么决定）**—— 不抄 diff，说"决定"
+3. **测试**—— 勾选项 + 手动冒烟说明
+4. **风险（说不出风险就是没看清）**—— 列 2-3 条可能问题或显式写"无"+理由
+5. **关联**—— ADR / 设计文档 / 模块 / Issue
+6. **Self-review checklist**—— 6 项合并门
+
+完整模板见 `.github/pull_request_template.md`（首次建仓时从本节 8.7 复制）。
+
+### 8.4 Self-review checklist（6 项合并门）
+
+合并前必须**全部勾过**：
+
+- [ ] **分层未越界**：router 不直查 DB / service 不直接 HTTP / dao 不做业务判断 / 模型无业务方法（对应规约 5）
+- [ ] **命名合规**：文件 / 变量 / 表 / API 路径符合规约 2
+- [ ] **错误 wrap 规范**：service 层抛 `AppError` 子类 / router 走全局 handler / 无裸 `raise Exception` / `raise ValueError`（对应规约 7）
+- [ ] **Tenant 过滤**：新增 DAO 查询必含 `user_id + project_id`；若例外需在代码注释显式标注理由
+- [ ] **测试已跑**：新增 / 修改代码有对应测试；`uv run pytest` + `pnpm test` 全绿；贴终端输出片段证明
+- [ ] **文档同步**：改 schema → 改 OpenAPI；加 ErrorCode → 改 errors 说明；改架构 → 改 ADR / `design/`
+
+**每一项都对应 AI 最常犯的一类错误**——checklist 是"AI 输出验收单元"的可量化形式，不是装饰。
+
+### 8.5 PR 大小规则
+
+| 规模 | diff 行数 | 处理 |
+|------|---------|------|
+| Small | ≤ 100 | 默认可合 |
+| Medium | 100-400 | 默认可合 |
+| Large | 400-800 | PR 描述开头说明原因 + 建议 reviewer 按 commit 顺序读 |
+| XL | > 800 | 原则上拆分；不拆需在 PR 描述"为什么不能拆"里写满 |
+
+**拆分建议**（从易到难）：
+
+1. 先拆"格式变更 / 重命名" → 单独 PR（`type=style` / `refactor`）
+2. 再按"model/schema → dao → service → router"顺序分层拆
+3. 前后端跨仓库：后端 PR 先合 → 前端 OpenAPI codegen → 再提前端 PR
+
+### 8.6 Draft PR vs Ready for review
+
+| 状态 | 含义 | CI | 可合并 |
+|------|------|-----|-------|
+| Draft | 代码不全 / 测试未过 / 想早获反馈 | 跑 | ❌ |
+| Ready for review | checklist 全勾 + CI 绿 + 自觉可合 | 跑 | ✅ |
+
+状态切换：GitHub 界面 "Ready for review" 按钮，或命令行 `gh pr ready`。
+
+### 8.7 PR 模板文件
+
+`.github/pull_request_template.md` 固定内容：
+
+~~~markdown
+## 背景（为什么做）
+
+<!-- 关联 ADR / 设计文档 / 需求。例："按 ADR-001 实现 M01 模块骨架。" -->
+
+## 改动点（做了什么决定）
+
+<!-- 按模块/层次分点。不抄 diff，说"做了什么决定"。 -->
+- 
+- 
+
+## 测试
+
+- [ ] 单元测试（`uv run pytest api/tests/` 全绿）
+- [ ] 前端类型检查（`pnpm tsc --noEmit` 0 errors）
+- [ ] 前端 lint（`pnpm lint` 0 errors）
+- [ ] 本地启动验证（`uv run uvicorn` + `pnpm dev` 能跑）
+- [ ] 手动冒烟（说明覆盖路径）：
+
+## 风险（说不出风险就是没看清）
+
+<!-- 列 2-3 条可能出问题的地方，或显式写"无"+理由。 -->
+- 
+
+## 关联
+
+- ADR: 
+- 设计文档: 
+- 模块: M__
+- Issue: #
+
+## Self-review checklist（合并前必须全部勾过）
+
+- [ ] 分层未越界（router 不直查 DB / service 不直接 HTTP / dao 不做业务判断）
+- [ ] 命名合规（规约 2：文件/变量/表/API 路径）
+- [ ] 错误 wrap 规范（service 抛 AppError 子类 / 无裸 raise）
+- [ ] Tenant 过滤（新增 DAO 查询必含 user_id + project_id）
+- [ ] 测试已跑（pytest / vitest 全绿，贴输出片段）
+- [ ] 文档同步（改 schema/errors/架构 → 改 OpenAPI/errors 说明/ADR）
+~~~
+
+### 8.8 Merge 策略
+
+- **squash merge**（GitHub repo 设置里**只开** squash merge，关 merge commit 和 rebase merge）
+- 原因：PR 内部 commit 在迭代中可能凌乱（`wip` / `fix typo`），squash 后 main 只保留"一个 PR 一个干净 commit"，配合第 6 条 commit 规约保证 main 历史可读
+- squash commit subject = PR title（GitHub 自动）；body 必要时手改为 PR description 精简版
+
+### 8.9 强制方式
+
+| 手段 | 覆盖 | 失败后果 |
+|------|------|---------|
+| `.github/pull_request_template.md` | 所有新 PR 自动加载 | 软提示（作者自觉填） |
+| GitHub Action `action-semantic-pull-request` | PR title 格式 | PR 不能合并 |
+| Branch protection（main）| 必过 CI + PR + 线性历史 | push / 合并阻塞 |
+| PR 描述 checklist 勾选 | self-review 6 项 | 作者自检 + 未来可加 Action 扫描 |
+| GitHub repo 设置"只允许 squash merge" | merge 方式 | 其他方式按钮不可用 |
+
+### 8.10 反例
+
+```
+❌ PR 描述空白
+标题：fix bug
+描述：（空）
+
+❌ 一句话描述
+标题：feat(m01): 新增模块
+描述："实现 M01"
+
+❌ 抄 diff
+描述：
+- 新增 api/models/module.py
+- 新增 api/dao/module_dao.py
+（只说"做了什么文件"，没说"做了什么决定"、风险在哪）
+
+❌ checklist 全勾但测试没跑（最危险）
+—— 解决：勾"测试已跑"项时必须贴 pytest / vitest 输出片段
+```
+
+---
+
 ## 9. Git 分支策略（B）
 ## 10. 依赖管理（B）
 ## 11. 文档维护规约（B）
 ## 12. 类型安全门槛（B）
+
+> B-09 起待后续填充
 
 ---
 
