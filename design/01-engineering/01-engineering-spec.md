@@ -4,7 +4,7 @@
 **定稿日期**：—
 **档位**：B
 **关联**：`design/00-architecture/04-layer-architecture.md`、`design/00-architecture/06-design-principles.md`、`design/adr/ADR-001-shadow-prism.md`
-**宏观讲解**（为什么这么定）：知识库 `/root/cy/ai-quality-engineering/02-技术/架构设计/工程规约7条详解-AI时代工程素养基石.md`
+**宏观讲解**（为什么这么定）：知识库 `/root/cy/ai-quality-engineering/02-技术/架构设计/工程规约详解-AI时代工程素养基石.md`
 
 ---
 
