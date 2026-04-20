@@ -298,6 +298,7 @@ ignore = [
     "E501",    # line-length 由 formatter 处理
     "ANN101",  # self 不需要类型注解
     "ANN102",  # cls 不需要类型注解
+    "ANN401",  # 允许 Any（逃生口由规约 12 的 # type: ignore 机制管理，不二次拦截）
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -550,9 +551,9 @@ forbidden_modules = ["api.routers", "api.services", "api.dao", "api.models", "ap
 [[importlinter.contracts]]
 name = "Queue is only invoked from services"
 type = "forbidden"
-source_modules = ["api.routers"]
+source_modules = ["api.routers", "api.dao", "api.models"]
 forbidden_modules = ["api.queue"]
-# Router 禁直接调 Queue，必须经 Service（保证事务边界 + activity_log 责任归属）
+# 除 services 外任何层都不能直调 Queue（保证事务边界 + activity_log 责任归属）
 
 [[importlinter.contracts]]
 name = "Errors layer is framework-independent"
@@ -1570,7 +1571,7 @@ pnpm install                        # 在 CI 应 --frozen-lockfile
 |------|------|---------|
 | CI: `uv lock --check` | Python lock 与 pyproject.toml 一致 | PR 阻塞 |
 | CI: `pnpm install --frozen-lockfile` | TS lock 与 package.json 一致 | PR 阻塞 |
-| CI: `pip-audit` / `pnpm audit` | 已知漏洞 | high/critical 阻塞 |
+| CI: `uvx pip-audit` / `pnpm audit` | 已知漏洞 | high/critical 阻塞 |
 | GitHub Dependency Review Action | PR 新增依赖风险评估 | 高危阻塞 |
 | `.gitignore` 不得含 `uv.lock` / `pnpm-lock.yaml` | 强制提交 | 人工 review |
 | `engines` + `packageManager` 字段 | Node/pnpm 版本锁定 | 用错工具会报错 |
@@ -1858,6 +1859,8 @@ plugins = [
 ]
 
 # tests 放宽（测试里 assert 时类型推断常失败，不强制）
+# 注：ruff per-file-ignores 用文件路径（tests/**/*.py），mypy overrides 用模块名（api.tests.*）
+# 两者指向同一目录，前提是 pyproject.toml 的 [tool.uv] package=true 使 api/ 成为 Python package root
 [[tool.mypy.overrides]]
 module = "api.tests.*"
 disallow_untyped_defs = false        # 测试函数允许无返回类型
