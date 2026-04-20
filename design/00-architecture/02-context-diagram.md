@@ -35,7 +35,7 @@
 | **Redis** | 缓存（AI 调用结果）+ Redis Queue（异步任务） | 新增（Prism 没用） |
 | **MinIO** | 对象存储（zip / 文件上传） | 新增（Prism 用本地文件系统） |
 | **AI Providers** | Claude / DeepSeek / Kimi / OpenAI（含 Embedding）/ Mock | 沿用 Prism 全部 |
-| **GitHub** | git clone 远程仓库（导入功能） | 新增（Prism 设计了但未实现） |
+| **git Remote** | git clone 远程仓库（GitHub / GitLab / Gitee 等） | 新增（Prism 设计了但未实现） |
 
 **第三方登录**（GitHub / Google OAuth）：标注未来扩展，本期不在边界图。
 
@@ -57,7 +57,7 @@ graph LR
     Redis[(Redis<br/>缓存 + Queue)]
     MinIO[(MinIO<br/>对象存储)]
     AI[AI Providers<br/>Claude/DeepSeek/Kimi/OpenAI/Mock]
-    GitHub[GitHub<br/>git clone]
+    GitRemote[git Remote<br/>GitHub/GitLab/Gitee/...]
 
     Owner ==本期主要使用==> System
     Editor -.架构保留.-> System
@@ -69,7 +69,7 @@ graph LR
     System --> Redis
     System --> MinIO
     System --> AI
-    System --> GitHub
+    System --> GitRemote
 ```
 
 **图例**：

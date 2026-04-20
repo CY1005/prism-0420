@@ -24,7 +24,29 @@
 
 ## 当前进度
 
-- [ ] 档位 A：极简 PRD + 架构骨架 6 工件 + 首份 ADR
-- [ ] 档位 B：5 项工程规约决策
-- [ ] 档位 C：M3（功能项档案页）模块详细设计
-- [ ] 对照报告：M3 vs Prism F4
+### 档位 A：架构骨架（必须完整做）
+
+- [x] 01-PRD.md
+- [x] 02-context-diagram.md
+- [ ] 03-tech-stack.md（含双 ORM 风险评估）
+- [ ] 04-layer-architecture.md（含权限中间件、事务边界）
+- [ ] 05-module-catalog.md（建 M 编号体系 + 多人影响标注）
+- [ ] 06-design-principles.md（≤5 条硬约束）
+- [ ] adr/ADR-001-shadow-prism.md（基础 4 节）
+- [ ] adr/ADR-001 多人架构核心预设（M1/B1/B2）
+
+### 档位 B：工程规约（决策记录，0/5）
+
+- [ ] 01-engineering-spec.md
+- [ ] 02-quality-spec.md
+- [ ] 03-cicd-plan.md
+- [ ] 04-observability-plan.md
+- [ ] 05-security-baseline.md
+
+### 档位 C：模块详细设计（暂不展开）
+
+- [ ] M{?} 模块详细设计（编号待档位 A 完成后定）
+
+### 对照报告
+
+- [ ] {模块} vs Prism F{?} 对照
