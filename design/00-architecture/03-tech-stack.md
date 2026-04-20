@@ -31,6 +31,7 @@
 | 数据库 | PostgreSQL 16 + pgvector | 照搬 Prism，pgvector 支持语义搜索 |
 | 认证 | Auth.js v5 + JWT + RBAC | 照搬 Prism |
 | **Auth.js session 存储** | **Redis**（Auth.js v5 Redis adapter） | 已选 Redis 作基础设施，复用能力不增加新依赖 |
+| **Queue 库** | **arq**（Python 异步 Redis Queue） | **新增**：异步原生（和 FastAPI async 生态一致）、轻量、依赖已选 Redis；候选对比见下方 Q5 |
 | AI 集成 | AI Provider 抽象层（Claude / DeepSeek / Kimi / OpenAI / Mock） | 照搬 Prism，多 Provider 可切换 |
 | 嵌入服务 | OpenAI text-embedding-3-small / Mock | 照搬 Prism |
 | 部署 | Docker Compose | 照搬 Prism，多服务编排简单 |
@@ -91,10 +92,24 @@ TODO 位置：`/root/cy/ai-quality-engineering/00-GTD/待办/TODO-index.md` → 
 
 ---
 
+## Q5：Queue 库选型理由（arq）
+
+| 候选 | 类型 | 优点 | 缺点 | 是否选 |
+|------|------|------|------|-------|
+| **arq** | 异步 Redis Queue | 异步原生（asyncio）、轻量、只依赖 Redis、和 FastAPI 生态一致 | 社区比 Celery 小 | ✅ |
+| Celery | 多后端任务队列 | 成熟、生态大、功能多 | 复杂（需 broker + result backend 分离）、同步模型、对单人项目过重 | ❌ |
+| rq（Redis Queue） | 同步 Redis Queue | 简单 | 不支持 asyncio，和 FastAPI 混用别扭 | ❌ |
+| Taskiq | 新兴异步 | 异步、支持多 broker | 生态年轻，文档和实践少 | ❌ |
+
+**为什么 arq**：单人项目 + FastAPI 异步 + 已有 Redis——arq 是最贴合的组合。
+
+---
+
 ## 完成度判定
 
 - [x] 每行的"理由"都不为空
 - [x] 双 ORM vs 单 ORM 决策有明确理由和后果澄清
 - [x] 新增工具链（Alembic + openapi-typescript）已加入学习清单
 - [x] Auth.js session 存储位置明确（Redis）
+- [x] Queue 库选型明确（arq + 候选对比）
 - [x] AI 完整性质疑通过

@@ -112,6 +112,18 @@
 - **检查**：敏感操作的 API schema 必须接受 idempotency_key 参数
 - **豁免条件**：只读操作（GET）不需要
 
+### 清单 5：DAO 层查询必须显式带 tenant 过滤（读路径 tenant 隔离）
+
+- **目的**：防止读路径越权——多租户系统最常见的安全漏洞
+- **执行**：
+  - 所有 DAO 层的 `SELECT` / `UPDATE` / `DELETE` 必须包含 tenant 过滤条件
+  - 常见条件：`WHERE project_id = ?` 或 `WHERE user_id = ?` 或 `WHERE project_id IN (<user 有权限的 project ids>)`
+- **检查**：CI 扫描 DAO 层，发现无 tenant 过滤的查询 → 告警阻塞合并
+- **豁免条件**（必须显式声明）：
+  - 全局数据：用户系统登录查询 / 全局行业动态 / 系统配置表
+  - 管理员操作（平台管理员可跨 tenant）——接口层需显式标注 `@admin_only`
+- **配合原则**：本清单覆盖"读路径"；原则 5 的其他清单覆盖"写路径"（activity_log / 乐观锁 / Queue tenant / 幂等）
+
 ---
 
 ## 原则间的优先级

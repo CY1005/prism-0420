@@ -72,21 +72,26 @@ graph TD
 
 ---
 
-## Q4：权限中间件位置（纵深防御）
+## Q4：权限中间件位置（三层纵深防御）
 
-**双重防御**：
+### 三层防御模型
 
-- **Router 层（粗粒度）**：HTTP 层拦截明显无权限请求
-  - FastAPI `Depends(check_project_access(project_id, role))`
-  - 快速失败，减少业务层负担
-- **Service 层（细粒度）**：业务一致性二次检查
-  - 验证"目标数据是否真的属于用户有权限的项目"
-  - **覆盖异步路径**（Queue 消费者不经过 Router）
+| 层 | 检查内容 | 实现 | 何时触发 |
+|----|---------|------|---------|
+| **Server Action** | Auth.js session 校验（登录了吗） | Auth.js middleware / `getServerSession()` | 每次 Server Action 调用前 |
+| **Router（粗粒度）** | 用户对资源的基础权限 | FastAPI `Depends(check_project_access(project_id, role))` | 每次 HTTP 请求进 Router |
+| **Service（细粒度）** | 业务一致性：目标数据是否真的属于用户权限范围 | 方法内 `_check_access(user_id, entity)` | 每次 Service 方法调用（含异步路径）|
 
-**为什么必须 Service 层也做**：
+**为什么三层都要**：
+- **Server Action 层**：前端请求的第一道门，快速拦截未登录请求（避免穿透到 FastAPI）
+- **Router 层**：HTTP 层拦截明显越权，减少业务层负担
+- **Service 层**：业务一致性兜底 + 覆盖异步路径（Queue 消费者不经过 Router）
+
+**真实例子：异步路径的权限绕过**
 - AI 任务异步执行：用户提交 → Queue → worker 后台消费
 - Worker 调 Service 不经过 HTTP Router
 - 如果只有 Router 权限，worker 可以拿任何用户的数据 = 安全洞
+- Service 层必须做权限检查——这是异步场景的唯一防线
 
 ---
 
