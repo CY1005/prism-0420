@@ -1515,9 +1515,225 @@ import lodash from "lodash";  // package.json 没 lodash
 ---
 
 ## 11. 文档维护规约（B）
+
+**适用范围**：全部
+
+**呼应**：规约 1（目录结构 `docs/` 和 `design/`）、规约 6（commit type=docs）、规约 8（PR checklist 文档同步项）
+
+### 11.1 设计要点
+
+- **单一真相源**：同一事实只在一处写（schema 看代码、决策看 ADR、契约看 OpenAPI）
+- **文档生命周期**：frontmatter 显式标注 `status`，不允许"长期 draft"
+- **ADR 不变性**：accepted 后禁止原地修改，只能起新 ADR 标记 `Supersedes`
+- **代码-文档配对**：改代码必须同步改文档（否则 PR 阻塞）
+- **文档是代码的一部分**：进同一 PR、走同一 CI、同一份 review
+
+### 11.2 文档分层与职责对照
+
+| 目录 / 文件 | 内容 | 真相源性质 | 更新频率 |
+|------------|-----|----------|---------|
+| `design/00-architecture/` | 架构骨架（档位 A） | 设计前置真相源 | B/C 档迭代中可改；accepted 后走 ADR |
+| `design/01-engineering/` | 工程规约（本档） | 设计前置真相源 | 迭代期可改 |
+| `design/02-modules/M{NN}/` | 模块详细设计（档位 C） | 设计前置真相源 | 实现前冻结 |
+| `design/adr/` | 设计阶段 ADR | 决策真相源 | **accepted 后不可改，只能新 ADR supersede** |
+| `docs/adr/` | 实现阶段 ADR | 决策真相源 | 同上 |
+| `docs/architecture/` | 运行时架构（arc42 格式） | 代码与设计的交叉真相 | 架构改动时同步 |
+| `docs/product/` | PRD | 产品需求真相源 | 需求变更时改 |
+| `docs/skills/` | 开发触发型 skills | AI 协作行为（非必需） | 按需加 |
+| `CLAUDE.md` | 项目协作指南 | AI 协作真相源 | 协作方式变化时改 |
+| `README.md` | 项目入口 | 外部访客第一印象 | 大版本里程碑时改 |
+| `api/alembic/versions/` | 数据库迁移 | schema 历史真相源 | 每次 schema 变更时新增 |
+| OpenAPI schema | API 契约 | 前后端契约真相源 | FastAPI 自动生成，禁手写 |
+
+**禁止交叉的真相源**：
+
+| 事实 | 真相源 | 禁止当真相源 |
+|------|-------|-------------|
+| 字段类型 | `api/models/*.py` | schemas / docs / 注释 |
+| API 行为 | OpenAPI（自动生成） | README / 设计文档 |
+| 架构决策 | ADR | 散落的代码注释 / CLAUDE.md |
+| 模块列表 | `design/00-architecture/05-module-catalog.md` | PRD / README |
+
+### 11.3 文档生命周期（frontmatter 规范）
+
+所有 `design/` 和 `docs/` 下的 Markdown 必须有 frontmatter：
+
+```yaml
+---
+title: 04-layer-architecture
+status: accepted      # draft / accepted / superseded / deprecated
+owner: CY
+created: 2026-04-15
+accepted: 2026-04-18
+supersedes: []        # 若此文档替代旧 ADR，填旧 ADR 编号
+superseded_by: null   # 若此文档被新 ADR 替代，填新编号
+---
+```
+
+**状态流转**：
+
+```
+draft ──accepted──> accepted ──superseded──> superseded
+                         └─deprecated──> deprecated（不再维护）
+```
+
+| 状态 | 含义 | 可改性 |
+|------|------|-------|
+| `draft` | 讨论中 | 自由改 |
+| `accepted` | 已定稿 | ADR 不可改；设计文档走迭代需备注 |
+| `superseded` | 被新版替代 | 不改（历史存根） |
+| `deprecated` | 弃用但保留 | 不改（历史存根） |
+
+**长期 draft 禁令**：任何文档 `status=draft` 超过 2 周 → doc-rot 扫描报警 → 要么推进到 accepted，要么合入其他文档，要么显式 deprecated。
+
+### 11.4 代码-文档配对更新规则
+
+**改动类型 → 必须同步的文档**：
+
+| 改了什么 | 必须同步改什么 |
+|---------|--------------|
+| 新增/改 SQLAlchemy model | alembic 迁移 + schemas Pydantic + OpenAPI 重新生成 + 前端 `web/src/types/api.ts` 重 codegen |
+| 新增/改 ErrorCode | `api/errors/codes.py` + `api/errors/exceptions.py` + 前端 `web/src/errors/codes.ts`（从 OpenAPI 生成） |
+| 新增模块 | `design/00-architecture/05-module-catalog.md` 加编号 + `design/02-modules/M{NN}/` 详细设计 |
+| 改架构（跨层 / tenant / 异步 / 并发）| 起新 ADR + 改 `design/00-architecture/04-layer-architecture.md` 或 `06-design-principles.md` |
+| 改目录结构 | 改本规约（第 1 条）+ 相应的 importlinter / eslint-plugin-boundaries 配置 |
+| 改 commit / 分支 / PR 流程 | 改本规约（第 6 / 9 / 8 条） |
+| 改协作规则 | 改 `CLAUDE.md` |
+| 改依赖工具链（uv / pnpm 等） | 改本规约（第 10 条）+ CI 配置 + `pyproject.toml` / `package.json` |
+
+**原则**：这些是**同一 PR 内必须一起改**的——不允许"后补文档"。
+
+### 11.5 ADR 不变性（核心纪律）
+
+**ADR（Architecture Decision Record）一旦 `status=accepted`，禁止原地修改**：
+
+- 改内容 → 起**新 ADR**，在 frontmatter `supersedes` 字段填旧 ADR 编号
+- 旧 ADR 状态改为 `superseded`，`superseded_by` 填新 ADR 编号
+- 旧 ADR 内容**不删不改**（作为历史存根）
+
+**示例**：
+```
+ADR-003 选用 Redis Queue（accepted 2026-04-20）
+  ↓ 半年后改为 RabbitMQ
+ADR-012 Queue 方案变更 - 从 Redis 切 RabbitMQ（accepted 2026-10-15）
+  - frontmatter: supersedes: [ADR-003]
+
+ADR-003 同时更新：
+  - frontmatter: status: superseded, superseded_by: ADR-012
+  - 内容不动
+```
+
+**允许的例外**（**不算"改"**）：
+- 纠正错别字 / 链接失效修复 → 在 PR 描述注明
+- 添加 "Note: superseded by ADR-XXX" 的顶部警示横幅
+
+**禁止**：
+- ❌ 改 ADR 的决策部分（理由、备选、结论）
+- ❌ 改 ADR 的日期 / 状态（除状态流转外）
+- ❌ 删除旧 ADR
+
+**理由**：ADR 是决策**历史**的锚。改 ADR = 改历史 = 未来的 AI / 人读到的是"假历史"，无法复现当时的判断逻辑。
+
+### 11.6 设计文档演进规则
+
+`design/` 下的设计文档（非 ADR）：
+
+- **B/C 档填充期**（prism-0420 当前阶段）：自由迭代，`status=draft` 合理
+- **accepted 后**：
+  - 小改（错字 / 链接 / 细节补充）→ 直接改，PR 描述说明
+  - 中改（某一节重写）→ 起新 ADR 记录变更 + 改文档
+  - 大改（推翻原设计）→ 起新 ADR + 原文档 `status=superseded`
+
+**判断"小 / 中 / 大"**：
+- 改动是否影响**已生成的代码**：否 = 小，是 = 中/大
+- 改动是否影响**已做的决策**：否 = 小/中，是 = 大
+
+### 11.7 PR 文档同步勾选
+
+规约 8.4 的 checklist 第 6 项是"文档同步"——在 B-11 定义具体内容：
+
+**勾选这项 = 作者声明已做以下检查**：
+
+- [ ] 改了 schema → OpenAPI 重新生成 + 前端 codegen 跑过
+- [ ] 改了 ErrorCode → 前端 `errors/codes.ts` 同步
+- [ ] 新模块 → `05-module-catalog.md` 更新 + `02-modules/M{NN}/` 建好
+- [ ] 架构决策 → 新 ADR 已起
+- [ ] 改目录 / 分支 / commit / PR 流程 → 本规约对应条目已改
+- [ ] 协作方式变 → `CLAUDE.md` 已改
+- [ ] 新 / 改依赖 → 本规约第 10 条审批清单已在 PR 描述勾过
+
+**规则**：凡涉及以上任一，必须**同 PR 内**完成，不允许"后补"。
+
+### 11.8 禁止模式
+
+```
+❌ 改代码不改文档
+改了 model 加字段，没改 schemas / 没重新生成 OpenAPI
+
+❌ 真相源分散
+字段说明同时写在 model docstring / schemas docstring / docs/architecture/
+（改一处漏两处）
+
+❌ 文档长期 draft
+status=draft 超 3 个月，没人负责推进
+
+❌ 原地改 accepted ADR
+ADR-003 原地改决策内容（破坏历史锚）
+
+❌ 后补文档
+PR merge 后再提"docs: update after M01" PR
+（违反"代码-文档配对"原则）
+
+❌ 用 README 当真相源
+"M01 的详细设计看 README"
+（README 是入口，不承载设计）
+```
+
+### 11.9 强制方式
+
+| 手段 | 覆盖 | 失败后果 |
+|------|------|---------|
+| PR template 第 6 项 checklist | 作者自检 | 软强制 |
+| `frontmatter-check` CI Action | 所有 `design/` 和 `docs/` MD 必须有 frontmatter | PR 阻塞 |
+| doc-rot 扫描（每周跑） | 超 2 周的 draft 报警 | 提醒（无硬阻塞） |
+| 代码路径映射检查（可选 Action） | 改 `api/models/*.py` 同 PR 内必含 `api/alembic/versions/*` | PR 阻塞 |
+| `git log` 扫描 | `type=feat` commit 若未伴随 `type=docs` 或 design 文件改动，review 时核 | 人工 |
+| OpenAPI codegen diff CI | 前端 `types/api.ts` 与后端 OpenAPI 差异 = 0 | PR 阻塞 |
+
+### 11.10 反例
+
+```yaml
+# ❌ 无 frontmatter
+# 直接正文开始
+# 设计讨论
+...
+
+# ❌ frontmatter 缺 status
+---
+title: 04-layer
+owner: CY
+---
+
+# ❌ status=draft 半年不动
+---
+status: draft
+created: 2025-10-15
+---
+
+# ❌ accepted 改决策（破坏历史）
+---
+status: accepted
+accepted: 2026-04-18
+---
+## 决策
+~~Redis Queue~~ RabbitMQ（半年后改了）   # 应起新 ADR
+```
+
+---
+
 ## 12. 类型安全门槛（B）
 
-> B-11 起待后续填充
+> B-12 待后续填充
 
 ---
 
