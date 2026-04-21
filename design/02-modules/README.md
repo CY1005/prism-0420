@@ -14,7 +14,7 @@
 | 第一批 | M07 问题沉淀 | draft（待 fix + CY 裁决） | [`M07-issue/`](./M07-issue/) |
 | 第一批 | M14 行业动态 | draft（待 fix + CY 裁决） | [`M14-industry-news/`](./M14-industry-news/) |
 | 第一批 | M19 导入/导出 | draft（待 fix + CY 裁决） | [`M19-import-export/`](./M19-import-export/) |
-| **Pilot 2** | M17 AI 智能导入（覆盖 Queue 异步） | 待开 | `M17-ai-import/` |
+| **Pilot 2** | M17 AI 智能导入（覆盖 Queue 异步） | accepted（2026-04-21）| [`M17-ai-import/`](./M17-ai-import/) |
 | 第二批 | M01 / M02 / M03 基础链 | 待 CY 出业务 | — |
 | 第二批 | M11 / M12 中复杂 | 待开 | — |
 | 第三批 | M13 / M16 / M18 复杂 AI | 待 CY 出业务 | — |
@@ -109,8 +109,9 @@ CY 标 status: accepted（节 15 全勾过 + last_reviewed_at 填日期）
 ## 完成度判定（C 档整体）
 
 - [x] Pilot M04 完成 + 模板首版定稿
-- [x] 第一批 5 模块批量生成 + reviewer audit（不能转 accepted，需 fix + CY 裁决）
-- [ ] 第一批 fix（机械问题 + CY 业务裁决）→ 转 accepted
-- [ ] Pilot M17 完成 + audit 通过 → 异步字段补完
+- [x] 第一批 5 模块批量生成 + reviewer audit + fix v1/v2 + verify + accept（2026-04-21）
+- [x] **Pilot M17 完成 + audit + 7 问题修复 + accept（2026-04-21）→ 异步字段补完**
+- [ ] 模板调整：§12 拆 3 子模板 / §8 Queue 消费者权限必填行 / §3 状态枚举列类型 / §11 idempotency 含 project_id / §4 禁止转换最少 N 条
+- [ ] 第二批批量（M02 / M03 / M11 / M12 等）
 - [ ] 20 模块全部 status=accepted
 - [ ] 99-comparison/ 对照报告：每模块一份

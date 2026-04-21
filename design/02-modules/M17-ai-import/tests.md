@@ -1,10 +1,10 @@
 ---
 title: M17 AI 智能导入 - 测试场景
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
-last_reviewed_at: null
+accepted: 2026-04-21
+last_reviewed_at: 2026-04-21
 module_id: M17
 prism_ref: F17
 pilot: true

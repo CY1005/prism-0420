@@ -1,12 +1,12 @@
 ---
 title: M17 AI 智能导入 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M17
 prism_ref: F17
 pilot: true
