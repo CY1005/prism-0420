@@ -32,6 +32,7 @@
 - [x] 04-layer-architecture.md（含权限中间件、事务边界）
 - [x] 05-module-catalog.md（建 M 编号体系 + 多人影响标注）
 - [x] 06-design-principles.md（≤5 条硬约束）
+- [x] 07-capability-matrix.md（20 模块能力总览，draft - 待 CY 校验 🟡 推断项）
 - [x] adr/ADR-001-shadow-prism.md（基础 4 节）
 - [x] adr/ADR-001 多人架构核心预设（M1/B1/B2）
 
