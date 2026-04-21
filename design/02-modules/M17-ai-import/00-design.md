@@ -48,8 +48,14 @@ complexity: high
 - **Queue 异步任务**：3 步 AI 都走 arq Queue（持久化 + 失败可重试）
 - **WebSocket 进度推送**（CY ack: Q4 选 c）：用户实时看任务进度 + 中途取消按钮
 - **失败 / 重试 / 死信**（CY ack: Q3 全按倾向）：单步 3 次指数退避；整任务失败 status=partial_failed 保留；死信 30 天保留
-- **idempotency**：用户重复传同一 zip（zip_hash + user_id），7 天内复用上次结果
+- **idempotency**（CY ack: Q6）：用户重复提交同 zip 且同 project，7 天内复用上次结果。**key = (user_id, project_id, source_hash)**——同 zip 不同 project 不命中（防跨租户污染）
 - **取消即删**（CY ack: Q5 选 a）：用户取消任意阶段 → 删除任务 + 已写入数据回滚 + 接受 AI token 浪费
+- **批量入库的协调角色**（决策——audit B2 修复）：M17 是 orchestrator，**不直接 INSERT 跨模块表**——批量入库阶段调用各目标模块的 Service：
+  - `M03 NodeService.batch_create_in_transaction(db, nodes, project_id)`
+  - `M04 DimensionService.batch_create_in_transaction(db, dimensions, project_id)`
+  - `M06 CompetitorService.batch_create_in_transaction(db, competitors, project_id)`
+  - `M07 IssueService.batch_create_in_transaction(db, issues, project_id)`
+  - 这些 Service 共用同一个 `db.begin()` 事务（M17 service 包外层事务）；任一失败回滚
 
 ### Out of scope（其他模块负责）
 
@@ -88,10 +94,10 @@ flowchart LR
   WS[(WebSocket Server)] --> M17
 
   M17[M17 AI 智能导入<br/>★ pilot 异步] -.事件.-> M15[M15 数据流转]
-  M17 -.写入.-> M03
-  M17 -.写入.-> M04
-  M17 -.写入.-> M06
-  M17 -.写入.-> M07
+  M17 -.调 NodeService.batch_create.-> M03
+  M17 -.调 DimensionService.batch_create.-> M04
+  M17 -.调 CompetitorService.batch_create.-> M06
+  M17 -.调 IssueService.batch_create.-> M07
 ```
 
 **前置依赖（必须先实现）**：M01 → M02（AI Provider 配置）→ M03 / M04 / M06 / M07（被写入的目标实体）
@@ -149,8 +155,9 @@ class ImportSourceType(str, enum.Enum):
 class ImportTask(Base, TimestampMixin):
     __tablename__ = "import_tasks"
     __table_args__ = (
-        # idempotency：7 天内同 user + 同 source_hash 复用
-        UniqueConstraint("user_id", "source_hash", name="uq_import_user_hash"),
+        # idempotency：7 天内同 user + 同 project + 同 source_hash 复用
+        # ★ project_id 必须在 key 内（audit B1 修复——防跨项目 task 误复用导致租户污染）
+        UniqueConstraint("user_id", "project_id", "source_hash", name="uq_import_user_project_hash"),
         CheckConstraint(
             "status IN ('pending','extracting','ai_step1','ai_step2','ai_step3',"
             "'awaiting_review','importing','completed','partial_failed','failed','cancelled')",
@@ -306,12 +313,17 @@ stateDiagram-v2
 | `importing` | `partial_failed` | 部分 item 失败 | activity_log + WebSocket 推 partial |
 | 任意非终态 | `cancelled` | 用户点取消 | **回滚已写入数据** + 删暂存 + activity_log |
 
-### 禁止的转换
+### 禁止的转换（audit B4 修复——补全所有非法路径）
 
 | 禁止 | 防护 |
 |------|------|
-| `cancelled / completed / failed → 任意` | Service 层抛 `TaskFinalizedError`（终态不可变） |
-| 跳步（如 `pending → ai_step3`）| Service 层校验 status 顺序 |
+| `cancelled / completed / failed → 任意` | Service 层抛 `ImportTaskFinalizedError`（终态不可变） |
+| `pending / extracting / ai_step1 / ai_step2 → ai_step3`（跳过 awaiting_review）| Service 层校验 status 顺序，抛 `ImportInvalidStateTransitionError` |
+| `awaiting_review → importing`（跳过 ai_step3）| Service 层校验，抛 `ImportInvalidStateTransitionError` |
+| `partial_failed → completed`（必须先 ai_step3 重试） | Service 层校验，抛 `ImportInvalidStateTransitionError` |
+| `partial_failed → 除 ai_step3 / cancelled 外的状态` | Service 层校验，抛 `ImportInvalidStateTransitionError` |
+| 任意 → `pending`（pending 仅在创建时）| Service 层不提供 reset 接口 |
+| `failed → any`（failed 是终态，重试需新建 task）| Service 层抛 `ImportTaskFinalizedError` |
 
 ---
 
@@ -320,16 +332,16 @@ stateDiagram-v2
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | `import_tasks.project_id` 冗余字段；DAO 强制 `WHERE project_id=?`；**Queue payload 强制带 user_id + project_id**（清单 3）|
-| **多表事务** | ✅ 必须（批量入库阶段）| `importing` 阶段 Service 层 `with db.begin():` 包：① 批量 INSERT nodes ② 批量 INSERT dimension_records ③ 批量 INSERT competitors ④ 批量 INSERT issues ⑤ 写 activity_log；任一失败回滚 + 整任务标 `partial_failed` |
+| **多表事务** | ✅ 必须（批量入库阶段）| `importing` 阶段 M17 Service 层 `with db.begin():` 包外层事务，**调用各模块 Service 的 batch_create_in_transaction**：① `M03 NodeService` ② `M04 DimensionService` ③ `M06 CompetitorService` ④ `M07 IssueService` ⑤ 写 activity_log；各 Service 共享同一 db session 不开新事务；任一失败回滚 + 整任务标 `partial_failed`。**M17 不直查/直写其他模块的表**（架构边界——audit B2 修复） |
 | **异步处理** | 🗂️ Queue（arq + Redis）| 3 步 AI + 解压 + 批量入库都走 Queue；**Queue payload 必带 user_id + project_id + task_id**；消费者入口校验 |
-| **并发控制** | ❌ N/A | import_tasks 单 user 不会自己并发改同一任务；用 `idempotency_key (user_id, source_hash)` 防同 zip 重复提交（7 天内复用） |
+| **并发控制** | 部分需要（review 阶段双 user 并发——audit B7 标识）| import_tasks 主流程单 user 无并发；但 review 阶段同项目多 editor 可能同时改 mapping（tests C5）—— 当前设计接受 **last-write-wins**（无乐观锁），不丢数据但用户感知"刚才改的没了"。**[设计风险声明]**：editor 协作场景罕见，review 阶段加 last_modified_by 字段提示即可，不引入 version 乐观锁；idempotency_key `(user_id, project_id, source_hash)` 防同 zip 重复提交 |
 
 ### 约束清单逐项检查
 
 | 清单项 | M17 是否触发 | 实现 |
 |-------|-------------|------|
 | 1. activity_log | ✅ 触发（任务状态转换 + 入库结果）| 节 10 |
-| 2. 乐观锁 version | ❌ 不触发（无并发编辑场景）| N/A |
+| 2. 乐观锁 version | ❌ 不触发（review 阶段 last-write-wins，CY ack 接受设计风险）| 节 5 并发列说明 |
 | 3. **Queue payload tenant** | ✅ **强触发**（pilot 异步核心）| 节 12 详细 |
 | 4. idempotency_key | ✅ 触发（用户重复传同 zip）| 节 11 |
 | 5. DAO tenant 过滤 | ✅ 触发 | 节 9 |
@@ -447,7 +459,8 @@ class ClientCommand(BaseModel):
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
 | **Router** | 用户对 project ≥editor | `Depends(check_project_access(project_id, role="editor"))` |
 | **Service** | 任务是否真属于该 project + user | `_check_task_belongs_to_user_and_project(task_id, user_id, project_id)` |
-| **WebSocket connect** | 同 Router + 校验 task_id 归属 | WebSocket 握手时 + 每个事件入口 |
+| **WebSocket connect**（握手）| 同 Router + 校验 URL path 中 task_id 归属 user | WebSocket 握手 `accept()` 前；不通过则 close(1008) |
+| **WebSocket 每命令入口**（audit B6 修复）| 客户端 `ClientCommand` 中带的 task_id 必须等于握手时的 task_id | 每个 command 处理函数第一行：`assert command.task_id == self.handshake_task_id else close(1008)`——防同连接 cancel 任意 task |
 | **Queue 消费者**（关键 - 异步路径）| **payload 校验 + Service 层二次 tenant 检查** | `TaskPayload` 基类强制 user_id + project_id；worker 入口校验 + Service 层 `_check_access` |
 
 **异步路径权限**（呼应 04-layer Q4）：
@@ -491,17 +504,21 @@ class ImportTaskDAO:
         )
 
     def find_idempotent(
-        self, db: Session, user_id: UUID, source_hash: str
+        self, db: Session, user_id: UUID, project_id: UUID, source_hash: str
     ) -> ImportTask | None:
-        """idempotency: 7 天内同 user + 同 source_hash 复用"""
+        """idempotency: 7 天内同 user + 同 project + 同 source_hash 复用
+        ★ project_id 是 key 的一部分（audit B1 修复——防跨项目 task 误复用）
+        """
         from datetime import datetime, timedelta
         return (
             db.query(ImportTask)
             .filter(
                 ImportTask.user_id == user_id,
+                ImportTask.project_id == project_id,    # ← B1 修复：必须过滤 project
                 ImportTask.source_hash == source_hash,
                 ImportTask.created_at > datetime.utcnow() - timedelta(days=7),
-                ImportTask.status.in_(["completed", "awaiting_review", "partial_failed"]),  # 失败/取消的不复用
+                # status 复用规则：completed/awaiting_review/partial_failed 复用；failed/cancelled 不复用
+                ImportTask.status.in_(["completed", "awaiting_review", "partial_failed"]),
             )
             .first()
         )
@@ -538,16 +555,24 @@ Service 层 `import_service.py` + Queue tasks 内调 `self.activity.log(...)`，
 
 ## 11. idempotency_key 适用操作清单
 
-### 决策：idempotency 仅用于"重复提交同 zip"（独立设计，非 CY ack 第 2 组的"全无"范围）
+### 决策：M17 例外做 idempotency（CY 2026-04-21 ack）
 
-⚠️ **你拍板**：M17 是否例外（其他 5 模块都"全无"，M17 异步任务有真实重复提交需求）？
+**理由**：M17 写操作有真实金钱代价（AI token $0.5-5/次）+ 时间代价（3-10 分钟）。重复执行 = 浪费两份钱 + 算力。其他 5 模块是普通 CRUD 无金钱代价，保持"无幂等"统一规则。
 
-| 候选 | 范围 | 说明 |
-|------|------|------|
-| **A 例外**（推荐）| `(user_id, source_hash)` 7 天内复用上次任务 | 防用户重复传同 zip 浪费 AI token；DB UNIQUE 实现 |
-| **B 不例外** | M17 也无 idempotency | 用户重复传 = 重新跑 AI（每次几美元）；体验差 |
+**Idempotency 范围**：`(user_id, project_id, source_hash)` 7 天内复用上次任务
 
-**我倾向 A**——AI 调用真有钱成本（每次 zip 处理 ~$0.5-5），不能让用户重复点浪费。技术上用 DB UNIQUE 实现，service 层 `find_idempotent` 命中则返回上次 task。
+- **★ project_id 必须参与 key 计算**（audit B1 修复）—— 防止用户在 project-A 传过 zip-X，在 project-B 重传时命中 project-A 的 task 导致跨租户数据污染
+- **source_hash 算法**：
+  - zip：SHA256(zip 文件内容)
+  - git_url：SHA256(git_url + git_ref)
+  - git_bundle：SHA256(.git 包内容)
+- **DB 约束**：`UNIQUE(user_id, project_id, source_hash)`（节 3 已定义）
+- **过期策略**：`created_at > NOW() - INTERVAL '7 days'` 才算命中
+- **复用范围**：`status IN ('completed', 'awaiting_review', 'partial_failed')` 的任务可复用
+  - `completed`：直接返回成功结果
+  - `awaiting_review`：用户回到 review 阶段继续
+  - `partial_failed`：用户可重试失败 items
+- **不复用范围**：`status IN ('failed', 'cancelled')` 的任务不复用（让用户能重新跑）
 
 ### Idempotency 实现细节
 
@@ -556,13 +581,13 @@ Service 层 `import_service.py` + Queue tasks 内调 `self.activity.log(...)`，
 def submit_import(self, user_id, project_id, source_type, source_data) -> ImportTask:
     source_hash = self._compute_hash(source_data)
 
-    # 1. 检查 idempotency
-    existing = self.dao.find_idempotent(self.db, user_id, source_hash)
+    # 1. 检查 idempotency（必须含 project_id——B1 修复）
+    existing = self.dao.find_idempotent(self.db, user_id, project_id, source_hash)
     if existing:
         return existing  # 复用：直接返回上次 task（无论当前在哪个 status）
 
     # 2. 新建任务
-    task = self.dao.create(...)
+    task = self.dao.create(user_id=user_id, project_id=project_id, source_hash=source_hash, ...)
     self.queue.enqueue("import_extract", task_id=task.id, user_id=user_id, project_id=project_id)
     return task
 ```
@@ -586,16 +611,37 @@ class TaskPayload(BaseModel):
 
 class ImportExtractPayload(TaskPayload):
     task_id: UUID
-    source_type: str
+    source_type: ImportSourceType          # ★ 用枚举而非 str（audit B5 修复——mypy strict 类型安全）
 
 class ImportAIStepPayload(TaskPayload):
     task_id: UUID
-    step: int                              # 1 / 2 / 3
+    step: Literal[1, 2, 3]                 # ★ 限定取值（audit B5 修复——比 int 更严格）
     chunk_id: UUID | None = None           # 大 zip 分 chunk 时
+
+class ConfirmedNodeData(BaseModel):
+    """节 7 ConfirmedNode 的 dict 表达，用于 Queue payload 序列化"""
+    proposed_id: UUID
+    name: str
+    parent_id: UUID | None = None
+    skipped: bool = False
+
+class ConfirmedDimensionData(BaseModel):
+    proposed_id: UUID
+    target_node_id: UUID
+    dimension_type_id: int
+    content: dict[str, Any]
+
+class ConfirmedImportData(BaseModel):
+    """用户 review 后的最终数据——结构化替代 dict[str, Any]"""
+    nodes: list[ConfirmedNodeData]
+    dimensions: list[ConfirmedDimensionData]
+    competitors: list[dict[str, Any]]      # 引用 M06 的 schema
+    issues: list[dict[str, Any]]           # 引用 M07 的 schema
+    skip_items: list[UUID]
 
 class ImportBatchInsertPayload(TaskPayload):
     task_id: UUID
-    confirmed_data: dict                   # 用户 review 后的最终数据
+    confirmed_data: ConfirmedImportData    # ★ 强类型替代裸 dict（audit B5 修复——mypy strict）
 ```
 
 ### Queue 消费者入口校验
@@ -678,6 +724,22 @@ class ImportInvalidStateTransitionError(AppError):
     code = ErrorCode.IMPORT_INVALID_STATE_TRANSITION
     http_status = 409
     message = "Invalid state transition"
+
+class ImportBatchInsertFailedError(AppError):
+    code = ErrorCode.IMPORT_BATCH_INSERT_FAILED
+    http_status = 500
+    message = "Batch insert failed; transaction rolled back"
+
+class ImportQuotaExceededError(AppError):
+    code = ErrorCode.IMPORT_QUOTA_EXCEEDED
+    http_status = 429
+    message = "AI quota exceeded for user or project"
+
+class ImportTaskDuplicateError(AppError):
+    """idempotency 命中——非错误，但 Service 层用此类标识复用"""
+    code = ErrorCode.IMPORT_TASK_DUPLICATE
+    http_status = 200    # 不是错误，正常返回
+    message = "Reusing previous import task (idempotency hit)"
 ```
 
 ---
@@ -709,7 +771,7 @@ class ImportInvalidStateTransitionError(AppError):
 - [x] 节 8：三层防御 + **Queue 消费者侧权限**（异步路径补完）
 - [x] 节 9：DAO tenant 过滤 + idempotency 查询
 - [x] 节 10：activity_log 8 类事件
-- [x] 节 11：idempotency_key 适用清单（M17 例外说明）⚠️ 你拍板
+- [x] 节 11：idempotency_key 适用清单（M17 例外，CY ack）
 - [x] 节 12：**Queue payload schema 详细**（pilot 异步核心）+ 任务清单 + 重试策略
 - [x] 节 13：ErrorCode 8 个 + AppError 子类
 - [x] 节 14：测试场景大纲（详情转 tests.md）
@@ -730,13 +792,7 @@ class ImportInvalidStateTransitionError(AppError):
 | Q3 | 失败重试策略 | 全按 AI 倾向：3 次指数退避 / partial_failed 保留 / 死信 30 天 / idempotency 7 天 |
 | Q4 | 进度反馈 | **C WebSocket**（双向，可中途取消命令） |
 | Q5 | 取消时已花 token | **a 取消即删**（接受 AI token 浪费） |
-
-### ⚠️ 仍需你 1 句话拍板（节 11）
-
-- **M17 是否打破"全模块无 idempotency"统一规则**：M17 用 `(user_id, source_hash)` 7 天内复用上次任务（防 AI token 浪费）。其他 5 模块仍无幂等。
-  - [ ] 同意例外（A 推荐）
-  - [ ] 不同意，M17 也无幂等
-  - [ ] 改用其他范围
+| Q6 | M17 idempotency（节 11） | **A 例外**（M17 用 source_hash 7 天复用，其他 5 模块仍无幂等） |
 
 ---
 
