@@ -1,10 +1,10 @@
 ---
 title: M06 竞品参考 - 测试场景
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
-last_reviewed_at: null
+accepted: 2026-04-21
+last_reviewed_at: 2026-04-21
 module_id: M06
 prism_ref: F6
 pilot: false
@@ -50,7 +50,7 @@ complexity: low
 | E4 | 引用不存在竞品创建对标 | `competitor_id` 不存在 | 404 `COMPETITOR_NOT_FOUND` |
 | E5 | 引用跨项目竞品 | `competitor_id` 属于 projectB，但在 projectA 下建对标 | 422 `COMPETITOR_CROSS_PROJECT` |
 | E6 | 重复关联同一竞品 | 同一 (node_id, competitor_id) 二次 POST | 409 `COMPETITOR_REF_DUPLICATE` |
-| E7 | 删除有对标记录的竞品 | DELETE 有 ref 的竞品 | （设计稿决策后补充用例）详见 [00-design.md](./00-design.md) 节 7 `onDelete cascade` 说明 |
+| E7 | 删除有对标记录的竞品 | DELETE 有 ref 的竞品 | 204 + 级联删所有关联对标记录；activity_log 先写各 ref 的 `delete competitor_ref`，再写 `delete competitor`（含 ref_count） |
 | E8 | pros_and_cons 格式非法 | `pros_and_cons={"pros": "not-a-list"}` | 422 Pydantic 类型校验 |
 
 ---
@@ -68,7 +68,7 @@ complexity: low
 | ID | 场景 | 模拟 | 期望 |
 |----|------|------|------|
 | T1 | 跨项目越权读竞品列表 | userA 用 projectA token 访问 projectB 竞品列表 | 403 `PERMISSION_DENIED`（Router 层拦） |
-| T2 | 越权读对标记录 | A 用 projectA 路径访问 projectB node 的对标列表 | 403 `PERMISSION_DENIED` |
+| T2 | 越权读对标记录 | A 用 projectA 路径访问 projectB node 的对标列表 | 404 `NOT_FOUND`（DAO tenant 过滤生效，不暴露 forbidden 信息；Service 层 _check_competitor_belongs_to_project 抛 NotFoundError） |
 | T3 | DAO 单元测试 tenant 过滤 | `competitor_dao.list_by_project(other_project_id)` | 返回空 list |
 | T4 | DAO refs 单元测试 tenant 过滤 | `competitor_dao.list_refs_by_node(node_id, other_project_id)` | 返回空 list |
 | T5 | 跨项目竞品引用（Service 层）| Service 创建对标时 competitor_id 属于 projectB | 422 `COMPETITOR_CROSS_PROJECT`（Service 层 _check_competitor_belongs_to_project） |
@@ -82,7 +82,7 @@ complexity: low
 | P1 | 未登录读竞品列表 | 401 `UNAUTHENTICATED` |
 | P2 | viewer 创建竞品 | 403 `PERMISSION_DENIED`（POST 要求 editor） |
 | P3 | viewer 读取对标列表 | 200（只读允许 viewer） |
-| P4 | editor 删除竞品（有对标记录）| （设计稿决策后补充用例）待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 7 |
+| P4 | editor 删除竞品（有对标记录）| 204 + 级联删所有对标记录（editor 有删除权限） |
 
 ---
 

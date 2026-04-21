@@ -1,10 +1,10 @@
 ---
 title: M07 问题沉淀 - 测试场景
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
-last_reviewed_at: null
+accepted: 2026-04-21
+last_reviewed_at: 2026-04-21
 module_id: M07
 prism_ref: F7
 pilot: false
@@ -42,8 +42,8 @@ complexity: medium
 | E3 | category 非法枚举 | `category="unknown"` | 422 `ISSUE_CATEGORY_INVALID` |
 | E4 | node_id 跨项目 | node_id 属于 projectB，但在 projectA 下创建 | 422 `ISSUE_NODE_CROSS_PROJECT` |
 | E5 | 非法状态转换 closed→open | POST transition target_status="open" on closed issue | 422 `ISSUE_TRANSITION_INVALID` |
-| E6 | 非法状态转换 open→resolved | 跳过 in_progress 直接 resolved | 422 `ISSUE_TRANSITION_INVALID` |
-| E7 | 同状态重复 transition | in_progress → in_progress | 待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 11 |
+| E6 | 合法状态转换 open→resolved（直接解决）| POST transition target_status="resolved" on open issue | 200 + status=resolved + resolved_at 写入（直接解决合法，无需先经 in_progress） |
+| E7 | 同状态重复 transition | in_progress → in_progress | 422 `ISSUE_TRANSITION_INVALID`（Service 层校验：目标状态与当前状态相同视为无效转换） |
 | E8 | 删除不存在 issue | DELETE 不存在 id | 404 `ISSUE_NOT_FOUND` |
 | E9 | tags 非字符串数组 | `tags=["valid", 123]` | 422 Pydantic 类型校验 |
 
@@ -99,8 +99,8 @@ complexity: medium
 | ID | 场景 | 步骤 | 期望 |
 |----|------|------|------|
 | SM1 | 完整生命周期 | open → in_progress → resolved → closed | 每步 200 + resolved_at 在 resolved 步写入 |
-| SM2 | resolved → open（问题复现）| 已 resolved 的 issue 重新打开 | 200 + resolved_at 清空 + status=open |
-| SM3 | open → closed（直接关闭）| 不修复直接关闭 | 200 + resolved_at=null + status=closed |
+| SM2 | resolved → open（问题复现，禁止）| POST transition target_status="open" on resolved issue | 422 `ISSUE_TRANSITION_INVALID`（resolved 只能→closed；若问题复现需新建 issue 引用旧的） |
+| SM3 | open → closed（直接关闭，禁止）| POST transition target_status="closed" on open issue | 422 `ISSUE_TRANSITION_INVALID`（open 不能直接 closed，必须经 in_progress 或 resolved） |
 | SM4 | closed 后所有 transition 拦截 | closed issue 任意 transition | 422 `ISSUE_TRANSITION_INVALID` |
 
 ---

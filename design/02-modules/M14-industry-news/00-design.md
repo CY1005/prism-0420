@@ -1,12 +1,12 @@
 ---
 title: M14 行业动态 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M14
 prism_ref: F14
 pilot: false
@@ -15,12 +15,11 @@ complexity: low
 
 # M14 行业动态 - 详细设计
 
-> **特殊说明**：M14 是全局共享数据模块，无 tenant 隔离（05-catalog Q3.1 / 07-capability-matrix 明确）。
+> **特殊说明**：M14 是全局共享数据模块，无 tenant 隔离（06-design-principles 清单 5 豁免条件：全局数据）。
 > DAO 层 tenant 过滤执行全局豁免，但必须显式声明（见节 9）。
 
 **协作约定**：
 - ✅ 已定稿节：直接采用（4 维机械推导已确定）
-- ⚠️ **待 CY 裁决**：给候选 + 我的倾向 + 你裁决
 - 🔗 关联到 A/B 档规约的均给链接
 
 ---
@@ -43,10 +42,8 @@ complexity: low
 
 ### In scope（M14 负责）
 
-> ⚠️ **AI 推断，CY 复审必改**——以下业务边界基于 US-B2.4 + F14 推断，PRD 业务细节未完整描述。
-
 - **行业动态录入**：编辑者录入一条行业动态（标题 / 摘要 / 来源链接 / 发布日期 / 标签）（US-B2.4）
-- **动态列表展示**：所有用户查看全局动态信息流（时间倒序分页）
+- **动态列表展示**：所有已登录用户查看全局动态信息流（时间倒序分页）
 - **关联功能项**：将一条动态关联到一个或多个功能项 node（US-B2.4 "关联到具体功能项"）
 - **动态删除**：录入者或管理员删除一条动态
 - **动态编辑**：录入者或管理员修改已录入的动态内容
@@ -55,37 +52,23 @@ complexity: low
 
 | 不做的事 | 归属模块 |
 |---------|---------|
-| RSS / 第三方 API 自动抓取动态 | 本期不实现（见节 1 灰区） |
-| AI 自动分类 / 摘要生成 | 本期不实现（见节 1 灰区） |
+| RSS / 第三方 API 自动抓取动态 | 本期不实现（`source_type` 枚举预留） |
+| AI 自动分类 / 摘要生成 | 本期不实现（`source_type` 枚举预留） |
 | 功能项信息录入 / CRUD | M03 / M04 |
 | 操作日志展示（数据流转） | M15（消费 activity_log） |
 
 ### 边界灰区（显式说明）
 
-> ⚠️ **AI 推断，CY 复审必改**——数据来源是本设计最大的未确认点，PRD（01-PRD.md）未明说。
+#### 灰区 1：数据来源（CY 2026-04-21 ack）
 
-#### 灰区 1：数据来源（最关键决策）
-
-| 候选 | 含义 | 优 | 劣 | 我的倾向 |
-|------|------|----|----|---------|
-| **A: 手动录入（推荐）** | 编辑者手动填写标题/摘要/来源链接 | 本期范围最小；实现最简；CY 能控制质量 | 信息量受限于人工 | ⭐ |
-| **B: 第三方 RSS 拉取** | 配置 RSS 源后定时 pull | 信息自动化 | 需要 arq Queue + 定时任务；RSS 源管理；去重 | 超出 M14 🟢 低复杂度定位 |
-| **C: AI 自动抓取** | 调 LLM 或爬虫定期获取热点 | 信息最丰富 | 最复杂；成本高；本期无此规划 | 超出范围 |
-
-**我倾向 A：本期手动录入**——07-capability-matrix 将 M14 列为 AI ❓（低置信），PRD Q3.1 未提 M14 有异步/AI 能力；保持 🟢 低复杂度定位一致。B/C 候选预留扩展口（`source_type` 字段枚举值预留）。
+**决策：本期仅手动录入**（CY 2026-04-21 ack）。
+- `source_type='manual'` 强制约束（CHECK 约束）
+- `rss` / `ai` 枚举值预留扩展，本期 service 层拒绝创建非 manual 的记录
+- `source_type` 字段已加入 schema，避免后期 Alembic 迁移
 
 #### 灰区 2：动态可见范围
 
-> ⚠️ **AI 推断，CY 复审必改**
-
-M14 是全局数据——所有已登录用户均可见，还是需要限定某种条件？
-
-| 候选 | 含义 | 我的倾向 |
-|------|------|---------|
-| **A: 所有已登录用户可见** | 全局信息流，无项目限制 | ⭐ |
-| **B: 仅项目成员可见（按项目过滤）** | 动态归属某项目 | 违背"全局共享"定位（05-catalog 明确 Tenant ❌） |
-
-**我倾向 A**：全局可见，无 tenant 过滤，与 05-catalog 一致。
+**决策：全局可见（已登录即可读）**（CY 2026-04-21 ack）。所有已登录用户均可见，无项目隔离，与 06-design-principles 清单 5 全局豁免一致。
 
 ---
 
@@ -115,18 +98,11 @@ flowchart LR
 
 ## 3. 数据模型（SQLAlchemy + Alembic 要点）
 
-> ⚠️ **AI 推断，CY 复审必改**——字段设计基于 US-B2.4 + 灰区 1 候选 A（手动录入）推断，细节待 CY 确认。
+### 决策：本期仅 `source_type='manual'`（CY 2026-04-21 ack）
 
-### ⚠️ 待 CY 裁决：`source_type` 枚举是否本期就定义
+`rss` / `ai` 预留扩展，本期 service 层拒绝创建非 manual 的记录（`CHECK (source_type = 'manual')` 约束可在扩展时改）。
 
-| 候选 | 优 | 劣 |
-|------|----|----|
-| **A: source_type 列预留**（推荐） | 本期只有 `manual`；后期 RSS / AI 无需 schema 变更 | 代码里 if-else 提前写但本期只走 manual 分支 |
-| **B: 无 source_type 字段** | 更简单，本期确实只有 manual | 后期加字段需 Alembic 迁移 |
-
-**我倾向 A**：预留字段成本极低，避免后期迁移。
-
-### ER 图（候选 A，手动录入 + source_type 预留）
+### ER 图
 
 ```mermaid
 erDiagram
@@ -141,7 +117,7 @@ erDiagram
         text summary "摘要（可空）"
         string source_url "来源链接（可空）"
         date published_date "发布日期（可空）"
-        string source_type "枚举：manual/rss/ai（本期只 manual）"
+        string source_type "枚举：manual/rss/ai（本期只 manual，CHECK 约束）"
         string[] tags "标签数组（PG text[]）"
         uuid created_by FK
         uuid updated_by FK
@@ -163,7 +139,7 @@ erDiagram
 ```python
 # api/models/industry_news.py
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, UniqueConstraint, Index, Text, Date
+from sqlalchemy import ForeignKey, UniqueConstraint, Index, Text, Date, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy import String
 from datetime import date, datetime
@@ -175,6 +151,8 @@ class IndustryNews(Base, TimestampMixin):
     __tablename__ = "industry_news"
     __table_args__ = (
         # 注意：M14 全局数据，无 project_id 约束
+        # 本期 source_type 只允许 manual；后期扩展 rss/ai 时修改此 CHECK 约束
+        CheckConstraint("source_type = 'manual'", name="ck_industry_news_source_type_manual"),
         Index("ix_industry_news_created_at", "created_at"),
         Index("ix_industry_news_created_by", "created_by"),
         Index("ix_industry_news_tags", "tags", postgresql_using="gin"),
@@ -185,7 +163,8 @@ class IndustryNews(Base, TimestampMixin):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)   # 摘要（可空）
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # 来源链接（可空）
     published_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # 发布日期（可空）
-    source_type: Mapped[str] = mapped_column(Text, nullable=False, default="manual")  # 枚举：manual/rss/ai（本期只 manual）
+    source_type: Mapped[str] = mapped_column(Text, nullable=False, default="manual")
+    # source_type 枚举：manual/rss/ai（本期只 manual，CHECK 约束限制；rss/ai 预留，service 层本期拒绝）
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)  # 标签数组（PG text[]）
     created_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     updated_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
@@ -193,7 +172,6 @@ class IndustryNews(Base, TimestampMixin):
     node_links = relationship("NewsNodeLink", back_populates="news", cascade="all, delete-orphan")
 
 
-# api/models/news_node_link.py
 class NewsNodeLink(Base):
     """行业动态与功能项 node 的关联表"""
     __tablename__ = "news_node_links"
@@ -211,8 +189,6 @@ class NewsNodeLink(Base):
     news = relationship("IndustryNews", back_populates="node_links")
 ```
 
-> ⚠️ **AI 推断，CY 复审必改**——字段设计基于 US-B2.4 + 灰区 1 候选 A（手动录入）推断，细节待 CY 确认。`tags` 使用 PG `text[]` 数组（ARRAY(String)），GIN 索引支持数组检索。
-
 ### 表说明
 
 | 表 | 归属模块 | M14 操作 |
@@ -224,7 +200,7 @@ class NewsNodeLink(Base):
 
 ### Alembic 要点
 
-- `industry_news.source_type` 默认值 `'manual'`
+- `industry_news.source_type` 默认值 `'manual'`；CHECK 约束 `ck_industry_news_source_type_manual`（本期强制）
 - `news_node_links` 唯一约束：`UNIQUE(news_id, node_id)`（防重复关联）
 - 索引：
   - `(created_at DESC)` 时间倒序分页
@@ -236,20 +212,13 @@ class NewsNodeLink(Base):
 
 ## 4. 状态机（无状态 / 有状态显式说明）
 
+### 决策：M14 无状态字段（CY 2026-04-21 ack 统一最小集）
+
+**理由**：PRD 未定义"草稿/发布"区分；全局动态直接可见；避免过度设计。
+
 **显式声明（按原则 4）**：**M14 无状态实体**
 
 `industry_news` 和 `news_node_links` 均无 `status` 字段，无状态机。
-
-> ⚠️ **AI 推断，CY 复审必改**——若 CY 需要"草稿/已发布"区分（如内部草稿不对所有人可见），需补充 status 字段和状态机。
-
-### ⚠️ 待 CY 裁决：是否需要 status 字段
-
-| 候选 | 状态 | 何时用 | 我的倾向 |
-|------|------|--------|---------|
-| **A: 无状态（推荐）** | 无 status | PRD 未说"草稿/发布"区分；全局动态直接可见 | ⭐ |
-| **B: draft / published** | 录入后为草稿，审核后发布 | 若需要内容审核机制 | PRD 无此需求，过度设计 |
-
-**我倾向 A**：无状态，直接可见，最简实现。
 
 ---
 
@@ -271,8 +240,8 @@ class NewsNodeLink(Base):
 | 1. activity_log | ✅ 触发（变更操作：创建/编辑/删除动态 + 建立/解除关联） | 见节 10 |
 | 2. 乐观锁 version | ❌ 不触发（无并发编辑场景） | N/A |
 | 3. Queue payload tenant | ❌ 不触发（无 Queue） | N/A |
-| 4. idempotency_key | ❌ 不触发（见节 11） | N/A |
-| 5. DAO tenant 过滤 | **豁免**（全局数据） | 节 9 显式声明豁免 |
+| 4. idempotency_key | ❌ 不触发（CY ack 无幂等需求，见节 11） | N/A |
+| 5. DAO tenant 过滤 | **豁免**（全局数据，06-design-principles 清单 5 豁免条件） | 节 9 显式声明豁免 |
 
 ---
 
@@ -283,11 +252,13 @@ class NewsNodeLink(Base):
 | **Page** | `web/src/app/industry-news/page.tsx` | 渲染动态列表页 SSR；调 Server Action 拿初始数据 |
 | **Component** | `web/src/components/business/news-card.tsx`<br>`web/src/components/business/news-form.tsx`<br>`web/src/components/business/node-link-picker.tsx` | 动态卡片 / 录入表单 / 关联功能项 picker |
 | **Server Action** | `web/src/actions/industry-news.ts` | session 校验 / zod 入参校验 / fetch FastAPI |
-| **Router** | `api/routers/industry_news_router.py` | 路由定义 / `Depends(get_current_user)` / Pydantic schema 入参出参 |
-| **Service** | `api/services/industry_news_service.py` | 业务规则 / node 存在校验 / 写 activity_log |
+| **Router** | `api/routers/industry_news_router.py` | 路由定义 / `Depends(get_current_user)` 读；写接口加 `Depends(require_authenticated)` / Pydantic schema 入参出参 |
+| **Service** | `api/services/industry_news_service.py` | 业务规则 / node 存在校验 / 写操作权限校验（本人或管理员）/ 写 activity_log |
 | **DAO** | `api/dao/industry_news_dao.py` | SQL 构建 + **全局查询（无 tenant 过滤，显式豁免注释）** |
 | **Model** | `api/models/industry_news.py`<br>`api/models/news_node_link.py` | SQLAlchemy 模型（schema 真相源） |
 | **Schema** | `api/schemas/industry_news_schema.py` | Pydantic 请求 / 响应 |
+
+**权限统一**：Router 层已登录即可读；写接口（POST/PUT/DELETE）`Depends(require_authenticated)` 鉴权；删除/编辑在 Service 层再校验 `created_by == current_user.id OR is_admin`。
 
 **禁止**（呼应分层原则）：
 - ❌ Router 直 `db.query(IndustryNews)`
@@ -296,8 +267,6 @@ class NewsNodeLink(Base):
 ---
 
 ## 7. API 契约（Pydantic + OpenAPI 路径表）
-
-> ⚠️ **AI 推断，CY 复审必改**——路径命名和字段设计待 CY 确认。
 
 ### Endpoints
 
@@ -320,10 +289,10 @@ class NewsNodeLink(Base):
 class NewsCreate(BaseModel):
     title: str = Field(..., max_length=200)
     summary: str | None = None
-    source_url: str | None = None
+    source_url: str | None = Field(None, description="URL 格式校验")
     published_date: date | None = None
     tags: list[str] = Field(default_factory=list)
-    # source_type 固定为 'manual'，不暴露给用户
+    # source_type 固定为 'manual'，不暴露给用户；service 层强制
 
 class NewsUpdate(BaseModel):
     title: str | None = Field(None, max_length=200)
@@ -367,23 +336,13 @@ class NewsNodeLinkResponse(BaseModel):
 
 ## 8. 权限三层防御点（呼应 04-layer-architecture Q4）
 
-> ⚠️ **AI 推断，CY 复审必改**——权限规则基于 M14 全局数据推断。
+**决策：已登录即可写**（CY 2026-04-21 ack）。
 
 | 层 | 检查 | 实现 |
 |----|------|------|
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
-| **Router** | 已登录即可读；写操作需 editor 及以上角色 | `Depends(get_current_user)` 读；写接口加 `Depends(require_editor)` |
+| **Router** | 已登录即可读；写操作已登录即可 | `Depends(get_current_user)` 读；写接口同样只需 `Depends(get_current_user)`（无需 editor 角色，M14 全局数据无项目级角色）|
 | **Service** | 删除/编辑：校验 `created_by == current_user.id` OR 平台管理员 | Service 层 `_check_news_owner_or_admin()` |
-
-### ⚠️ 待 CY 裁决：写权限粒度
-
-| 候选 | 规则 | 我的倾向 |
-|------|------|---------|
-| **A: 已登录即可写（推荐）** | 任何已登录用户都能录入动态 | ⭐（行业动态是全局共享，录入门槛低） |
-| **B: 仅 editor 及以上** | 需要有某个项目的 editor 角色 | 与全局数据定位略矛盾（M14 无项目隔离） |
-| **C: 仅平台管理员** | 只有平台级管理员能录入 | 使用门槛太高，不符合 US-B2.4（编辑者录入） |
-
-**我倾向 A**：已登录即可录入，删除/编辑仅限本人或平台管理员。
 
 **异步路径**：M14 无异步，三层即足够。
 
@@ -399,9 +358,9 @@ class NewsNodeLinkResponse(BaseModel):
 class IndustryNewsDAO:
     """
     ⚠️ GLOBAL DATA — NO TENANT FILTER
-    M14 行业动态是全局共享数据（见 05-module-catalog.md Q3.1）。
+    M14 行业动态是全局共享数据（见 06-design-principles.md 清单 5 豁免条件：全局数据）。
     本 DAO 所有查询均无 project_id / user_id 过滤（访问控制在 Service 层）。
-    豁免理由：06-design-principles 清单 5 豁免条件 — 全局数据无 tenant 概念。
+    豁免理由：全局行业动态，所有已登录用户均可见。
     """
 
     def list_all(
@@ -425,11 +384,15 @@ class IndustryNewsDAO:
 
 | 豁免项 | 理由 | 清单 5 豁免条件 |
 |--------|------|----------------|
-| `IndustryNewsDAO` 所有查询 | 全局共享数据，无 project_id 概念 | "全局数据：全局行业动态" |
+| `IndustryNewsDAO` 所有查询 | 全局共享数据，无 project_id 概念 | "全局数据：全局行业动态"（06-design-principles 清单 5） |
 
 ---
 
 ## 10. activity_log 事件清单（呼应清单 1）
+
+### 决策：操作粒度 + metadata（CY 2026-04-21 ack 全模块统一）
+
+**理由**：折中方案，metadata 留 hash/size 等扩展点供 M15/M13/M16 后续消费。
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
@@ -445,14 +408,14 @@ class IndustryNewsDAO:
 
 ## 11. idempotency_key 适用操作清单（呼应清单 4）
 
-**显式声明（按原则 5 清单 4 要求）**：**M14 无 idempotency_key 操作**。
+### 决策：本模块无 idempotency 需求（CY 2026-04-21 ack 全模块统一）
 
-理由：
+**理由**：CRUD 走乐观锁/DB 唯一约束已防；删除天然幂等。具体：
 - 创建：`title` + `created_by` + `published_date` 组合无 DB 唯一约束（允许录入相同标题的不同动态）；重复提交风险可接受
 - 删除：天然幂等（重复 DELETE 返回 204）
 - 关联：`UNIQUE(news_id, node_id)` DB 约束防重
 
-> ⚠️ **AI 推断，CY 复审必改**——若 CY 认为创建动态需要防重复提交，可加 idempotency_key。
+**显式声明（按原则 5 清单 4 要求）**：**M14 无 idempotency_key 操作**。
 
 ---
 
@@ -462,7 +425,7 @@ class IndustryNewsDAO:
 
 显式声明（按原则 5 清单 3 要求）：**M14 不投递 Queue 任务**。
 
-> ⚠️ **AI 推断，CY 复审必改**——若 CY 决定采用灰区 1 候选 B（RSS 自动拉取），需补充 arq Queue 任务设计。
+> 若 CY 未来决定采用 RSS 自动拉取，需补充 arq Queue 任务设计（本期不在范围）。
 
 ---
 
@@ -528,21 +491,21 @@ class NewsForbiddenError(AppError):
 
 定稿前必须全部勾过：
 
-- [ ] 节 1：职责边界 in/out scope 完整；灰区 1 数据来源 ⚠️ 待 CY 裁决
-- [ ] 节 2：依赖图覆盖所有上下游
-- [ ] 节 3：数据模型 ER 图 + Alembic 要点完整；⚠️ source_type 字段决策已定
-- [ ] 节 4：状态机无状态显式声明；⚠️ status 字段决策已定
-- [ ] 节 5：4 维必答 + 5 项清单逐项标注
-- [ ] 节 6：分层职责表完整（每层文件路径明确）
-- [ ] 节 7：所有 API endpoint + Pydantic schema 列全
-- [ ] 节 8：权限三层防御；⚠️ 写权限粒度决策已定
-- [ ] 节 9：DAO 全局豁免显式声明（含注释代码示例）
-- [ ] 节 10：activity_log 事件清单
-- [ ] 节 11：idempotency 无，显式说明
-- [ ] 节 12：Queue N/A 显式声明
-- [ ] 节 13：ErrorCode 新增清单
-- [ ] 节 14：tests.md 测试场景写完
-- [ ] 节 15：本 checklist 全勾过
+- [x] 节 1：职责边界 in/out scope 完整；数据来源决策已定（CY ack）
+- [x] 节 2：依赖图覆盖所有上下游
+- [x] 节 3：数据模型 ER 图 + SQLAlchemy class + Alembic 要点完整；source_type 字段预留 + 本期只 manual（CY ack）
+- [x] 节 4：状态机无状态显式声明（CY ack）
+- [x] 节 5：4 维必答 + 5 项清单逐项标注
+- [x] 节 6：分层职责表完整（每层文件路径明确）；权限规则统一（已登录即可写）
+- [x] 节 7：所有 API endpoint + Pydantic schema 列全
+- [x] 节 8：权限三层防御；写权限粒度决策已定（CY ack）
+- [x] 节 9：DAO 全局豁免显式声明（含注释代码示例）
+- [x] 节 10：activity_log 事件清单 + 操作粒度+metadata（CY ack）
+- [x] 节 11：idempotency 无（CY ack）
+- [x] 节 12：Queue N/A 显式声明
+- [x] 节 13：ErrorCode 新增清单
+- [x] 节 14：tests.md 测试场景写完
+- [x] 节 15：本 checklist 全勾过
 - [ ] **🔴 第一轮 reviewer audit（完整性）通过**
 - [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
 - [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
@@ -552,15 +515,16 @@ class NewsForbiddenError(AppError):
 
 ---
 
-## 待 CY 裁决项汇总（一次过）
+## CY 决策记录（2026-04-21 批量统一）
 
-| # | 节 | 决策点 | 候选 | 我的倾向 |
-|---|----|-------|------|---------|
-| Q1 | 1 灰区 1 | 数据来源 | A 手动录入 / B RSS 拉取 / C AI 抓取 | **A 手动录入** |
-| Q2 | 1 灰区 2 | 动态可见范围 | A 所有已登录 / B 按项目 | **A 全局可见** |
-| Q3 | 3 | source_type 字段是否预留 | A 预留 / B 不预留 | **A 预留** |
-| Q4 | 4 | status 字段 | A 无 / B draft+published | **A 无状态** |
-| Q5 | 8 | 写权限粒度 | A 已登录即可 / B editor+ / C 平台管理员 | **A 已登录即可** |
+| # | 节 | 决策点 | 决定 |
+|---|----|-------|------|
+| Q1 | 1 灰区 1 | 数据来源 | **A 手动录入**（`source_type='manual'`，rss/ai 预留） |
+| Q2 | 1 灰区 2 | 动态可见范围 | **A 全局可见**（所有已登录用户） |
+| Q3 | 3 | source_type 字段是否预留 | **A 预留**（本期 CHECK 约束限 manual，后期扩展改约束） |
+| Q4 | 4 | status 字段 | **A 无状态**（统一最小集） |
+| Q5 | 8 | 写权限粒度 | **A 已登录即可**（无项目 editor 要求，全局数据） |
+| Q6 | 11 | idempotency 范围 | **A 无幂等**（统一） |
 
 ---
 
@@ -568,7 +532,7 @@ class NewsForbiddenError(AppError):
 
 - 上游设计：
   - `design/00-architecture/04-layer-architecture.md`（5 层 / 三层权限 / 事务边界）
-  - `design/00-architecture/05-module-catalog.md`（4 维标注 / Q3.1 全局无 tenant）
+  - `design/00-architecture/05-module-catalog.md`（4 维标注 / 全局无 tenant）
   - `design/00-architecture/06-design-principles.md`（原则 5 + 5 项清单 / 清单 5 豁免条件）
   - `design/00-architecture/07-capability-matrix.md`（M14 能力定位）
 - 工程规约：

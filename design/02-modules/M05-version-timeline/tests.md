@@ -1,10 +1,10 @@
 ---
 title: M05 版本演进时间线 - 测试场景
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
-last_reviewed_at: null
+accepted: 2026-04-21
+last_reviewed_at: 2026-04-21
 module_id: M05
 prism_ref: F5
 pilot: false

@@ -1,12 +1,12 @@
 ---
 title: M05 版本演进时间线 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M05
 prism_ref: F5
 pilot: false
@@ -17,7 +17,6 @@ complexity: medium
 
 **协作约定**：
 - ✅ 已定稿节：直接采用（来自架构规约 + 4 维标注）
-- ⚠️ **待 CY 裁决**：AI 推断，给候选 + 我的倾向 + 你裁决
 - 🔗 关联到 A/B 档规约均给链接
 
 ---
@@ -54,7 +53,7 @@ complexity: medium
 ### 边界灰区（显式说明）
 
 - **snapshot_data 存储**：M05 负责存，M16 负责读并生成自然语言描述。M05 本身不做 AI 解析。
-- **"标记当前版本"**：⚠️ 需 CY 裁决是否做"切换当前版本自动更新维度内容"（见节 15）。
+- **"切换当前版本"**：决策：仅改标记（`is_current` 布尔），不自动写回维度内容——版本回滚属于 M04 职责（CY 2026-04-21 ack）。
 
 ---
 
@@ -82,14 +81,10 @@ flowchart LR
 
 ## 3. 数据模型（SQLAlchemy + Alembic 要点）
 
-### ⚠️ 待 CY 裁决 Q1：version_records 是否冗余 project_id
+### 决策：`version_records` 冗余 `project_id`（CY 2026-04-21 ack 批量统一冗余）
 
-| 候选 | 优 | 劣 |
-|------|----|----|
-| **A: 不冗余** | 范式干净 | DAO tenant 过滤必须 JOIN nodes |
-| **B: 冗余 project_id**（推荐） | DAO 简单，直接 WHERE project_id=?；批量删除项目时直接过滤 | 写时须保证与 node.project_id 一致（service 层强制赋值） |
-
-**我倾向 B**——与 M04 同样策略，保持 DAO 实现一致性。
+**理由**：DAO 强制 tenant 过滤策略一致性，直接 `WHERE project_id=?` 无需 JOIN nodes；批量删除项目时简单。
+**一致性兜底**：service 层创建时强制 `record.project_id = node.project_id`。
 
 ### SQLAlchemy 模型
 
@@ -117,13 +112,19 @@ class VersionRecord(Base, TimestampMixin):
         ),
         Index("ix_version_node_project", "node_id", "project_id"),
         Index("ix_version_project", "project_id"),
-        # 部分索引：快速找当前版本
-        Index("ix_version_is_current", "node_id", postgresql_where="is_current = true"),
+        # 部分唯一约束（DB 级并发防护）：同 node 最多 1 条 is_current=true
+        # PG 部分唯一索引——SQLAlchemy 用 Index + unique=True + postgresql_where 表达
+        Index(
+            "uq_version_node_is_current",
+            "node_id",
+            unique=True,
+            postgresql_where=text("is_current = true"),
+        ),
     )
 
     id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     node_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
-    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant 字段
     version_label: Mapped[str] = mapped_column(Text, nullable=False)           # "v3.9.3" 或 "2026-04-07"
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -136,9 +137,7 @@ class VersionRecord(Base, TimestampMixin):
     node = relationship("Node", back_populates="version_records")
 ```
 
-> ⚠️ **AI 推断，CY 复审必改**：Prism 原字段 `mode` 重命名为 `release_mode` 以更明确语义；`createdBy` 补充（Prism 原无），用于 activity_log；字段名全用 snake_case（SQLAlchemy 规范）。
-
-### ER 图（候选 B）
+### ER 图
 
 ```mermaid
 erDiagram
@@ -177,21 +176,16 @@ erDiagram
   - `(node_id, project_id)` 主查询
   - `(project_id)` tenant 过滤
   - `(node_id, is_current)` 快速找当前版本（部分索引 `WHERE is_current = true`）
-- `is_current` 切换：Service 层先 UPDATE 旧 isCurrent=false，再 UPDATE 新 isCurrent=true（同一事务内，M05 不需要多表事务，两次 UPDATE 同一表均在 version_records）
-- CHECK 约束候选 B 兜底：`project_id = (SELECT project_id FROM nodes WHERE id = node_id)`
+- `is_current` 切换：Service 层在**单一事务内**先 UPDATE 旧 `is_current=false`，再 UPDATE 新 `is_current=true`（同表两次 UPDATE，事务包裹保证原子；非跨表事务）
+- 防并发窗口：PG 部分唯一索引 `UNIQUE (node_id) WHERE is_current = true` 在 DB 层保证同一 node 最多 1 条 is_current=true（Alembic 迁移中加入）
 
 ---
 
 ## 4. 状态机
 
-### ⚠️ 待 CY 裁决 Q2：version_records 是否需要 status 字段
+### 决策：仅 `is_current` 布尔，无 `status` 字段（CY 2026-04-21 ack 统一最小集）
 
-| 候选 | 说明 |
-|------|------|
-| **A: 无 status（推荐）** | version_records 只有 is_current（布尔）标记"当前版本"，不是状态枚举；PRD 无草稿/发布概念 |
-| **B: draft/published** | 允许创建草稿版本后再发布；PRD 未提及，过度设计 |
-
-**我倾向 A**——遵循 PRD US-B1.5，版本记录是手动录入的历史事实，无需草稿态。
+**理由**：PRD 未定义"草稿/发布"区分；`is_current` 是布尔标记，不构成状态机；避免过度设计。
 
 ### is_current 布尔转换图
 
@@ -201,7 +195,8 @@ is_current 不是状态机（只是布尔标记），但存在一个业务约束
   同一 node 下，任意时刻最多 1 条 is_current = true
 
   [is_current=false] <--(切换当前版本)--> [is_current=true]
-                        （Service 层原子操作：先置 false，再置 true）
+                        （Service 层事务原子操作：先置 false，再置 true）
+                        （DB 级防护：部分唯一索引 UNIQUE(node_id) WHERE is_current=true）
 ```
 
 显式声明（原则 4）：**M05 无 status 枚举实体**。`is_current` 是布尔标记，不构成状态机。
@@ -212,12 +207,10 @@ is_current 不是状态机（只是布尔标记），但存在一个业务约束
 
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
-| **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE version_records.project_id = ?`（候选 B 冗余字段） |
-| **多表事务** | ❌ 不需要 | 版本记录的 CRUD 只涉及 version_records 单表；"切换当前版本"是同表两次 UPDATE，可放单 DB 事务（非多表）；activity_log 写入在 Service 层同方法内调用 |
+| **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE version_records.project_id = ?`（冗余字段） |
+| **多表事务** | ❌ 主流程同步无多表事务；`is_current` 切换走单表 UPDATE 原子（同一表不同行的 set true/false）+ 事务包裹保证原子 | Service 层 `with db.begin():` 包裹两次 UPDATE（同表），非跨表事务 |
 | **异步处理** | ❌ N/A | 全同步，用户手动录入，无 AI / Queue 处理 |
-| **并发控制** | ❌ N/A | 05-module-catalog 标注无并发；版本记录主要是追加写（每次新建版本），不是多人编辑同一记录 |
-
-> ⚠️ **AI 推断，CY 复审必改**：事务标注参考 05-module-catalog（事务=❌），但 is_current 切换需同表两次 UPDATE，Service 层包一个 transaction 即可（不是跨表事务，因此维持❌）。
+| **并发控制** | ❌ N/A | 版本记录主要是追加写（每次新建版本），不是多人编辑同一记录；`is_current` 切换由 DB 部分唯一索引在数据库层防护 |
 
 ### 约束清单逐项检查
 
@@ -226,7 +219,7 @@ is_current 不是状态机（只是布尔标记），但存在一个业务约束
 | 1. activity_log | ✅ 触发（创建/更新/删除版本记录）| 节 10 |
 | 2. 乐观锁 version | ❌ 不触发（无并发编辑场景）| N/A |
 | 3. Queue payload tenant | ❌ 不触发（无 Queue）| N/A |
-| 4. idempotency_key | ⚠️ 待裁决 | 节 11 |
+| 4. idempotency_key | ❌ 不触发（CY ack 无幂等需求）| 节 11 |
 | 5. DAO tenant 过滤 | ✅ 触发 | 节 9 |
 
 ---
@@ -283,6 +276,8 @@ class VersionUpdate(BaseModel):
     details: str | None = None
     change_type: Literal["added", "modified", "deprecated", "split", "merged", "migrated"] | None = None
     release_mode: Literal["release", "continuous"] | None = None
+    # snapshot_data 不允许通过 PUT 更新（快照是历史事实，不可改）
+    # Pydantic 无此字段 → 自动拒绝任何传入的 snapshot_data
 
 class VersionResponse(BaseModel):
     id: UUID
@@ -305,8 +300,7 @@ class VersionListResponse(BaseModel):
     total: int
 ```
 
-⚠️ **AI 推断，CY 复审必改**：
-- `snapshot_data` 是否允许 PUT 更新？候选 A：不允许（快照是历史事实，不可改）；候选 B：允许（避免数据修复麻烦）。我倾向 A。
+**决策：`snapshot_data` 不允许 PUT 更新**（CY 2026-04-21 ack）——快照是历史事实，`VersionUpdate` schema 无此字段，Pydantic 自动拒绝；Router 层不需要额外拦截。
 
 ---
 
@@ -350,12 +344,30 @@ class VersionDAO:
         )
 
     def clear_current_flag(self, db: Session, node_id: UUID, project_id: UUID) -> None:
-        """切换当前版本前先清空旧 isCurrent"""
+        """切换当前版本前先清空旧 isCurrent——必须在事务内调用"""
         db.query(VersionRecord).filter(
             VersionRecord.node_id == node_id,
             VersionRecord.project_id == project_id,
             VersionRecord.is_current == True,
         ).update({"is_current": False})
+```
+
+**Service 层 set_current 调用模式**（事务包裹 + activity_log 同事务，遵循 M04 pilot 范式）：
+
+```python
+# api/services/version_service.py（节选）
+def set_current(self, db: Session, version_id: UUID, node_id: UUID, project_id: UUID, user_id: UUID) -> VersionRecord:
+    with db.begin():                                          # ← 事务包裹
+        self.version_dao.clear_current_flag(db, node_id, project_id)  # 清空旧 current
+        record = self.version_dao.get_one(db, version_id, project_id)
+        if not record:
+            raise VersionNotFoundError()
+        record.is_current = True
+        # ✅ activity_log 在事务内（与 M04 pilot 一致）——任一失败回滚
+        self.activity.log(user_id, "set_current", target_type="version_record", target_id=record.id,
+                          metadata={"node_id": str(node_id), "version_label": record.version_label})
+    # 部分唯一索引 uq_version_node_is_current 在 commit 时兜底（防并发双 current）
+    return record
 ```
 
 ### 豁免清单
@@ -365,6 +377,10 @@ class VersionDAO:
 ---
 
 ## 10. activity_log 事件清单
+
+### 决策：操作粒度 + metadata（CY 2026-04-21 ack 全模块统一）
+
+**理由**：折中方案，metadata 留 hash/size 等扩展点供 M15/M13/M16 后续消费。
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
@@ -379,14 +395,12 @@ class VersionDAO:
 
 ## 11. idempotency_key 适用操作
 
-### ⚠️ 待 CY 裁决 Q3：是否需要幂等
+### 决策：本模块无 idempotency 需求（CY 2026-04-21 ack 全模块统一）
 
-| 候选 | 理由 | 我的倾向 |
-|------|------|---------|
-| **A: 全无（推荐）** | 版本记录唯一约束 `(node_id, version_label)` 天然防重复创建；删除幂等天然成立；更新重试无害 | ⭐ |
-| **B: 创建加 idempotency_key** | 防止网络重试导致重复版本记录 | 唯一约束已覆盖 |
-
-**我倾向 A**——`UNIQUE(node_id, version_label)` 已防重；无需额外幂等机制。
+**理由**：CRUD 走乐观锁/DB 唯一约束已防；删除天然幂等。具体：
+- 创建：`UNIQUE(node_id, version_label)` 防重复版本标签
+- 更新：重试无害
+- 删除：天然幂等（重复 DELETE 返回 204）
 
 显式声明（清单 4）：**M05 无 idempotency_key 操作**。
 
@@ -447,25 +461,23 @@ class VersionSnapshotInvalidError(ValidationError):
 
 ---
 
-## 15. 完成度判定 checklist + ⚠️ 待 CY 裁决项汇总
+## 15. 完成度判定 checklist
 
-### Checklist
-
-- [ ] 节 1：职责边界 in/out scope 完整（引 US-B1.5 / US-C1.4）
-- [ ] 节 2：依赖图完整
-- [ ] 节 3：数据模型 ER 图 + Alembic 要点 + ⚠️ project_id 冗余决策
-- [ ] 节 4：is_current 布尔语义明确（无状态机）
-- [ ] 节 5：4 维必答 + 5 项清单逐项
-- [ ] 节 6：分层文件路径明确
-- [ ] 节 7：所有 API endpoint + schema + ⚠️ snapshot_data 可否更新决策
-- [ ] 节 8：权限三层
-- [ ] 节 9：DAO tenant 过滤 + 豁免清单（无）
-- [ ] 节 10：activity_log 4 种事件
-- [ ] 节 11：idempotency 显式 N/A
-- [ ] 节 12：Queue 显式 N/A
-- [ ] 节 13：ErrorCode 3 个新增
-- [ ] 节 14：tests.md 完整
-- [ ] 节 15：本 checklist 全勾过
+- [x] 节 1：职责边界 in/out scope 完整（引 US-B1.5 / US-C1.4）
+- [x] 节 2：依赖图完整
+- [x] 节 3：数据模型 ER 图 + Alembic 要点 + SQLAlchemy class + project_id 冗余（CY ack）
+- [x] 节 4：is_current 布尔语义明确（无状态机，CY ack）
+- [x] 节 5：4 维必答 + 5 项清单逐项
+- [x] 节 6：分层文件路径明确
+- [x] 节 7：所有 API endpoint + schema + snapshot_data 不可 PUT 更新（CY ack）
+- [x] 节 8：权限三层
+- [x] 节 9：DAO tenant 过滤 + 豁免清单（无）
+- [x] 节 10：activity_log 操作粒度+metadata（CY ack）+ 4 种事件
+- [x] 节 11：idempotency 无（CY ack）
+- [x] 节 12：Queue 显式 N/A
+- [x] 节 13：ErrorCode 3 个新增
+- [x] 节 14：tests.md 测试场景写完
+- [x] 节 15：本 checklist 全勾过
 - [ ] **🔴 第一轮 reviewer audit（完整性）通过**
 - [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
 - [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
@@ -473,17 +485,17 @@ class VersionSnapshotInvalidError(ValidationError):
 
 > ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 10 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
-### ⚠️ 待 CY 裁决项汇总
+---
 
-| # | 节 | 决策点 | 候选 | 我的倾向 |
-|---|----|-------|------|---------|
-| Q1 | 3 | version_records 是否冗余 project_id | A 不冗余 / B 冗余 | **B** |
-| Q2 | 4 | 是否需要 status 字段 | A 无 / B draft+published | **A** |
-| Q3 | 7 | snapshot_data 是否允许 PUT 更新 | A 不允许 / B 允许 | **A** |
-| Q4 | 11 | idempotency 范围 | A 全无 / B 创建加 key | **A** |
-| Q5 | 1 | "切换当前版本"是否自动写回维度内容 | A 否（只改标记）/ B 是（写回维度快照）| **A**（M04 职责分离） |
+## CY 决策记录（2026-04-21 批量统一）
 
-> ⚠️ **以上所有判断均为 AI 推断，CY 复审必改**
+| # | 节 | 决策点 | 决定 |
+|---|----|-------|------|
+| Q1 | 3 | version_records 是否冗余 project_id | **B 冗余**（统一规则） |
+| Q2 | 4 | 是否需要 status 字段 | **A 无状态**（统一最小集，仅 is_current 布尔） |
+| Q3 | 7 | snapshot_data 是否允许 PUT 更新 | **A 不允许**（快照是历史事实） |
+| Q4 | 11 | idempotency 范围 | **A 无幂等**（统一） |
+| Q5 | 1 | "切换当前版本"是否自动写回维度内容 | **A 否**（只改标记，M04 职责分离） |
 
 ---
 

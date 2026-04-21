@@ -95,16 +95,12 @@ flowchart LR
 
 ## 3. 数据模型（SQLAlchemy + Alembic 要点）
 
-### ⚠️ 待 CY 裁决：`dimension_records` 是否冗余 `project_id`
+### 决策：`dimension_records` 冗余 `project_id`（CY 2026-04-21 ack 批量统一冗余）
 
-| 候选 | 优 | 劣 |
-|------|----|----|
-| **A: 不冗余**（按 Prism 现状） | 范式干净；project_id 通过 nodes 反查 | DAO 每次都要 JOIN nodes（性能可控但代码要小心） |
-| **B: 冗余 project_id**（推荐） | DAO 层 tenant 过滤 SQL 简单（直接 WHERE project_id=?）；性能更好；批量删除项目时简单 | 写时要保证 project_id 与 node.project_id 一致（trigger 或 service 层） |
+**理由**：原则 5 清单 5（DAO 强制 tenant 过滤）下冗余字段让 DAO 实现成本最低；性能更好；批量删除项目时简单。
+**一致性兜底**：service 层创建时强制 `record.project_id = node.project_id`；alembic 迁移加 CHECK 约束 / PG 14+ generated column。
 
-**我倾向 B**——A+B 档原则 5 清单 5（DAO 强制 tenant 过滤）下，B 让 DAO 实现成本最低；不一致风险通过 service 层创建时强制赋值 + alembic 迁移加 CHECK 约束兜底。
-
-### ER 图（基于候选 B）
+### ER 图
 
 ```mermaid
 erDiagram
@@ -210,17 +206,11 @@ class DimensionRecord(Base, TimestampMixin):
 
 ## 4. 状态机（无状态 / 有状态显式说明）
 
-### ⚠️ 待 CY 裁决：dimension_records 是否需要 status 字段
+### 决策：dimension_records 无 status 字段（CY 2026-04-21 ack 统一最小集）
 
-| 候选 | 状态 | 何时用 | 我的倾向 |
-|------|------|--------|---------|
-| **A: 无状态** | dimension_records 只有 version 数字，无 status | 当前 PRD 没说"草稿 / 发布"区分 | ⭐ 推荐 |
-| **B: 有 draft/published** | 编辑时是 draft，显式发布后变 published | 区分"私人草稿"和"团队可见" | PRD 没说，避免过度设计 |
-| **C: 有 active/archived** | 软删除 | 删除维度记录后保留历史 | 可考虑——但 activity_log 已能追溯，软删除收益小 |
+**理由**：PRD 未定义"草稿/发布"区分；硬删除 + activity_log 已满足审计需求；避免过度设计。
 
-**我倾向 A：无状态**——遵循 PRD，不过度设计；硬删除 + activity_log 已满足审计。
-
-### 状态机图（候选 A）
+### 状态机图
 
 ```
 本模块 dimension_records 实体无 status 字段，无状态机。
@@ -250,7 +240,7 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 | 1. activity_log | ✅ 触发（变更操作）| 节 10 列清单 |
 | 2. 乐观锁 version | ✅ 触发（多人编辑）| dimension_records.version |
 | 3. Queue payload tenant | ❌ 不触发（无 Queue）| N/A |
-| 4. idempotency_key | ⚠️ 待裁决 | 节 11 |
+| 4. idempotency_key | ❌ 不触发（CY ack 无幂等需求）| 节 11 |
 | 5. DAO tenant 过滤 | ✅ 触发 | 节 9 |
 
 ---
@@ -327,11 +317,7 @@ class CompletionResponse(BaseModel):
     completion_rate: float           # 0.0 - 1.0
 ```
 
-⚠️ **待 CY 裁决**：
-- `content` 用 `dict[str, Any]` 还是按 `dimension_type_key` 动态生成具体 Pydantic 类？
-  - 候选 A：`dict[str, Any]`，service 层用 `dimension_types.field_schema` 跑 jsonschema 校验（更灵活，维度类型可后台配置）
-  - 候选 B：每个维度类型一个 Pydantic 类（强类型，但加维度要改代码 + 重新 codegen）
-  - 我倾向 A——业务上"维度类型"是配置数据，不是代码
+**决策：`content` 用 `dict[str, Any]`**（CY 2026-04-21 ack）—— service 层用 `dimension_types.field_schema` 跑 jsonschema 运行时校验。理由：维度类型是配置数据不是代码，新增维度无需改代码。
 
 ---
 
@@ -349,7 +335,7 @@ class CompletionResponse(BaseModel):
 
 ## 9. DAO tenant 过滤策略（呼应原则 5 清单 5）
 
-### 主查询模式（候选 B 实现）
+### 主查询模式（dimension_records 冗余 project_id）
 
 ```python
 # api/dao/dimension_dao.py
@@ -409,17 +395,11 @@ class DimensionDAO:
 
 ## 10. activity_log 事件清单（呼应清单 1）
 
-### ⚠️ 待 CY 裁决：粒度
+### 决策：操作粒度 + metadata（CY 2026-04-21 ack 全模块统一）
 
-| 候选 | 例子 | 优 | 劣 |
-|------|------|----|----|
-| **A: 操作粒度** | `dimension.update {type_id: 5}` | 简单；表行数少 | 看不出"改了哪个字段" |
-| **B: 字段粒度** | `dimension.update {type_id: 5, fields: ["technical_solution"]}` | 审计精细 | 实现复杂；M15 数据流转才是消费方 |
-| **C: 操作粒度 + diff metadata** | `dimension.update {type_id: 5, metadata: {old_hash, new_hash}}` | 折中 | metadata 字段已有，扩展性好 |
+**理由**：折中方案——表行数可控；metadata 留 hash/size 等扩展点供 M15 / M13 / M16 后续消费。
 
-**我倾向 C**：操作粒度 + metadata 留 hash / size，需要时 M15 / M13 扩展消费。
-
-### 事件清单（候选 C）
+### 事件清单
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
@@ -435,18 +415,12 @@ Service 层 `dimension_service.py`，每个 C/U/D 方法事务内调 `self.activ
 
 ## 11. idempotency_key 适用操作清单（呼应清单 4）
 
-### ⚠️ 待 CY 裁决
+### 决策：M04 无 idempotency 需求（CY 2026-04-21 ack 全模块统一无幂等）
 
-| 候选 | 范围 | 我的倾向 |
-|------|------|---------|
-| **A: 全无** | M04 无敏感操作；编辑可重复（乐观锁防丢失）；删除支持重复（删除已删的返回 204） | ⭐ 推荐 |
-| **B: 仅删除** | 删除维度走 idempotency_key | 收益不大，删除幂等天然成立 |
-| **C: 创建也加** | 防止网络重试导致重复创建（特别是空状态点击）| 唯一约束 `(node_id, type_id)` 已防 → 重复创建会被 DB 挡 |
-
-**我倾向 A：M04 无 idempotency 需求**——
-- 更新：乐观锁 + 重复请求会因 version 不匹配而失败一次（用户需主动刷新），自然防重
+**理由**：
+- 更新：乐观锁 + version 不匹配自然防重
 - 创建：DB 唯一约束 `(node_id, type_id)` 防重
-- 删除：天然幂等（重复 DELETE 第二次返回 204 也合理）
+- 删除：天然幂等（重复 DELETE 返回 204）
 
 显式声明（按原则 5 清单 4 要求）：**M04 无 idempotency_key 操作**。
 
@@ -528,21 +502,21 @@ class DimensionDuplicateError(AppError):
 
 定稿前必须全部勾过：
 
-- [ ] 节 1：职责边界 in/out scope 完整
-- [ ] 节 2：依赖图覆盖所有上下游
-- [ ] 节 3：数据模型 ER 图 + Alembic 要点完整 + ⚠️ project_id 冗余决策已定
-- [ ] 节 4：状态机决策已定（无状态显式声明）
-- [ ] 节 5：4 维必答 + 5 项清单逐项标注
-- [ ] 节 6：分层职责表完整（每层文件路径明确）
-- [ ] 节 7：所有 API endpoint + Pydantic schema 列全 + ⚠️ content 类型决策已定
-- [ ] 节 8：权限三层防御 + 异步路径声明
-- [ ] 节 9：DAO 主查询模式 + 豁免清单（无）
-- [ ] 节 10：activity_log 事件粒度决策已定 + 事件清单
-- [ ] 节 11：idempotency 决策已定（A: 无）
-- [ ] 节 12：Queue 显式 N/A
-- [ ] 节 13：ErrorCode 新增清单 + AppError 类
-- [ ] 节 14：tests.md 测试场景写完
-- [ ] 节 15：本 checklist 全勾过
+- [x] 节 1：职责边界 in/out scope 完整
+- [x] 节 2：依赖图覆盖所有上下游
+- [x] 节 3：数据模型 ER 图 + Alembic 要点 + SQLAlchemy class 完整 + project_id 冗余（CY ack）
+- [x] 节 4：状态机决策已定（无状态显式声明，CY ack）
+- [x] 节 5：4 维必答 + 5 项清单逐项标注
+- [x] 节 6：分层职责表完整（每层文件路径明确）
+- [x] 节 7：所有 API endpoint + Pydantic schema 列全 + content 类型 dict[str,Any]（CY ack）
+- [x] 节 8：权限三层防御 + 异步路径声明
+- [x] 节 9：DAO 主查询模式 + 豁免清单（无）
+- [x] 节 10：activity_log 操作粒度+metadata（CY ack）+ 事件清单
+- [x] 节 11：idempotency 无（CY ack）
+- [x] 节 12：Queue 显式 N/A
+- [x] 节 13：ErrorCode 新增清单 + AppError 类
+- [x] 节 14：tests.md 测试场景写完
+- [x] 节 15：本 checklist 全勾过
 - [ ] **🔴 第一轮 reviewer audit（完整性）通过**
 - [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
 - [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
@@ -550,15 +524,15 @@ class DimensionDuplicateError(AppError):
 
 ---
 
-## 待 CY 裁决项汇总（一次过）
+## CY 决策记录（2026-04-21 批量统一）
 
-| # | 节 | 决策点 | 候选 | 我的倾向 |
-|---|----|-------|------|---------|
-| Q1 | 3 | dimension_records 是否冗余 project_id | A 不冗余 / B 冗余 | **B** |
-| Q2 | 4 | 是否需要 status 字段 | A 无 / B draft+published / C active+archived | **A** |
-| Q3 | 7 | content 类型 | A dict[str,Any] / B 每维度一类 | **A** |
-| Q4 | 10 | activity_log 粒度 | A 操作 / B 字段 / C 操作+metadata | **C** |
-| Q5 | 11 | idempotency 范围 | A 全无 / B 仅删除 / C 含创建 | **A** |
+| # | 节 | 决策点 | 决定 |
+|---|----|-------|------|
+| Q1 | 3 | dimension_records 是否冗余 project_id | **B 冗余**（统一规则） |
+| Q2 | 4 | 是否需要 status 字段 | **A 无状态**（统一最小集） |
+| Q3 | 7 | content 类型 | **A `dict[str, Any]`** |
+| Q4 | 10 | activity_log 粒度 | **C 操作+metadata**（统一） |
+| Q5 | 11 | idempotency 范围 | **A 无幂等**（统一） |
 
 ---
 
