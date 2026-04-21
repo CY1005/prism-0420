@@ -1,54 +1,80 @@
-# 模块详细设计
+# 模块详细设计（C 档）
 
-> 本期只设计 1 个模块：**M3（功能项档案页，对应 Prism F4）**
-
-详细设计将在档位 A+B 完成后开始。
+按 16 字段模板逐模块设计——pilot 验证模板可复用性，再批量填其他模块。
 
 ---
 
-## 每个模块的产出清单
+## 模块清单（按 pilot 顺序）
 
-每个模块产出 7 个文档（按"软件工程设计前置方法论"checklist）：
+| 顺序 | 模块 | 状态 | 路径 |
+|------|------|------|------|
+| **Pilot 1** | M04 功能项档案页（覆盖并发） | draft | [`M04-feature-archive/`](./M04-feature-archive/) |
+| **Pilot 2** | M17 AI 智能导入（覆盖 Queue 异步） | 待开 | `M17-ai-import/` |
+| 之后 | M01 / M02 / M03 基础链 | 待开 | — |
+| 之后 | M13 / M16 / M18 复杂 AI | 待开 | — |
+| 之后 | M5-M12 中复杂度 8 个 | 待开 | — |
+| 之后 | M14 / M15 / M19 / M20 简单 4 个 | 待开 | — |
 
-```
-M3-功能项档案/
-├── 01-业务理解.md          # 这个模块在做什么、用户旅程、为什么需要它
-├── 02-实体设计-ER图.md     # 实体、字段、关系（Mermaid erDiagram）
-├── 03-状态机设计.md        # 状态枚举、转换、副作用、非法转换
-├── 04-数据流图-DFD.md      # 数据从哪进、经过哪、到哪出
-├── 05-数据字典.md          # 每个字段的语义、类型、约束、生命周期
-├── 06-接口契约.md          # API 定义（contract first）
-└── 07-8问checklist.md      # 设计前置方法论的 8 问
-```
-
-对照报告在 `99-comparison/` 目录。
+完整能力定位见 [`../00-architecture/07-capability-matrix.md`](../00-architecture/07-capability-matrix.md)。
 
 ---
 
-## 设计流程（每个模块）
+## 16 字段模板（每个模块产出）
 
-按"双 Agent 辩论"流程：
+每个模块目录最少包含 `00-design.md`（节 0-13 + 15）+ `tests.md`（节 14）。
+
+| # | 节 | 性质 |
+|---|----|------|
+| 0 | frontmatter | 强制（规约 11.3） |
+| 1 | 职责边界（in / out scope） | 业务 |
+| 2 | 依赖模块图（M? → M?） | 半机械 |
+| 3 | 数据模型（SQLAlchemy + Alembic） | 业务核心 |
+| 4 | 状态机（无状态显式声明） | 业务 |
+| 5 | 多人架构 4 维必答 | 半机械（按 catalog） |
+| 6 | 分层职责表 | 机械（按 04-layer） |
+| 7 | API 契约（Pydantic + OpenAPI） | 半机械 |
+| 8 | 权限三层防御点 | 机械（按 04-layer Q4） |
+| 9 | DAO tenant 过滤策略 | 机械（按清单 5） |
+| 10 | activity_log 事件清单 | 业务 |
+| 11 | idempotency_key 适用清单 | 业务 |
+| 12 | Queue payload schema（异步专用） | 半机械（异步模块） |
+| 13 | ErrorCode 新增清单 | 半机械 |
+| 14 | 测试场景（独立 tests.md） | 业务 |
+| 15 | 完成度判定 checklist | 机械 |
+
+---
+
+## 设计流程（每模块）
 
 ```
-CY 出业务理解
-    ↓
-AI 第一轮质疑（完整性）
-    ↓
-CY 修订
-    ↓
-CY 出实体清单 + 状态枚举（朴素版）
-    ↓
-AI 第一轮质疑
-    ↓
-CY 修订 → 出 ER 图、状态机图、DFD
-    ↓
-AI 第二轮质疑（边界场景）
-    ↓
-CY 修订 → 出数据字典、接口契约
-    ↓
-AI 第三轮质疑（演进）
-    ↓
-CY 修订 → 完成 8 问 checklist
-    ↓
-对比 Prism 现状 → 输出对照报告
+CY 出业务理解（节 1 + 节 3 数据语义 + 节 4 状态语义）
+       ↓
+AI 出 16 字段初稿（机械节定稿，业务节给候选）
+       ↓
+CY 逐节裁决「待 CY 裁决」项 + 复审
+       ↓
+CY 标 status: accepted
+       ↓
+独立 reviewer Agent 三轮 audit（Sonnet）：
+  ① 完整性    ② 边界场景    ③ 演进 / 模板可复用性
+       ↓
+修复 + 收尾
+       ↓
+对照 Prism 现状 → 99-comparison/ 报告
 ```
+
+**Agent 协作纪律**：
+- pilot 模板用对话内推进，不起子 Agent
+- audit 用独立 Sonnet Agent
+- Agent 不得 commit / push（Agent 只产 patch / report，CY 或主对话 commit）
+
+---
+
+## 完成度判定（C 档整体）
+
+- [ ] Pilot M04 完成 + audit 通过 → 模板字段定稿
+- [ ] Pilot M17 完成 + audit 通过 → 异步字段补完
+- [ ] 20 模块全部 status=accepted
+- [ ] 99-comparison/ 对照报告：每模块一份
+
+对照报告见 [`../99-comparison/`](../99-comparison/) 目录（待建）。
