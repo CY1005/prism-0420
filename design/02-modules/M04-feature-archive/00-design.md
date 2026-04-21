@@ -6,9 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M04
 prism_ref: F4
 pilot: true
+complexity: high
 ---
 
 # M04 功能项档案页 - 详细设计
@@ -156,6 +158,43 @@ erDiagram
 | `project_dimension_configs` | M02 主 | 只读（哪些维度启用、排序） |
 | `dimension_records` | **M04 主** | C/U/D（U 含乐观锁） |
 | `activity_logs` | 横切 | W（每次 C/U/D 都写） |
+
+### SQLAlchemy model
+
+```python
+# api/models/dimension_record.py
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, UniqueConstraint, Integer, CheckConstraint
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+from uuid import UUID as PyUUID, uuid4
+from typing import Any
+from .base import Base, TimestampMixin
+
+class DimensionRecord(Base, TimestampMixin):
+    __tablename__ = "dimension_records"
+    __table_args__ = (
+        UniqueConstraint("node_id", "dimension_type_id", name="uq_dim_node_type"),
+        CheckConstraint(
+            "project_id IS NOT NULL",
+            name="ck_dim_project_id_not_null",
+        ),
+        # 一致性兜底：project_id 必须等于 node.project_id
+        # PG 14+ 用 generated column，否则 service 层强制 + alembic trigger
+    )
+
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    node_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)  # 冗余 tenant 字段
+    dimension_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("dimension_types.id"), nullable=False)
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 乐观锁
+    created_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    updated_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    node = relationship("Node", back_populates="dimension_records")
+    dimension_type = relationship("DimensionType")
+```
 
 ### Alembic 要点
 
