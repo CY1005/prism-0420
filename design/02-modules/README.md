@@ -15,8 +15,11 @@
 | 第一批 | M14 行业动态 | **accepted（2026-04-21）** | [`M14-industry-news/`](./M14-industry-news/) |
 | 第一批 | M19 导入/导出 | **accepted（2026-04-21）** | [`M19-import-export/`](./M19-import-export/) |
 | **Pilot 2** | M17 AI 智能导入（异步基线 / Queue + WebSocket） | **accepted（2026-04-21）** | [`M17-ai-import/`](./M17-ai-import/) |
-| 第二批 | M01 / M02 / M03 基础链 | 待开 | — |
-| 第二批 | M11 / M12 中复杂 | 待开 | — |
+| 第二批 | M02 项目管理 | **accepted（2026-04-21）** | [`M02-project/`](./M02-project/) |
+| 第二批 | M03 功能模块树 | **accepted（2026-04-21）** | [`M03-module-tree/`](./M03-module-tree/) |
+| 第二批 | M11 冷启动支持 | **accepted（2026-04-21）** | [`M11-cold-start/`](./M11-cold-start/) |
+| 第二批 | M12 对比矩阵 | **accepted（2026-04-21）** | [`M12-comparison/`](./M12-comparison/) |
+| 第二批 | M01 用户账号 | 待开 | — |
 | 第三批 | M13 / M16 / M18 复杂 AI | 待 CY 出业务 | — |
 | 第四批 | M08 / M09 / M10 / M15 / M20 | 待开 | — |
 
@@ -26,6 +29,7 @@
 
 **Audit 报告归档**：
 - 第一批：[`audit-report-batch1.md`](./audit-report-batch1.md) + [`audit-report-batch1-verify.md`](./audit-report-batch1-verify.md)
+- 第二批：[`audit-report-batch2.md`](./audit-report-batch2.md) + [`audit-report-batch2-verify.md`](./audit-report-batch2-verify.md)
 - M17 pilot：[`M17-ai-import/audit-report.md`](./M17-ai-import/audit-report.md)
 
 完整能力定位见 [`../00-architecture/07-capability-matrix.md`](../00-architecture/07-capability-matrix.md)。
@@ -107,16 +111,31 @@ complexity: low                         # 必填：low / medium / high（来自 
 
 ### §3 数据模型
 - **R3-1**：必含 SQLAlchemy class 代码块（ER 图 + class 二者皆有，单独 ER 图不通过）
-- **R3-2**：状态字段必用 `Mapped[StatusEnum]`（不能裸 `Mapped[str]`），配合 `CheckConstraint` 双重防护
+- **R3-2**：状态字段**三重防护**合规（CY 2026-04-21 ack，batch2 audit 沉淀）：
+  1. Python 类型注解：`Mapped[StatusEnum]`（不能裸 `Mapped[str]`）
+  2. SA 列类型：`mapped_column(String(N) / Text, ...)` 或 `mapped_column(SAEnum(StatusEnum, name="..."), ...)` 二选一
+  3. **`CheckConstraint` 枚举值显式列出**（无论选 String 还是 SAEnum，CHECK 都必须有）
+  - 现状选型：4 模块 + M17 pilot 统一用 `String(N) + CheckConstraint`，**不**升级 SAEnum（避免 PG TYPE 迁移 + pilot 改动）；审计时满足三重即合规
 - **R3-3**：tenant 字段（project_id）冗余在 SQLAlchemy class 上（统一规则，便于 DAO 过滤）
+- **R3-4**（新增）：**核心设计决策必须有"候选 B 改回成本"块**——对于有 ⚠️ 核心决策（如 M12 快照存引用 vs 值、M11 持久化 vs 无持久化）的模块，§3 或专属决策块内必须量化给出：
+  - Alembic 迁移步数（新增/删除表、改字段）
+  - 新增/删除表数
+  - 受影响模块数（需要联动改动的其他 M 模块）
+  - 数据迁移不可逆性（是否丢历史数据）
 
 ### §4 状态机
 - **R4-1**：无状态实体也要显式声明
-- **R4-2**：禁止转换至少列 N 条（N = 终态数 + 1，防仅列 2 条就勾过）—— M17 教训：原稿仅列 2 条，audit 抓出 4 条漏列
+- **R4-2**：禁止转换至少列 N 条（N = 终态数 + 1）+ **每条格式必须是 "状态A → 状态B：原因 + 对应 ErrorCode"**（batch2 audit 沉淀）
+  - **禁止合并写法**：`X / Y → 任意`（两个终态合并算 1 条，不满足 N 数量要求）
+  - 每个终态单独一条：`completed → 任意 状态`、`failed → 任意 状态`、`cancelled → 任意 状态` 必须分开写
+  - 禁止把"并发控制 version 冲突"、"删后 404"等非状态转换混入（应放在节 5 竞态分析或节 13 ErrorCode）
 - **R4-3**：mermaid stateDiagram-v2 必须画
 
 ### §5 多人架构 4 维必答
-- **R5-1**：5 项清单逐项标（即使 N/A 也要显式说明）
+- **R5-1**：5 项清单逐项标（即使 N/A 也要显式说明）+ **4 维表格禁止 ⚠️ 占位**（batch2 audit 沉淀）
+  - 4 维（Tenant / 事务 / 异步 / 并发）表格中必须给出 AI 默认值 + 候选说明
+  - ⚠️ 只能出现在 §15 "待 CY 裁决项"汇总表中
+  - 反例：M03 原稿 §5 多表事务列写 "⚠️ 待裁决"——违反本规则
 - **R5-2**：有状态机时必答"状态转换竞态分析"行（防自圆其说）
 
 ### §7 API 契约
@@ -146,6 +165,9 @@ complexity: low                         # 必填：low / medium / high（来自 
 
 ### 横切
 - **R-X1**：M17 的"M17 不直 INSERT 跨模块表"原则——orchestrator 模块通过其他模块 Service.batch_create_in_transaction 调用，不直查/直写其他模块的表（M17 教训：原稿直写 nodes/dimension_records 等违反分层）
+- **R-X2**（新增，batch2 audit 沉淀）：**DB CASCADE 不触发下游 activity_log**
+  - 若本模块被其他模块 FK 引用且设为 `ON DELETE CASCADE`（如 M03 nodes 被 M04/M06/M07 引用），**本模块删除时必须在 Service 层显式调用下游 Service.delete_by_xxx** 以写入下游 activity_log，DB CASCADE 仅作兜底
+  - 反例：M03 若只靠 DB CASCADE 删除节点，M04 dimension_records 删除不写 activity_log——违反清单 1（所有变更操作必须写 activity_log）
 
 ---
 
@@ -203,7 +225,7 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 - [x] 第一批 5 模块批量生成 + reviewer audit + fix v1/v2 + verify + accept（2026-04-21）
 - [x] **Pilot M17 完成 + audit + 7 问题修复 + accept（2026-04-21）→ 异步字段补完**
 - [x] **模板调整 5 条建议沉淀到 README（2026-04-21）+ ADR-002 起**
-- [ ] 第二批批量（M02 / M03 / M11 / M12 等）
+- [x] **第二批 4 模块批量生成 + audit + fix v2 + verify + 精修 accept（2026-04-21）**：M02/M03/M11/M12；模板追加 TA-01~05 + R3-4 + R-X2
 - [ ] 第三批 AI 类（M13 / M16 / M18）—— 异步流式 / 后台 子模板待补完
 - [ ] 第四批（M08 / M09 / M10 / M15 / M20）
 - [ ] 20 模块全部 status=accepted
