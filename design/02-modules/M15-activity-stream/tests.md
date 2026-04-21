@@ -5,6 +5,7 @@ owner: CY
 created: 2026-04-21
 accepted: null
 module_id: M15
+prism_ref: F15
 ---
 
 # M15 测试场景
@@ -19,7 +20,7 @@ module_id: M15
 
 | ID | 场景 | 步骤 | 期望 |
 |----|------|------|------|
-| G1 | 查询项目操作日志列表 | admin → GET `/api/projects/{pid}/activity-stream?page=1&page_size=20` | 200；items 按 created_at 降序；每条含 user_name（JOIN users）；has_more 正确 |
+| G1 | 查询项目操作日志列表 | owner（或 editor）→ GET `/api/projects/{pid}/activity-stream?page=1&page_size=20` | 200；items 按 created_at 降序；每条含 user_name（JOIN users）；has_more 正确 |
 | G2 | 按 user_id 过滤 | `?user_id={uid}` 过滤 | 200；返回的 items 全部来自该 user；total 反映过滤后数量 |
 | G3 | 按 action_type 过滤 | `?action_type=update` | 200；items 全部为 action_type="update" 的记录 |
 | G4 | 按时间范围过滤 | `?from_dt=2026-01-01T00:00:00&to_dt=2026-04-01T00:00:00` | 200；items 全部在时间范围内；边界日期记录包含 |
@@ -47,7 +48,7 @@ module_id: M15
 
 显式说明：
 - M15 不存在"两个用户同时写同一资源"的场景
-- 多 admin 同时读 activity-stream：各自独立 GET，结果一致
+- 多 owner/editor 同时读 activity-stream：各自独立 GET，结果一致
 - **读-写并发**（M04 写 dimension_record 的同时 M15 读）：M15 读到的是查询时刻的快照，PG READ COMMITTED 下正常工作，不需要锁
 
 补充一条**读一致性验证**：
@@ -62,11 +63,11 @@ module_id: M15
 
 | ID | 场景 | 模拟 | 期望 |
 |----|------|------|------|
-| T1 | 跨项目越权读 | admin-A 持 projectA token，GET `/api/projects/{projectB_id}/activity-stream` | 403 `PERMISSION_DENIED`（Router check_project_access 拦）|
-| T2 | 非成员 admin 读 | userC 不在 projectA 成员表，GET projectA activity-stream | 403/404（Service 层 _check_project_admin 拦）|
+| T1 | 跨项目越权读 | owner-A 持 projectA token，GET `/api/projects/{projectB_id}/activity-stream` | 403 `PERMISSION_DENIED`（Router check_project_access 拦）|
+| T2 | 非成员用户读 | userC 不在 projectA 成员表（无 owner/editor 身份），GET projectA activity-stream | 403/404（Service 层 _check_activity_audit_access 拦）|
 | T3 | DAO tenant 过滤覆盖 | 单元测试 `activity_stream_dao.list_stream(db, other_project_id)` | 返回空 list（activity_logs.project_id 过滤生效，不泄露其他 project 日志）|
 | T4 | URL 路径篡改 | URL path 是 projectA，query 无法指定其他 project_id | activity_logs 过滤锁定在路径中的 project_id，无法跨 project 读取 |
-| T5 | 两个 project 日志隔离 | projectA 和 projectB 各有操作日志；admin-A 查 projectA | items 全部来自 projectA，不含 projectB 数据 |
+| T5 | 两个 project 日志隔离 | projectA 和 projectB 各有操作日志；owner-A 查 projectA | items 全部来自 projectA，不含 projectB 数据 |
 
 ---
 
@@ -75,9 +76,9 @@ module_id: M15
 | ID | 场景 | 期望 |
 |----|------|------|
 | P1 | 未登录访问 | 401 `UNAUTHENTICATED`（Server Action 层拦）|
-| P2 | viewer 角色访问 | 403 `ACTIVITY_STREAM_FORBIDDEN`（Router check_project_access(role="admin") 拦）|
-| P3 | editor 角色访问 | 403 `ACTIVITY_STREAM_FORBIDDEN`（同上，仅 admin 可访问）|
-| P4 | admin 正常读 | 200；完整日志列表返回 |
+| P2 | viewer 角色访问 | 403 `ACTIVITY_STREAM_FORBIDDEN`（Router check_project_access(roles=["owner","editor"]) 拦；viewer 不可访问，CY ack C-5）|
+| P3 | editor 角色访问 | 200；完整日志列表返回（CY ack C-5，editor 有审计权限）|
+| P4 | owner 正常读 | 200；完整日志列表返回 |
 
 ---
 
@@ -86,9 +87,9 @@ module_id: M15
 | ID | 场景 | 期望响应格式（规约 7）|
 |----|------|----------------------|
 | ER1 | project 不存在 | `{"error": {"code": "ACTIVITY_STREAM_PROJECT_NOT_FOUND", "message": "Project not found or access denied"}}` |
-| ER2 | 非 admin 访问 | `{"error": {"code": "ACTIVITY_STREAM_FORBIDDEN", "message": "Only project admin can view activity stream"}}` |
+| ER2 | viewer 访问（非 owner/editor）| `{"error": {"code": "ACTIVITY_STREAM_FORBIDDEN", "message": "Only project owner or editor can view activity stream"}}` |
 | ER3 | 过滤参数不合法（from > to）| `{"error": {"code": "ACTIVITY_STREAM_INVALID_FILTER", "message": "Invalid filter parameters: from_dt must be before to_dt"}}` |
-| ER4 | DB 查询超时（大量日志）| 502/504；不暴露内部 SQL；⚠️ AI 推断——若添加超时保护，ErrorCode 待 CY 定 |
+| ER4 | DB 查询超时（大量日志）| 502/504；不暴露内部 SQL；观察项：若添加超时保护，ErrorCode 待后续精修阶段定 |
 
 ---
 
@@ -97,8 +98,8 @@ module_id: M15
 | 层 | 覆盖率目标 | 备注 |
 |----|----------|------|
 | DAO | ≥ 95% | tenant 过滤（project_id）/ 分页 / 各过滤条件分支（user_id / action_type / target_type / 时间范围）|
-| Service | ≥ 90% | admin 权限校验 + 列表组装 |
-| Router | ≥ 80% | 主走 e2e；含 admin 正常返回 + viewer/editor 403 |
+| Service | ≥ 90% | owner/editor 权限校验（C-5）+ 列表组装 |
+| Router | ≥ 80% | 主走 e2e；含 owner/editor 正常返回 + viewer 403 |
 | Component | ≥ 70% | 时间轴按日期分组渲染 + 过滤器 UI |
 
 ---

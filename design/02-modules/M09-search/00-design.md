@@ -1,12 +1,12 @@
 ---
 title: M09 全局搜索 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M09
 prism_ref: F9
 pilot: false
@@ -16,7 +16,7 @@ complexity: medium
 # M09 全局搜索 - 详细设计
 
 > 对标 M04 同步 pilot 范本，纯读聚合模块。Tenant ✅ / 事务 ❌ / 异步 ❌ / 并发 ❌。
-> 业务节凡 ⚠️ 标记处须 CY 复审裁决；M09 跨模块 Read 聚合方式强制标 ⚠️ 待主对话决策（见节 3）。
+> **CY 2026-04-21 决策记录见 §15，业务决策已 accepted**
 
 ---
 
@@ -27,7 +27,7 @@ complexity: medium
 M09 对应 Prism F9，提供**关键词驱动的全局跨模块搜索**——跨 nodes / dimension_records / competitors / issues / industry_news / module_relations 多模块读取，按 project 边界过滤，仅返回用户有权访问的内容。
 
 引用用户故事：
-- **US-C1.3**（`feature-list-and-user-stories.md`）：作为查看者，我想搜索关键词快速找到相关功能项，搜索结果带上下文高亮，这样不用翻树逐个找
+- **US-C1.3**（`/root/cy/prism/docs/product/feature-list-and-user-stories.md`）：作为查看者，我想搜索关键词快速找到相关功能项，搜索结果带上下文高亮，这样不用翻树逐个找
 - **US-C2.2**（同文件）：作为查看者，我搜索时只能看到有权限的项目内容，这样不会越权
 
 引用 PRD Q3（`design/00-architecture/01-PRD.md`）："围绕功能模块组织"——搜索必须能跨维度（功能描述、技术实现、测试分析等）找到功能项。
@@ -54,18 +54,18 @@ M09 对应 Prism F9，提供**关键词驱动的全局跨模块搜索**——跨
 | 不做的事 | 归属模块 |
 |---------|---------|
 | 语义搜索（向量相似度，pgvector） | M18 |
-| 维度筛选（按维度类型过滤） | M09 扩展点，本期不实现（⚠️ 待 CY 确认是否本期） |
+| 维度筛选（按维度类型过滤） | M09 扩展点，本期不实现（PRD 未提及，后续需求变更时追加）|
 | 跨 project 搜索（无 project 边界） | 不在 scope（基于 US-C2.2 每条结果必须在有权限 project 内） |
 | 搜索历史记录 | 不在 scope（PRD 未提及） |
 | 写操作（搜索结果的 CRUD） | M09 纯读，所有写委托各自模块 |
 
 ### 边界灰区（显式说明）
 
-- **搜索范围 project 边界**：⚠️ **AI 推断，CY 复审必改**——推断 M09 只搜索**用户有成员身份**的 project（IN 过滤），不支持全平台搜索。候选：A 仅成员 project（推断默认）/ B 用户提供 project_id 参数搜指定 project。
+- **搜索范围 project 边界**：**CY ack 候选 A 仅成员 project**——M09 只搜索用户有成员身份的 project（IN 过滤），不支持全平台搜索。§9 DAO 通过 `accessible_project_ids` IN 过滤实现。
 
-- **搜索算法选型**：⚠️ **AI 推断，CY 复审必改**——推断默认使用 PostgreSQL `ILIKE '%query%'`，简单可靠；PG 全文搜索（`tsvector`/`tsquery`）性能更好但需要额外迁移。候选：A ILIKE（推断默认）/ B PG 全文搜索（`to_tsquery`）。
+- **搜索算法选型**：**CY ack 候选 A ILIKE**——使用 PostgreSQL `ILIKE '%query%'`，简单可靠。§3 + §9 明确 ILIKE 实现；`score: float | None` 字段在 ILIKE 下始终为 None（保留字段以防未来升级全文搜索）。
 
-- **维度内容搜索**：⚠️ **AI 推断，CY 复审必改**——`dimension_records.content` 是 JSONB，搜索时需转换为文本（`content::text ILIKE`）。此方式精度低（可能匹配到 JSON key 名），但实现简单。候选：A JSONB::text ILIKE（推断默认）/ B 专门对 content 建立 GIN 全文索引（性能好但迁移复杂）。
+- **维度内容搜索**：**CY ack 候选 A JSONB::text ILIKE**——`dimension_records.content` 是 JSONB，搜索时通过 `content::text ILIKE` 转换。已 ack 接受边界：可能匹配到 JSON key 名（假阳性），实现简单。JSONB key 名假阳性场景见 tests.md。
 
 ---
 
@@ -95,29 +95,44 @@ flowchart LR
 - M06 提供：`competitors` 表 `(id, node_id, project_id, name, notes)`
 - M07 提供：`issues` 表 `(id, node_id, project_id, title, description)`
 - M08 提供：`module_relations` 表 `(id, project_id, source_node_id, target_node_id, notes)`
-- M14 提供：`industry_news` 表 `(id, title, summary)`（M14 为全局数据，无 project_id，⚠️ 见节 9 豁免声明）
+- M14 提供：`industry_news` 表 `(id, title, summary)`（M14 为全局数据，无 project_id，见节 9 豁免声明）
 
 ---
 
 ## 3. 数据模型
 
-### M09 无主表
+### M09 无自有实体表
 
-**M09 是纯读聚合模块，不拥有任何主表**——所有数据来自其他模块的表，M09 DAO 层只做 SELECT。
+**本模块无自有实体表，§3 适用纯读聚合规范（R3-5），采纳 ADR-003 规则 1：通过上游 Service 接口读取。**
 
-### ⚠️ 核心决策：跨模块 Read 聚合方式（待主对话决策是否起 ADR-003）
+引用：[`adr/ADR-003-cross-module-read-strategy.md`](../../adr/ADR-003-cross-module-read-strategy.md)
 
-> **HARD-GATE 遵守**：本节不自行选定方案，仅列候选，留给 CY + 主对话决策（若涉及 ADR 起草则为 ADR-003）。
+M09 Service 层通过调用上游模块的 Service 接口获取数据，**不得**在自己的 DAO 层直接 `db.query(上游 Model)`。M09 无自有 DAO 层（无主表，无自有 SQL 查询）。
 
-| 候选 | 方案描述 | 优点 | 缺点 | 推荐度 |
-|------|---------|------|------|-------|
-| **A：各模块 Service 提供 `search_by_keyword()` 接口，M09 聚合** | M03/M04/M06/M07/M08/M14 各自 Service 暴露 `search_by_keyword(query, project_id)` 方法；M09 Service 依次调用后合并结果 | 模块解耦，符合 R-X1 分层原则；各模块可独立优化搜索逻辑 | N 次 DB 查询（N = 搜索模块数）；分页 + 排序在内存层做聚合，性能有限 | ⭐⭐⭐（**推断倾向**，但最终由 CY 决定） |
-| **B：独立 search_view 物化视图** | 创建 PG 物化视图聚合所有可搜索字段；M09 直查视图 | 单次 SQL，性能最优；关键词 + 全文索引可统一加 | 需维护视图刷新策略；每次上游表变更后 REFRESH MATERIALIZED VIEW（延迟或触发器） | ⭐⭐ |
-| **C：M09 DAO 直接 JOIN 多表** | M09 DAO 层直接 JOIN nodes / dimension_records / competitors 等 | 实现最简 | **违反 R-X1**（跨模块直读其他模块表，破坏分层）；DAO 与所有上游表耦合，任一上游表变更影响 M09 | ❌ 不推荐 |
+### 上游依赖表清单（访问方式 = Service 接口调用，ADR-003 规则 1）
 
-**当前状态**：⚠️ **待主对话评估是否起 ADR-003**，三个候选方案已列出，不自行拍板。
+| 上游表 | 归属模块 | 访问方式 |
+|--------|---------|---------|
+| `nodes` | M03 | M03 `NodeService.search_by_keyword(db, query, project_id, limit)` |
+| `dimension_records` | M04 | M04 `DimensionService.search_by_keyword(db, query, project_id, limit)` |
+| `competitors` | M06 | M06 `CompetitorService.search_by_keyword(db, query, project_id, limit)` |
+| `issues` | M07 | M07 `IssueService.search_by_keyword(db, query, project_id, limit)` |
+| `module_relations` | M08 | M08 `ModuleRelationService.search_by_keyword(db, query, project_id, limit)` |
+| `industry_news` | M14 | M14 `IndustryNewsService.search_by_keyword(db, query, limit)`（无 project_id，ADR-003 M14 例外）|
 
-**搜索字段范围（各候选均适用）**：
+> **M14 例外说明**：M14 是全局无 project_id 模块（catalog Tenant ❌），其 `search_by_keyword` 接口签名不含 `project_id`，M09 Service 调用时做分支处理（见 §9）。
+
+> **基线补丁 TODO**：M03/M04/M06/M07/M14 各已 accepted 模块需追加 `search_by_keyword` Service 接口实现——见 README.md 末尾 TODO（ADR-003 引用方清单）。
+
+### 历史候选方案（已决策，供参考）
+
+| 候选 | 方案描述 | 推荐度 |
+|------|---------|-------|
+| **A：各模块 Service 提供 `search_by_keyword()` 接口，M09 聚合**（**已采纳，ADR-003 规则 1**）| M09 Service 依次调上游 Service 方法后合并结果 | ✅ 采纳 |
+| **B：独立 search_view 物化视图** | 创建 PG 物化视图；需 REFRESH 策略；实时性弱 | ⭐⭐（演进备选）|
+| **C：M09 DAO 直接 JOIN 多表** | 违反 R-X1；ADR-003 明确否决 | ❌ |
+
+**搜索字段范围**：
 
 | 模块 | 表 | 搜索字段 | result_type |
 |------|-----|---------|------------|
@@ -156,7 +171,7 @@ class SearchResultItem(BaseModel):
     title: str                     # 主要展示文本
     snippet: str                   # 上下文摘要（含高亮标记）
     matched_field: str             # 哪个字段命中（用于前端区分展示）
-    score: float | None            # 候选 B（全文搜索）时的相关度分数；ILIKE 时填 None
+    score: float | None            # ILIKE 下始终为 None（保留字段以防未来升级全文搜索，CY ack A-5）
     created_at: datetime
 
 
@@ -213,13 +228,13 @@ M09 是**纯读聚合模块，无任何写操作**，无任何实体有状态字
 | **Component** | `web/src/components/business/search-bar.tsx`<br>`web/src/components/business/search-result-list.tsx` | 搜索输入 debounce；结果分页展示；result_type 图标区分 |
 | **Server Action** | `web/src/actions/search.ts` | session 校验 / zod 入参校验（query 长度 / page 范围）/ fetch FastAPI |
 | **Router** | `api/routers/search_router.py` | 路由定义 / `Depends(get_current_user)` 获取用户身份 / Pydantic schema |
-| **Service** | `api/services/search_service.py` | 查用户有权限 project_ids / 聚合多模块搜索结果 / 分页 + snippet 生成 |
-| **DAO** | `api/dao/search_dao.py`（候选 A 时为聚合入口；候选 B 时直查 search_view） | SQL 构建 + tenant IN 过滤 |
+| **Service** | `api/services/search_service.py` | 查用户有权限 project_ids / 调各上游 Service.search_by_keyword / 聚合排序 / 权限过滤 / 分页 + snippet 生成（ADR-003 规则 1）|
+| **DAO** | **M09 无 DAO 层**（Service 层直接调上游 Service，不构建自己的 SQL）| — |
 | **Model** | 无（不新建表）| — |
 | **Schema** | `api/schemas/search_schema.py` | Pydantic 请求 / 响应（SearchRequest / SearchResponse / SearchResultItem） |
 
 **禁止**：
-- ❌ M09 DAO 直接 JOIN 其他模块表（候选 C 违反 R-X1）
+- ❌ M09 直接 `db.query(上游 Model)`——必须通过上游 Service 接口（ADR-003 规则 1，候选 C 直 JOIN 已明确否决）
 - ❌ Router 直查 DB
 - ❌ M09 写任何表（纯读模块）
 
@@ -239,6 +254,7 @@ M09 是**纯读聚合模块，无任何写操作**，无任何实体有状态字
 ```python
 # api/schemas/search_schema.py
 from pydantic import BaseModel, UUID4, Field
+from fastapi import Depends, Query
 from enum import Enum
 from datetime import datetime
 from typing import Literal
@@ -256,32 +272,44 @@ class SearchResultType(str, Enum):
 class SearchResultItem(BaseModel):
     result_id: UUID4
     result_type: SearchResultType
-    project_id: UUID4 | None       # industry_news 无 project_id
+    project_id: UUID4 | None       # industry_news 无 project_id，填 None（全局内容）
     project_name: str | None
     node_id: UUID4 | None
     node_name: str | None
     title: str
     snippet: str                   # 含 <mark>keyword</mark> 标记的上下文片段
     matched_field: str             # 如 "name" / "content" / "title" / "notes"
-    score: float | None
+    score: float | None            # ILIKE 下始终为 None（保留字段以防未来升级全文搜索，CY ack A-5）
     created_at: datetime
 
 
 class SearchResponse(BaseModel):
     items: list[SearchResultItem]
-    total: int
+    total: int    # 各模块命中数之和，不跨模块去重（CY ack C-1，候选 A）
     page: int
     page_size: int
     query: str
 
 
-class SearchRequest(BaseModel):
-    """Query params（FastAPI 自动从 query string 解析）"""
+class SearchFilters(BaseModel):
+    """
+    query params 通过 Depends(SearchFilters) 解析，避免 FastAPI 默认将 BaseModel 解析为 request body。
+    FastAPI 规则：GET endpoint 中 BaseModel 入参必须用 Depends() 包裹才能作为 query params 解析。
+    """
     q: str = Field(..., min_length=1, max_length=200, description="搜索关键词")
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
-    # ⚠️ AI 推断，CY 复审必改——是否支持 result_type 过滤
+    # result_types 过滤：本期不实现（PRD 未提及），预留扩展口
     # result_types: list[SearchResultType] | None = None
+
+
+# Router 中使用方式（M09-F4 修正：Depends 包裹 BaseModel 作为 query params）：
+# @router.get("/search")
+# async def search(
+#     filters: SearchFilters = Depends(),
+#     current_user = Depends(get_current_user)
+# ):
+#     ...
 ```
 
 ---
@@ -302,52 +330,65 @@ class SearchRequest(BaseModel):
 
 ## 9. DAO tenant 过滤策略
 
-### 主查询策略（IN 过滤）
+### Service 层权限过滤策略（ADR-003 规则 1）
 
-M09 无主表，tenant 过滤通过限定搜索范围实现：
+M09 无 DAO 层（无主表）。Tenant 过滤通过 Service 层权限白名单实现：
 
 ```python
-# api/dao/search_dao.py（候选 A 方案示例）
+# api/services/search_service.py（ADR-003 规则 1 实现）
 
-class SearchDAO:
-    def search_nodes(
-        self, db: Session, query: str, project_ids: list[UUID]
-    ) -> list[dict]:
-        """搜索 nodes.name（候选 A：各模块 DAO 提供 search 方法）"""
-        return (
-            db.query(Node)
-            .filter(
-                Node.project_id.in_(project_ids),  # ← tenant IN 过滤
-                Node.name.ilike(f"%{query}%"),
-            )
-            .all()
-        )
+class SearchService:
+    def search(self, db: Session, query: str, user_id: UUID, page: int, page_size: int) -> SearchResponse:
+        # 第一步：获取用户可访问的 project_ids 白名单（仅成员 project，CY ack A-4）
+        accessible_project_ids = self._get_accessible_project_ids(db, user_id)
 
-    def search_issues(
-        self, db: Session, query: str, project_ids: list[UUID]
-    ) -> list[dict]:
-        return (
-            db.query(Issue)
-            .filter(
-                Issue.project_id.in_(project_ids),  # ← tenant IN 过滤
-                (Issue.title.ilike(f"%{query}%"))
-                | (Issue.description.ilike(f"%{query}%")),
-            )
-            .all()
-        )
-    # ... 其他模块类似
+        # D-4 短路处理：空白名单时直接返回（CY ack，M14 在此场景也跳过——无权限用户不返回 M14）
+        if not accessible_project_ids:
+            return SearchResponse(items=[], total=0, page=page, page_size=page_size, query=query)
+
+        results = []
+
+        # 第二步：调各上游 Service.search_by_keyword（ADR-003 规则 1）
+        # ILIKE 实现（CY ack A-5）：各模块 search_by_keyword 内部用 ILIKE '%query%'
+        for pid in accessible_project_ids:
+            results += self.node_service.search_by_keyword(db, query, pid, limit=page_size)
+            results += self.dimension_service.search_by_keyword(db, query, pid, limit=page_size)
+            # dimension_records 用 content::text ILIKE（CY ack A-6，接受 JSONB key 名假阳性）
+            results += self.competitor_service.search_by_keyword(db, query, pid, limit=page_size)
+            results += self.issue_service.search_by_keyword(db, query, pid, limit=page_size)
+            results += self.module_relation_service.search_by_keyword(db, query, pid, limit=page_size)
+
+        # M14 分支处理：默认聚合 M14 结果，不提供 include_global 参数（CY ack C-3，候选 A）
+        # ADR-003 M14 例外：调 M14 时不传 project_id；结果 project_id 字段为 null（表示全局）
+        results += self.industry_news_service.search_by_keyword(db, query, limit=page_size)
+
+        # _merge_and_paginate：按 created_at DESC + 模块类型分组排序（CY ack C-2，候选 A）
+        # total 语义：各模块命中数之和，不跨模块去重（CY ack C-1，候选 A）
+        return self._merge_and_paginate(results, query, page, page_size)
+
+    def _merge_and_paginate(self, results, query, page, page_size) -> SearchResponse:
+        """
+        聚合排序：按 created_at DESC（最新优先）+ 模块类型分组（CY ack C-2）
+        total：各模块命中数之和（len(results) 直接加总，不去重，CY ack C-1）
+        """
+        # 按 created_at 降序排列（ILIKE 无 score，用 created_at 作时间线锚点）
+        sorted_results = sorted(results, key=lambda x: x.created_at, reverse=True)
+        total = len(sorted_results)
+        offset = (page - 1) * page_size
+        page_items = sorted_results[offset: offset + page_size]
+        return SearchResponse(items=page_items, total=total, page=page, page_size=page_size, query=query)
 ```
 
 ### 豁免清单
 
 | 豁免项 | 原因 | 处理方式 |
 |-------|------|---------|
-| `industry_news`（M14） | 全局共享数据，无 `project_id` 字段（M14 catalog：Tenant ❌ 全局共享）| M09 搜索 industry_news 时**不加 project_id 过滤**；但展示时标注"全局内容"，不关联具体 project |
+| `industry_news`（M14） | 全局共享数据，无 `project_id` 字段（M14 catalog：Tenant ❌ 全局共享）；ADR-003 M14 签名例外 | M09 调 `IndustryNewsService.search_by_keyword(db, query, limit)` 时**不传 project_id**；结果 `project_id` 字段为 `null`（全局内容）|
 
 ### 防绕过纪律
 
 - `_get_accessible_project_ids(user_id)` 查询结果不缓存（每次搜索实时查 project_members，防 role 降级后缓存残留）
-- ⚠️ **AI 推断，CY 复审必改**——若需要缓存优化，需评估 Redis TTL 与权限变更延迟的权衡
+- 观察项：若需要缓存优化，需评估 Redis TTL 与权限变更延迟的权衡（当前不实现）
 
 ---
 
@@ -440,7 +481,7 @@ class SearchProjectAccessDeniedError(AppError):
 
 - [x] 节 1：业务说明引 US-C1.3 + US-C2.2 + PRD Q3；in/out scope 完整；M09 vs M18 区分明确
 - [x] 节 2：依赖图覆盖全部上游模块（M03/M04/M06/M07/M08/M14）
-- [x] 节 3：无主表声明 + ⚠️ 跨模块 Read 聚合三候选完整列出 + 待 ADR-003 标记
+- [x] 节 3：无自有表声明（R3-5）+ 上游 Service 接口清单 + ADR-003 规则 1 引用 + M14 例外说明（不得误勾 R3-1 "SQLAlchemy class 代码块"）
 - [x] 节 4：无状态实体显式声明
 - [x] 节 5：4 维必答（无 ⚠️ 占位）+ 5 项清单逐项标
 - [x] 节 6：分层职责表每层文件路径具体
@@ -460,15 +501,112 @@ class SearchProjectAccessDeniedError(AppError):
 
 ---
 
-## ⚠️ 待 CY 裁决项汇总
+## C 类决策补对比（2026-04-21）
 
-| # | 节 | 决策点 | AI 默认值 | 候选 | ADR 触发 |
-|---|----|-------|----------|------|---------|
-| Q1 | 3 | 跨模块 Read 聚合方式 | **A 各模块 Service 提供 search_by_keyword()** | B 物化视图 / C 直 JOIN（不推荐）| ⚠️ **可能触发 ADR-003**，待主对话评估 |
-| Q2 | 1 | 搜索算法：ILIKE vs PG 全文搜索 | **A ILIKE**（简单） | B `to_tsquery`（性能好，需迁移）| 无 ADR，但影响 M09 DAO 实现 |
-| Q3 | 1 | dimension_records.content 搜索方式 | **A JSONB::text ILIKE** | B GIN 全文索引 | 无 ADR，但影响迁移 |
-| Q4 | 1 | 搜索范围：所有可访问 project vs 指定 project | **A 用户所有可访问 project** | B 必须指定 project_id | 无 ADR |
-| Q5 | 9 | industry_news tenant 豁免缓存 | **无缓存**（实时查）| 加 Redis TTL 缓存（需评估延迟） | 无 ADR |
+> 以下 3 条 C 类决策补对比，CY 2026-04-21 已 ack（见底部）。候选 A/B/C 文字结构保留作历史记录。
+
+---
+
+### C-M09-1：SearchResponse.total 字段语义（C 类补对比，2026-04-21）
+
+**当前状态**：`SearchResponse.total: int`，文档未说明语义——各模块命中数之和（不去重）vs 去重总数 vs 不提供 total。
+
+**候选 A/B/C**（业务场景对比）：
+
+| 候选 | 业务场景（CY 实际用法）| 实现影响 |
+|------|---------------------|---------|
+| **A：各模块命中数之和（不去重）** | CY 搜"支付"→ 看到 `total: 23`，即 M04 功能项 10 + M06 竞品 8 + M07 问题 5 等各模块 count 加总。同一业务实体若在多模块都命中，会被计为多次——但对 CY 来说这是"有多少条搜索结果"，直觉符合"结果列表有 23 条" | 各上游 Service.search_by_keyword() 返回结果数直接 `len()` 加总，无额外 JOIN；Service 层代码无变化 |
+| **B：去重总数（同一实体只算 1）** | CY 搜"支付"→ 看到 `total: 18`（某些节点在 M03 节点名和 M04 内容里都命中，去重后唯一实体 18 个）。语义更"精确"，但 CY 的搜索场景里同一功能项在不同维度命中是合理现象，去重后数字反而不直观 | 需在 Service 层聚合后按 (result_type, result_id) 去重，增加一次 O(N) set 操作；SearchService._merge_and_paginate() 需改写；不涉及 Alembic 迁移 |
+| **C：不提供 total，仅 has_more** | CY 搜"支付"→ 列表展示结果，底部显示"还有更多结果"按钮（无精确数字）。避免 COUNT 性能问题，但 CY 无法一眼知道结果规模，只知道"有没有更多" | SearchResponse 去掉 total 字段，加 has_more: bool；Pydantic schema 改字段；前端翻页逻辑简化（无需 total pages 计算）；不涉及 Alembic 迁移 |
+
+**AI 倾向**：候选 A（和式，实现最简单）
+
+**理由**：
+1. 本项目单 project 几十到几百条数据，去重代价（跨模块聚合后 set 操作）大于收益
+2. CY 用 Prism 搜索频次不高，每次搜"支付"看到 23 条结果比看到 18 条去重结果更直觉——她关心"找到多少条可看"，而非"有多少个唯一实体"
+3. 候选 C 丢失数字维度，CY 半年后回看搜索结果想知道规模时无法获取
+4. ILIKE 下各模块 count 加总 < 1ms，候选 B 的额外 set 操作对这个数据量无意义
+
+**改回成本**：
+- Alembic 迁移步数：0 步（total 语义是纯 Service/Schema 层决策，无 DB 变更）
+- 受影响模块数：1 个（M09 自身 SearchService._merge_and_paginate + SearchResponse schema）
+- 数据迁移不可逆性：无（无持久化数据）
+- 代码改动量：A→B 约 1 小时（Service 层加去重逻辑 + schema 加注释）；A→C 约 30 分钟（去掉 total 字段，加 has_more）
+
+**CY 2026-04-21 ack：候选 A**
+
+---
+
+### C-M09-2：搜索结果排序规则（C 类补对比，2026-04-21）
+
+**当前状态**：§9 Service 层聚合代码 `_merge_and_paginate()` 有分页逻辑，但无显式 ORDER BY——ILIKE 无 score，排序规则未定义。
+
+**候选 A/B/C**（业务场景对比）：
+
+| 候选 | 业务场景（CY 实际用法）| 实现影响 |
+|------|---------------------|---------|
+| **A：按 created_at DESC（最新优先）+ 模块类型分组显示** | CY 搜"支付"→ 最近新建的功能项 / 竞品 / 问题优先出现，最早录入的沉底。CY"边改边查"的场景下，最新加的记录就是最需要关注的——符合"知识库随时间沉淀"的心智模型 | SearchResultItem 已有 created_at 字段；_merge_and_paginate 改为 sorted(results, key=lambda x: x.created_at, reverse=True)；纯内存排序，无 SQL 改动 |
+| **B：按 updated_at DESC（最近更新优先）+ 模块类型分组** | CY 搜"支付"→ 最近被编辑的记录优先出现。但 M15 activity_log 每次小改都更新 updated_at——搜索结果会被近期编辑的记录"刷屏"，即使那条记录不是最相关的 | SearchResultItem 需增加 updated_at 字段（各上游 search_by_keyword 返回结果需带此字段）；各模块 Service 接口改动量 +5 个模块 |
+| **C：按相关度降序（匹配位置 / 匹配次数，Service 层自算）** | CY 搜"支付"→ 标题就是"支付流程"的记录排第一，内容里只偶然提到"支付"的记录排后。"最匹配"直觉最好，但 ILIKE 无 tf-idf，需要 Service 层手写相关度算法（如：title 命中权重 > content 命中权重）| 需在 SearchService 里实现相关度评分函数（`matched_field == "name"/"title"` 加权），成本高且效果受 ILIKE 精度限制 |
+
+**AI 倾向**：候选 A（created_at DESC）
+
+**理由**：
+1. created_at 是 CY 知识库的时间线锚点——"最新加的=最关注的"在个人知识库场景中高度成立
+2. updated_at 在 M15 语义下每次任何小改都更新，会让搜索结果被最近活跃的记录污染（即使那条记录并不最相关）
+3. 候选 C 的 ILIKE 相关度自算（非 ts_rank）成本高、效果不确定，对 CY 单用户几百条数据场景过度设计
+4. 候选 A 纯内存 sorted() 调用，不增加任何 DB 查询
+
+**改回成本**：
+- Alembic 迁移步数：0 步（纯 ORDER BY / Python 排序逻辑，无 DB schema 变更）
+- 受影响模块数：1 个（M09 自身 _merge_and_paginate）
+- 数据迁移不可逆性：无（排序字段切换不影响存储数据）
+- 代码改动量：A→B 约 2 小时（SearchResultItem 加 updated_at + 各上游 5 模块 Service 接口改动）；A→C 约 3-4 小时（Service 层相关度评分函数）
+
+**CY 2026-04-21 ack：候选 A**
+
+---
+
+### C-M09-3：M14 行业动态默认出现 vs 显式勾选（C 类补对比，2026-04-21）
+
+**当前状态**：§1 边界灰区提到"M14 全局数据，无 project_id"，§9 豁免清单说明 M14 调用不传 project_id，但未说明搜索时是否默认聚合 M14 结果、还是需用户显式选择。
+
+**候选 A/B/C**（业务场景对比）：
+
+| 候选 | 业务场景（CY 实际用法）| 实现影响 |
+|------|---------------------|---------|
+| **A：M14 结果默认出现（所有搜索自动聚合 M14）** | CY 搜"金融科技"→ 结果列表里同时出现 project 内的功能项记录 + M14 全局行业动态新闻。她看到的是"我知识库里关于金融科技的全部内容（含行业趋势）"——符合"全信息聚合"的直觉 | 当前 §9 实现已是此逻辑（results += industry_news_service.search_by_keyword(...)）；无需改动 |
+| **B：M14 需用户显式勾选"包含全局资料"才出现** | CY 搜"金融科技"→ 默认只看到 project 内结果；需手动勾选"也搜行业动态"才出现 M14 内容。减少"噪音"，但多一步操作；CY 的个人知识库场景里她通常希望一次搜完，额外勾选是摩擦 | SearchFilters 加 include_global: bool = False；Router 透传参数；SearchService 分支处理 M14 调用；Pydantic schema 改动 |
+| **C：M14 独立 tab 展示（project 结果 + 全局结果分 tab）** | CY 搜"金融科技"→ 看到两个 tab："项目内容"和"行业动态"，分开展示。最清晰，但 UI 复杂度增加；对于 CY 的单人知识库，分 tab 切换的认知负担可能超过收益 | 后端不变（M14 结果已带 result_type=industry_news 标识可分组）；前端需新增 tab 组件 + 分组渲染逻辑；API 不变 |
+
+**AI 倾向**：候选 A（默认出现）
+
+**理由**：
+1. M14 是全局共享资源，设计初衷就是"对所有用户开放的行业知识底座"——默认聚合符合"搜索 = 全信息"直觉
+2. CY 用 Prism 半年后回看时，"支付"相关的行业新闻和自己项目内的功能分析一起出现，正是"交叉印证"的核心价值
+3. 候选 B 增加操作步骤，CY 的个人知识库场景几乎不需要"只看 project 内"的孤立搜索
+4. 候选 C 的 UI 分 tab 复杂度高于收益，且后端实现与 A 等价
+
+**改回成本**：
+- Alembic 迁移步数：0 步
+- 受影响模块数：A→B：1 个（M09 SearchService + SearchFilters schema + Router 参数）；A→C：0 个后端（纯前端重构）
+- 数据迁移不可逆性：无
+- 代码改动量：A→B 约 1 小时（加 include_global 参数透传）；A→C 约 0 后端 + 前端 tab 组件约 2-3 小时
+
+**CY 2026-04-21 ack：候选 A**
+
+---
+
+## CY 决策记录（2026-04-21）
+
+| # | 节 | 决策点 | 决定（候选 X）| 理由简述 |
+|---|----|-------|--------------|---------|
+| A-4 | 1 | 搜索范围 | **候选 A 仅成员 project**（IN 过滤）| 符合 US-C2.2 权限隔离 |
+| A-5 | 1 | 搜索算法 | **候选 A ILIKE** | 简单可靠；score 字段保留备用 |
+| A-6 | 1 | 维度内容搜索 | **候选 A JSONB::text ILIKE** | 接受 JSONB key 名假阳性边界 |
+| C-1 | 7 | SearchResponse.total 语义 | **候选 A 各模块命中数之和** | 实现最简单；不去重符合"有多少条结果"直觉 |
+| C-2 | 9 | 搜索结果排序 | **候选 A created_at DESC** | 最新优先符合知识库心智；纯内存排序 |
+| C-3 | 9 | M14 默认出现 | **候选 A 默认聚合 M14** | 全信息聚合直觉；无需 include_global 参数 |
 
 ---
 

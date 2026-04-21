@@ -5,13 +5,14 @@ owner: CY
 created: 2026-04-21
 accepted: null
 module_id: M08
+prism_ref: F8
 ---
 
 # M08 测试场景
 
 > 主设计文档：[`00-design.md`](./00-design.md)
 > 测试用例命名遵循规约 6（中文允许）+ pytest 标准。
-> 所有 ⚠️ 决策项（Q1/Q2/Q3）在 CY 裁决前，测试默认使用 AI 默认值。
+> CY 2026-04-21 已 ack Q1/Q2/Q3（候选 A），本测试基于有向关系 + UNIQUE(source,target,type) + 3 种枚举。
 
 ---
 

@@ -1,12 +1,12 @@
 ---
 title: M08 模块关系图 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M08
 prism_ref: F8
 pilot: false
@@ -16,7 +16,7 @@ complexity: medium
 # M08 模块关系图 - 详细设计
 
 > 对标 M04 同步 pilot 范本，Tenant ✅ / 事务 ✅ / 异步 ❌ / 并发 ❌。
-> 业务节凡 ⚠️ 标记处须 CY 复审裁决。
+> **CY 2026-04-21 决策记录见 §15，业务决策已 accepted**
 
 ---
 
@@ -53,9 +53,9 @@ M08 对应 Prism F8，为功能项之间提供**结构化关联关系**管理。
 
 ### 边界灰区（显式说明）
 
-- **relation_type 方向性**：⚠️ **AI 推断，CY 复审必改**——推断关联为**有向关系**（`source_node_id` → `target_node_id`），即"A 依赖 B"与"B 依赖 A"是不同记录；无向关系（如"相关"）由前端展示层对称显示，后端仅存有向。**候选**：A 有向（推断默认）/ B 无向（DB 层做 `min(src,tgt) + max(src,tgt)` 唯一约束）。
+- **关联方向性**：**CY ack 候选 A 有向**——关联为**有向关系**（`source_node_id` → `target_node_id`），即"A 依赖 B"与"B 依赖 A"是不同记录；无向关系（如"相关"）由前端展示层对称显示，后端仅存有向。（候选 B 无向，其 DB 层 `min/max` 唯一约束描述见 §3 候选 B 改回成本块。）
 
-- **同一对节点多关联**：⚠️ **AI 推断，CY 复审必改**——推断允许同一对 `(source_node_id, target_node_id)` 存在不同 `relation_type`（如既"依赖"又"相关"），但禁止完全相同的三元组重复。**候选**：A 允许多类型（推断默认）/ B 不允许同对节点多关联（唯一约束仅 `(source,target)` 不含 type）。
+- **同一对节点多关联**：**CY ack 候选 A 允许多类型**——允许同一对 `(source_node_id, target_node_id)` 存在不同 `relation_type`，唯一约束为三元组 `UNIQUE(source, target, type)`，禁止完全相同的三元组重复。
 
 - **节点删除时的关联清理**：M03 删除节点时需清理 `module_relations`。按 R-X2 规则，M03 Service 层必须显式调用 `ModuleRelationService.delete_by_node_id(node_id, project_id)` 而非依赖 DB CASCADE（否则 activity_log 不触发）。本模块提供该接口。
 
@@ -81,7 +81,7 @@ flowchart LR
 **依赖契约**：
 - M03 提供：`NodeService.get_node(node_id, project_id)` 返回节点（含 project_id，用于归属校验）
 - M03 消费 M08：删除节点时调 `ModuleRelationService.delete_by_node_id(node_id, project_id)`（R-X2）
-- M08 对 M09 提供：`ModuleRelationDAO.search_by_keyword(query, project_id)` 接口（M09 ⚠️ 聚合方案确定后实现）
+- M08 对 M09 提供：`ModuleRelationDAO.search_by_keyword(query, project_id)` 接口（ADR-003 规则 1 已确定，各模块 Service 提供此接口）
 
 ---
 
@@ -130,12 +130,13 @@ erDiagram
 
 **冗余 `project_id`**：按全模块统一规则（M04 pilot ack，R3-3），`module_relations` 冗余 `project_id` 字段——DAO 层 tenant 过滤无需 JOIN `nodes`，直接 `WHERE project_id = ?`。Service 层创建时强制 `relation.project_id = source_node.project_id`。
 
-**`relation_type` 三重防护**（R3-2）：Python 类型注解 `Mapped[RelationTypeEnum]` + `mapped_column(String(32))` + `CheckConstraint` 枚举值列出。
+**`relation_type` 三重防护**（R3-2）：Python 类型注解 `Mapped[RelationTypeEnum]` + `mapped_column(String(32))` + `CheckConstraint` 枚举值列出。按 README R3-2 现状选型：String(N) + CheckConstraint，不升 SAEnum（避免 PG TYPE 迁移 + pilot 改动）。
 
 ### SQLAlchemy model
 
 ```python
 # api/models/module_relation.py
+# TimestampMixin 定义见 `api/models/base.py`，含 `created_at: datetime` + `updated_at: datetime`
 from __future__ import annotations
 from enum import Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -149,8 +150,8 @@ from .base import Base, TimestampMixin
 
 
 class RelationTypeEnum(str, Enum):
-    # ⚠️ AI 推断，CY 复审必改——候选：depends_on / related_to / conflicts_with
-    # CY 可增减枚举值，但每次变更需同步 CheckConstraint + Alembic 迁移
+    # CY ack 候选 A（2026-04-21）：3 种枚举够用，可扩展时走 Alembic ALTER CHECK
+    # 如需新增类型走 Alembic ALTER CHECK（见 §3 改回成本块）
     depends_on = "depends_on"
     related_to = "related_to"
     conflicts_with = "conflicts_with"
@@ -159,13 +160,13 @@ class RelationTypeEnum(str, Enum):
 class ModuleRelation(Base, TimestampMixin):
     __tablename__ = "module_relations"
     __table_args__ = (
-        # ⚠️ AI 推断，CY 复审必改——如选"同对节点+类型唯一"则用此约束
-        # 候选 A（推断默认）：(source, target, type) 三元组唯一
+        # CY ack 候选 A（2026-04-21）：(source, target, type) 三元组唯一约束
+        # A-2：同对多类型允许，UNIQUE(source, target, type) 三元组定案
         UniqueConstraint(
             "source_node_id", "target_node_id", "relation_type",
             name="uq_module_relation_src_tgt_type",
         ),
-        # 候选 B：(source, target) 唯一（不含 type）—— CY 裁决后切换
+        # 历史记录（候选 B）：(source, target) 唯一——不含 type，已否决
         # UniqueConstraint("source_node_id", "target_node_id", name="uq_module_relation_src_tgt"),
         #
         # 三重防护 CheckConstraint（R3-2）
@@ -226,13 +227,20 @@ class ModuleRelation(Base, TimestampMixin):
   - `(source_node_id, project_id)` 查某节点的出向关联
   - `(target_node_id, project_id)` 查某节点的入向关联
 
-### ⚠️ 候选 B 改回成本（R3-4）
+### 候选 B 改回成本（R3-4，历史记录）
 
-若 CY 选"关系有向改无向"或"唯一约束改 `(source,target)` 不含 type"：
+**CY 2026-04-21 ack：候选 A 有向 + UNIQUE(source,target,type)（A-1 + A-2），候选 B 历史保留。**
+
+若改为"关系有向改无向"或"唯一约束改 `(source,target)` 不含 type"（候选 B）：
+- 候选 B 无向约束实现：DB 层做 `min(source_node_id, target_node_id)` + `max(source_node_id, target_node_id)` 唯一约束（消除对称重复）
 - Alembic 迁移步数：1 步（DROP 旧约束 + ADD 新约束）
 - 新增/删除表数：0（仅改约束）
 - 受影响模块：M09（搜索聚合逻辑需同步）
 - 数据迁移不可逆性：可逆（无数据丢失，仅约束变更；若现有数据违反新约束需清理重复行）
+
+**Q3 枚举值增减改回成本（R3-4，M08-F1 补充）**：
+- **新增 relation_type**（如加 `includes`）：Alembic 1-2 步（ALTER TABLE ... CHECK constraint 改值 + 重建约束）；无数据迁移不可逆性（新增不影响现存数据）
+- **删除已有 relation_type**（如删 `conflicts_with`）：Alembic 1 步（ALTER CHECK constraint）；**有数据迁移不可逆性**——必须先清理或迁移该类型的现存记录（否则 ALTER 失败）；若有数据则不可逆（删除的 relation 历史永久丢失）；受影响模块：M09（search_by_keyword 过滤范围需同步）
 
 ---
 
@@ -255,7 +263,7 @@ class ModuleRelation(Base, TimestampMixin):
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE module_relations.project_id = ?`；Service 创建时校验 `source_node.project_id == target_node.project_id == 入参 project_id` |
-| **多表事务** | ✅ 必须 | Service 层 `with self.db.transaction():` 包：① INSERT module_relations ② log activity_log；任一失败回滚 |
+| **多表事务** | ✅ 必须 | Service 层 `with self.db.begin():` 包：① INSERT module_relations ② log activity_log；任一失败回滚（SQLAlchemy 2.x 标准事务 API）|
 | **异步处理** | ❌ N/A | M08 全同步——关系 CRUD 是用户即时操作，无后台任务、无 Queue、无流式 |
 | **并发控制** | ❌ N/A | 无乐观锁——关联更新只改 notes（纯文本，last-write-wins 可接受）；唯一约束防重复插入（DB 层兜底） |
 
@@ -279,7 +287,7 @@ class ModuleRelation(Base, TimestampMixin):
 | **Component** | `web/src/components/business/relation-graph.tsx`<br>`web/src/components/business/relation-form.tsx` | React Flow 渲染关系图（前端可视化）；创建/删除关联表单 |
 | **Server Action** | `web/src/actions/module-relation.ts` | session 校验 / zod 入参校验 / fetch FastAPI |
 | **Router** | `api/routers/module_relation_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic schema |
-| **Service** | `api/services/module_relation_service.py` | 业务规则（节点归属校验）/ 事务 / 写 activity_log |
+| **Service** | `api/services/module_relation_service.py` | 业务规则（节点归属校验）/ 事务 / 写 activity_log。**对外契约（R-X3）**：`delete_by_node_id(db, node_id, project_id)` 供 M03 级联调用 / `batch_create_in_transaction(db, ...)` 供其他 orchestrator 调用——这些方法接受外部 db Session，不自开事务 |
 | **DAO** | `api/dao/module_relation_dao.py` | SQL 构建 + 强制 tenant 过滤 |
 | **Model** | `api/models/module_relation.py` | SQLAlchemy 模型（schema 真相源） |
 | **Schema** | `api/schemas/module_relation_schema.py` | Pydantic 请求 / 响应 |
@@ -365,6 +373,7 @@ class RelationUpdate(BaseModel):
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
 | **Router** | 用户对 project 是否有权限 | `Depends(check_project_access(project_id, role="editor"))` 写操作；读操作允许 viewer |
 | **Service** | source/target node 是否真的属于该 project | `_check_nodes_belong_to_project(source_node_id, target_node_id, project_id)`；不属于抛 `NodeNotFoundError`（不暴露 forbidden 信息） |
+| **DELETE `/nodes/{node_id}/relations`（M03 级联调用）** | 内部服务调用路径 | 经 Router 但 role=editor（与其他写操作一致）；M03 Service 作为调用方，在自己的事务内调用 `ModuleRelationService.delete_by_node_id(db, node_id, project_id)`，Router 权限检查由 M03 前置完成 |
 
 **异步路径**：M08 无异步，三层即足够（无需 Queue 消费者侧权限）。
 
@@ -403,7 +412,9 @@ class ModuleRelationDAO:
     def delete_by_node(
         self, db: Session, node_id: UUID, project_id: UUID
     ) -> int:
-        """供 M03 Service 层调用（R-X2 规则）"""
+        """供 M03 Service 层调用（R-X2 规则）。
+        R-X3：接受外部 db session，不调 self.db.begin() 另开事务——由调用方（M03 Service）统一管理事务边界。
+        """
         return (
             db.query(ModuleRelation)
             .filter(
@@ -432,6 +443,80 @@ class ModuleRelationDAO:
 
 无——M08 所有查询都在 tenant 边界内。
 
+### Service 层对外契约代码草案（R-X3 示范）
+
+```python
+# api/services/module_relation_service.py
+from sqlalchemy.orm import Session
+
+class ModuleRelationService:
+    def __init__(self, db: Session, dao: ModuleRelationDAO, activity: ActivityLogService):
+        self.db = db
+        self.dao = dao
+        self.activity = activity
+
+    def create_relation(
+        self, source_id: UUID, target_id: UUID, relation_type: str,
+        project_id: UUID, user_id: UUID, notes: str | None = None,
+    ) -> ModuleRelation:
+        """用户通过 UI 创建关联——本模块自开事务（SQLAlchemy 2.x 标准用法）"""
+        with self.db.begin():
+            # 节点归属校验（§8 Service 层）
+            self._check_nodes_belong_to_project(source_id, target_id, project_id)
+            relation = self.dao.create(self.db, source_id, target_id, relation_type, project_id, user_id, notes)
+            self.activity.log(
+                self.db, action="create", target_type="module_relation",
+                target_id=relation.id, project_id=project_id, user_id=user_id,
+                metadata={"source_node_id": str(source_id), "target_node_id": str(target_id), "relation_type": relation_type},
+            )
+            return relation
+
+    def delete_by_node_id(
+        self, db: Session, node_id: UUID, project_id: UUID,
+    ) -> int:
+        """供 M03 Service 层级联调用（R-X2 + R-X3）。
+
+        R-X3：接受外部 `db` session，**不**调 `self.db.begin()` 另开事务——
+        由调用方（M03 Service）统一管理事务边界，保证"删节点 + 删关联 + 写 activity_log"原子性。
+
+        R10-1：写 N 条独立 activity_log（每条关联一条 `delete` 事件，不汇总）。
+        """
+        # 先预取关联列表供 log（因为删除后就读不到 source/target 信息了）
+        relations = self.dao.list_by_node(db, node_id, project_id)
+        deleted_count = self.dao.delete_by_node(db, node_id, project_id)
+        for rel in relations:
+            self.activity.log(
+                db, action="delete", target_type="module_relation",
+                target_id=rel.id, project_id=project_id,
+                metadata={
+                    "source_node_id": str(rel.source_node_id),
+                    "target_node_id": str(rel.target_node_id),
+                    "relation_type": rel.relation_type,
+                    "triggered_by": "node_deletion",
+                },
+            )
+        return deleted_count
+
+    def batch_create_in_transaction(
+        self, db: Session, relations_data: list[RelationCreate], project_id: UUID, user_id: UUID,
+    ) -> list[ModuleRelation]:
+        """供其他 orchestrator 模块（如 M17 AI 导入）批量调用（R-X3）。
+        接受外部 db session 共享事务；写 N 条独立 create activity_log（R10-1）。
+        """
+        created = []
+        for data in relations_data:
+            rel = self.dao.create(db, **data.dict(), project_id=project_id, user_id=user_id)
+            self.activity.log(db, action="create", target_type="module_relation", target_id=rel.id, project_id=project_id, user_id=user_id)
+            created.append(rel)
+        return created
+```
+
+**验证要点**：
+- `create_relation` 用 `with self.db.begin():`——M08 自发起事务
+- `delete_by_node_id` / `batch_create_in_transaction` 入参 `db: Session`——接受外部 session，不自开事务（R-X3）
+- 所有写操作都在 Service 层事务内配对写 activity_log（清单 1）
+- 删除前预取关联列表——保证 N 条独立日志能拿到 source/target 信息（R10-1）
+
 ---
 
 ## 10. activity_log 事件清单
@@ -441,8 +526,10 @@ class ModuleRelationDAO:
 | `create` | `module_relation` | `<relation_id>` | 创建关联：{source_name} → {target_name} [{type}] | `{source_node_id, target_node_id, relation_type}` |
 | `delete` | `module_relation` | `<relation_id>` | 删除关联：{source_name} → {target_name} | `{source_node_id, target_node_id, relation_type}` |
 | `update` | `module_relation` | `<relation_id>` | 更新备注：{source_name} → {target_name} | `{relation_type, old_notes_length, new_notes_length}` |
+| `delete` | `module_relation` | `<relation_id>` | 删除关联（来自节点级联）：{source_name} → {target_name} | `{node_id, relation_type, triggered_by: 'node_deletion'}` |
 
 > `notes` 字段更新（PATCH）写 `update` 事件；M03 级联删除节点时由 `ModuleRelationService.delete_by_node_id` 写 `delete` 事件（R-X2 要求）。
+> **R10-1（批量操作 N 条独立事件）**：`delete_by_node_id` 调用时，若该节点有 N 条关联，则写 **N 条独立** `delete` 事件，每条 `target_id` = 对应的 `relation_id`，不得汇总为单条"批量删除 N 条"事件。N 条关联 → N 条独立 activity_log 记录。
 
 **实现位置**：Service 层 `module_relation_service.py`，每个 C/U/D 方法事务内调 `self.activity.log(...)`。
 
@@ -519,6 +606,38 @@ class RelationTypeInvalidError(AppError):
     message = "Invalid relation_type value"
 ```
 
+### Exception Handler 映射说明（M08-B1）
+
+Pydantic `ValueError`（由 `RelationCreate.check_no_self_loop` 抛出）由 FastAPI global exception handler 映射为 `RELATION_SELF_LOOP` ErrorCode（参 M04 pilot exception handler 惯例）：
+
+```python
+# api/main.py（global exception handler 惯例）
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    # Pydantic ValidationError 中包含 ValueError 时，提取 ErrorCode 返回
+    # RelationSelfLoopError 由 Pydantic model_validator raise ValueError 触发后转换
+    ...
+```
+
+### IntegrityError 捕获说明（M08-B5）
+
+Service 层 catch `sqlalchemy.exc.IntegrityError`，按 constraint name 分支处理：
+- 若 constraint name 是 `uq_module_relation_src_tgt_type`（三元组唯一约束）→ raise `RelationDuplicateError`
+- 其他 constraint violation（如 FK 不存在）→ 透传（不 wrap 为 409，避免语义混淆）
+
+```python
+# api/services/module_relation_service.py
+from sqlalchemy.exc import IntegrityError
+
+try:
+    db.add(relation)
+    db.flush()
+except IntegrityError as e:
+    if "uq_module_relation_src_tgt_type" in str(e.orig):
+        raise RelationDuplicateError()
+    raise  # 其他 IntegrityError 透传
+```
+
 ### 复用已有
 
 - `PERMISSION_DENIED` / `UNAUTHENTICATED`——复用
@@ -564,13 +683,13 @@ class RelationTypeInvalidError(AppError):
 
 ---
 
-## ⚠️ 待 CY 裁决项汇总
+## CY 决策记录（2026-04-21）
 
-| # | 节 | 决策点 | AI 默认值 | 候选 |
-|---|----|-------|----------|------|
-| Q1 | 3 | 关联方向性（有向 vs 无向） | **A 有向**（source→target 有意义） | B 无向（DB 层 min/max 唯一约束） |
-| Q2 | 3 | 同对节点多关联类型（允许 vs 不允许） | **A 允许**（三元组唯一，含 type） | B 不允许（仅 (source,target) 唯一） |
-| Q3 | 3 | relation_type 枚举值（3 个够吗） | **depends_on / related_to / conflicts_with** | CY 可增删，需同步 CheckConstraint |
+| # | 节 | 决策点 | 决定（候选 X）| 理由简述 |
+|---|----|-------|--------------|---------|
+| A-1 | 3 | 关联方向性（有向 vs 无向） | **候选 A 有向**（source→target 有意义）| 有向关系更精确；无向由前端对称显示 |
+| A-2 | 3 | 同对节点多关联类型（允许 vs 不允许） | **候选 A 允许多类型**（UNIQUE(source,target,type) 三元组）| 同一对节点可有多种语义关系 |
+| A-3 | 3 | relation_type 枚举值（3 个够用） | **候选 A：depends_on/related_to/conflicts_with**（可扩展）| 3 种覆盖主要业务场景；如需新增类型走 Alembic ALTER CHECK |
 
 ---
 

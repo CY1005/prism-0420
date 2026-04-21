@@ -1,12 +1,12 @@
 ---
 title: M15 数据流转可视化 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-21
 module_id: M15
 prism_ref: F15
 pilot: false
@@ -16,7 +16,7 @@ complexity: medium
 # M15 数据流转可视化 - 详细设计
 
 > 纯读聚合模块——消费横切 `activity_logs` 表，自身无写表。
-> 业务节标注 ⚠️ 的项为 AI 推断，CY 复审必改。
+> **CY 2026-04-21 决策记录见 §15，业务决策已 accepted**
 
 ---
 
@@ -44,17 +44,19 @@ complexity: medium
 | 不做的事 | 归属模块 |
 |---------|---------|
 | activity_log 的写入（各业务事件的记录）| M02/M03/M04/M05/M06/M07/M08/... 各业务模块 |
-| 节点名称 / 维度类型名称的完整 JOIN 展示 | ⚠️ AI 推断是否 in scope，见灰区说明 |
+| 节点名称 / 维度类型名称的完整 JOIN 展示 | CY ack A-11：不做跨表 JOIN，仅显示 summary 字段 |
 | AI 分析操作的流式事件 | M13（流式 SSE，不走 activity_log 实时推送）|
 | 跨 project 的操作汇总 | 不在 US-A2.2 范围内 |
 
 ### 边界灰区（显式说明）
 
-- **⚠️ 查询范围：单 project 还是跨 project**（AI 推断，CY 复审必改）：US-A2.2 描述"项目管理员"查看"所有成员的变更记录"，语境明确是单 project 内。推断：单 project 视图（路径 `/project/:id/activity`）。候选：A 单 project（默认），B 按 user 维度跨 project 日志（需新设计）。AI 默认 A。
-- **⚠️ 目标详情（target name）展示**（AI 推断，CY 复审必改）：activity_log 只存 `target_id`（UUID），不存目标的名称。如果要显示"更新了节点『登录流程』"，需要 JOIN nodes / dimension_records 等表取名字。推断：M15 不做跨表 JOIN 取目标名，仅显示 summary 字段（各模块写入时已包含可读摘要）。候选：A 仅显示 summary（默认），B JOIN 取目标 name（需联查多表）。AI 默认 A（避免 M15 和所有上游模块的表耦合）。
-- **⚠️ 与 ADR-003 Read Model 的关系**（待主对话决策）：M15 目前计划直查 `activity_logs` 横切表，与 M10 共同面对"是否起 ADR-003 统一 Read Model 层"的决策。详见 §3。
+- **查询范围**：**CY ack 候选 A 单 project 视图**——US-A2.2 语境明确是单 project 内（路径 `/project/:id/activity`）。
+- **目标详情（target name）展示**：**CY ack 候选 A 仅显示 summary**——M15 不做跨表 JOIN 取目标名，仅显示 summary 字段（各模块写入时已包含可读摘要，如"删除了节点『登录流程』"）。避免 M15 和所有上游模块的表耦合。
+- **与 ADR-003 Read Model 的关系**：已采纳 ADR-003 规则 3（横切共享表消费模块豁免——直查横切表），M15 独立 DAO 直查 `activity_logs`。详见 §3。
 - **M15 自身是否写 activity_log**（CY 怀疑点，显式说明）：M15 是纯读模块，自身不写 activity_log 事件。"查看操作日志"是只读浏览行为，不产生新的审计事件。M15 的"写入动作"（如果存在）——如用户点击展开某条日志——属于 UI 交互，**不写 activity_log**。故 M15 事务维度 ❌，与 catalog 一致。
-- **是否需要实时推送**（WebSocket/SSE）：US-A2.2 无实时需求，推断为普通分页 GET 列表；不引入 WebSocket 或 SSE。⚠️ AI 推断，CY 复审必改。
+- **是否需要实时推送**：**CY ack 无实时推送**——普通分页 GET 列表，不引入 WebSocket 或 SSE。
+
+- **僵尸 target_id 展示策略**（M15-B2）：`activity_log.target_id` 无 FK 约束（有意设计，日志不因目标被删而丢失）。前端展示时若 target 已删除（查 target 返回 404），展示 `summary` 字段内容（写入方在写 activity_log 时已在 summary 里冻结 target 名字，如"删除了节点『登录流程』"）；点击跳转禁用（target 已不存在，不跳）。此为固定展示策略，不属于业务决策——M15 §7 `ActivityLogItem` 的 `summary` 字段承担此职责。
 
 ---
 
@@ -86,9 +88,9 @@ flowchart LR
 
 ## 3. 数据模型（SQLAlchemy + Alembic 要点）
 
-### 核心决策点 ⚠️（待主对话决策是否起 ADR-003）
+### 核心决策点（ADR-003 规则 3 已采纳）
 
-M15 直接消费 `activity_logs` 横切表。与 M10 类似，面对"跨模块 Read 聚合方式"决策：
+M15 直接消费 `activity_logs` 横切表。跨模块 Read 聚合方式已采纳 ADR-003 规则 3（横切共享表消费模块豁免——直查横切表）：
 
 **两种候选方案**：
 
@@ -99,7 +101,7 @@ M15 直接消费 `activity_logs` 横切表。与 M10 类似，面对"跨模块 R
 
 **M15 与 M10 的差异**：M10 的聚合来自 3 个不同模块的表（nodes/dimension_records/project_dimension_configs），ADR-003 对 M10 价值更高；M15 只消费 `activity_logs` 单一横切表，ADR-003 对 M15 价值较低。但为了架构一致性，若主对话决策起 ADR-003，M15 也应随之迁移。
 
-⚠️ **AI 推断，CY 复审必改**：AI 暂时以方案 A（M15 独立 DAO 直查）为基线写后续节。若主对话决策选 B，§3/§6/§7/§9 需联动修改。
+**已采纳方案 A（M15 独立 DAO 直查 activity_logs）**：ADR-003 规则 3 豁免，CY 2026-04-21 ack。若未来升级为 ADR-003 Read Model 统一层（方案 B），§3/§6/§7/§9 需联动修改（改回成本见下方）。
 
 **候选 A→B 改回成本（R3-4）**：
 - Alembic 迁移步数：无（仅改代码结构，不改 DB schema）
@@ -108,6 +110,21 @@ M15 直接消费 `activity_logs` 横切表。与 M10 类似，面对"跨模块 R
 - 数据迁移不可逆性：无（纯代码重构）
 
 ---
+
+### M15 是 activity_log 横切表的 owner（R10-2）
+
+**本模块无自有业务实体表，§3 适用纯读聚合规范（R3-5），采纳 ADR-003 规则 3：横切共享表消费模块豁免——直查横切表。**
+
+引用：[`adr/ADR-003-cross-module-read-strategy.md`](../../adr/ADR-003-cross-module-read-strategy.md)
+
+`activity_logs` 是全项目/全模块共享的横切表，不归属任何单一业务模块。M15 直查 `activity_logs` 无需通过各业务模块的"日志接口"，保留时间顺序连贯性（横切表的核心价值）。
+
+**M15 是 activity_log 横切表的 owner（R10-2）**——M15 负责 `ActivityLog` model / `ActionType` + `TargetType` schema / Alembic 迁移的统一维护。
+
+新 action_type / target_type 扩增流程（R10-2）：
+1. 业务模块在自身 §10 设计新 action_type/target_type 字符串
+2. 模块 accepted 后**回写 M15 的 `ActionType` / `TargetType` 枚举 + 更新 CheckConstraint**
+3. 同步发起 Alembic 迁移（ALTER CHECK constraint）
 
 ### M15 无自有实体表（只读上游）
 
@@ -126,27 +143,47 @@ M15 消费 `activity_logs` 横切表，不创建任何新表：
 M15 消费的横切表字段（SQLAlchemy 只读视角，M15 不定义此表 model——由各模块共享）：
 
 ```python
-# api/models/activity_log.py  ← 横切共享 model，M15 只 import，不是 owner
+# api/models/activity_log.py  ← 横切共享 model，M15 是 owner（R10-2），负责 Alembic 迁移
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import ForeignKey, Index, Text, String
+from sqlalchemy import ForeignKey, Index, Text, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 from uuid import UUID as PyUUID, uuid4
 from typing import Any
-from .base import Base, TimestampMixin
+
+# api/models/base.py（文档中只写注释引用，不真改 base.py）
+# ImmutableMixin：只有 created_at，无 updated_at——日志等不可变实体用
+#   class ImmutableMixin:
+#       created_at: Mapped[datetime] = mapped_column(..., default=func.now())
+# base.py 若无 ImmutableMixin 则本模块引入
+from .base import Base, ImmutableMixin  # 不用 TimestampMixin（M15-F3 修复）
+
+from api.schemas.activity_stream_schema import ActionType, TargetType  # 三重防护：Mapped[Enum]
 
 
-class ActivityLog(Base, TimestampMixin):
+class ActivityLog(Base, ImmutableMixin):
     """
-    横切表——所有业务模块写入此表，M15 是唯一展示消费者。
-    定义归属：独立共享 model（非 M15 所有，M15 只读）。
-    TimestampMixin 只含 created_at（不含 updated_at——日志不可修改）。
+    横切表——所有业务模块写入此表，M15 是 activity_log 横切表的 owner（R10-2）。
+    M15 负责 action_type / target_type 枚举、Alembic 迁移。
+    不继承 TimestampMixin 避免 updated_at 与"日志不可修改"语义冲突（M15-F3 修复）。
+    ImmutableMixin 只含 created_at（无 updated_at）——日志 append-only 不可修改。
     """
     __tablename__ = "activity_logs"
     __table_args__ = (
         Index("ix_activity_log_project_created", "project_id", "created_at"),  # M15 主查询路径
         Index("ix_activity_log_user_project", "user_id", "project_id"),        # 按用户过滤
         Index("ix_activity_log_target", "target_type", "target_id"),           # 按目标关联
+        # 三重防护（R3-2）：CheckConstraint 枚举值显式列出
+        # 枚举值清单会随各模块 accepted 回写扩展（R10-2）——新 action_type/target_type 扩增时同步更新此 CHECK
+        CheckConstraint(
+            "action_type IN ('create', 'update', 'delete', 'import', 'analyze', 'archive')",
+            name="ck_activity_log_action_type",
+        ),
+        CheckConstraint(
+            "target_type IN ('node', 'dimension_record', 'version_record', 'competitor', "
+            "'issue', 'relation', 'project', 'project_member', 'module_relation')",
+            name="ck_activity_log_target_type",
+        ),
     )
 
     id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -158,20 +195,15 @@ class ActivityLog(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id"),
         nullable=False
     )
-    action_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-        # 取值：'create' | 'update' | 'delete' | 'import' | 'analyze' | 'archive'
-        # ⚠️ 未用 SAEnum——统一规则（batch2 audit 沉淀：String + CheckConstraint）
-    )
-    target_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-        # 取值：'node' | 'dimension_record' | 'version_record' | 'competitor' |
-        #        'issue' | 'relation' | 'project' | 'project_member' | ...
-    )
+    # 三重防护（R3-2）：Mapped[ActionType]（Enum） + String(50) + CheckConstraint（见 __table_args__）
+    # 按 README R3-2 现状选型：String(N) + CheckConstraint，不升 SAEnum
+    action_type: Mapped[ActionType] = mapped_column(String(50), nullable=False)
+    # 三重防护（R3-2）：Mapped[TargetType]（Enum） + String(50) + CheckConstraint（见 __table_args__）
+    target_type: Mapped[TargetType] = mapped_column(String(50), nullable=False)
     target_id: Mapped[str] = mapped_column(Text, nullable=False)  # UUID str（兼容各模块 id 类型）
     summary: Mapped[str] = mapped_column(Text, nullable=False)    # 人可读摘要，各模块写入时提供
     metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    # created_at 继承自 TimestampMixin（activity_log 不含 updated_at，日志不可修改）
+    # created_at 继承自 ImmutableMixin（无 updated_at，日志不可修改）
 ```
 
 ### M15 只读 DAO（不定义新 model，仅查上游）
@@ -192,7 +224,7 @@ class ActivityStreamDAO:
     """
     M15 只读 DAO。
     方案 A：直查 activity_logs + JOIN users。
-    ⚠️ 若主对话决策选方案 B（ADR-003），此 DAO 迁移到 Read Model 层。
+    # 方案 A 已采纳（ADR-003 规则 3 豁免）；若未来升级方案 B，此 DAO 迁移到 Read Model 层。
     """
 
     def list_stream(
@@ -228,7 +260,12 @@ class ActivityStreamDAO:
         if to_dt:
             q = q.filter(ActivityLog.created_at <= to_dt)
 
-        total = q.count()
+        # D-2（CY ack）：首页请求（offset=0）返回精确 total；后续分页（offset>0）仅返回 has_more + items
+        # 避免每次全表 COUNT，防百万级日志性能问题
+        if (page - 1) == 0:
+            total = q.count()  # 首页精确 total
+        else:
+            total = None  # 后续分页不计算精确 total（前端用 has_more 判断）
         records = (
             q.order_by(desc(ActivityLog.created_at))
             .offset((page - 1) * page_size)
@@ -240,8 +277,9 @@ class ActivityStreamDAO:
 
 ### Alembic 要点
 
-- M15 **无 Alembic 迁移**——不新增表，依赖上游 `activity_logs` 已有表。
-- `activity_logs` 表上的索引应由 ActivityLog model 声明（见上方 `__table_args__`），但实际迁移由"横切表 owner"维护（可考虑独立 migration 文件）。
+- M15 作为 `activity_logs` owner（R10-2）：**M15 负责 activity_logs 表的 Alembic 迁移文件**，索引 + CheckConstraint 均由此模块维护。
+- **ImmutableMixin 引入**：`base.py` 若无 `ImmutableMixin`，则本模块引入——仅含 `created_at`，无 `updated_at`，专用于日志等不可变实体（M15-F3 修复）。
+- `action_type` / `target_type` CheckConstraint 初始值见上方 model `__table_args__`；随各模块 accepted 回写时需追加 Alembic 迁移（ALTER TABLE ... DROP CONSTRAINT + ADD CONSTRAINT）。
 
 ---
 
@@ -286,7 +324,7 @@ M15 无自有实体表，无状态字段，无状态机。
 | **Page** | `web/src/app/projects/[pid]/activity/page.tsx` | SSR 渲染数据流转页；调 Server Action 拿日志列表；渲染时间轴组件 |
 | **Component** | `web/src/components/business/activity-timeline.tsx`<br>`web/src/components/business/activity-filter-bar.tsx` | 按日期分组的时间流渲染；过滤器 UI（用户/操作类型/时间范围）|
 | **Server Action** | `web/src/actions/activity_stream.ts` | session 校验 / 拼接过滤参数 / 调 FastAPI GET 日志列表 |
-| **Router** | `api/routers/activity_stream_router.py` | 路由定义 / `Depends(check_project_access(role="admin"))`（管理员专属）/ Pydantic schema 出参；纯 GET，无写操作 |
+| **Router** | `api/routers/activity_stream_router.py` | 路由定义 / `Depends(check_project_access(project_id, roles=["owner", "editor"]))`（owner+editor 可审计，C-5）/ Pydantic schema 出参；纯 GET，无写操作 |
 | **Service** | `api/services/activity_stream_service.py` | tenant 二次校验；调 DAO；将 (ActivityLog, user_name) flat list 整形为 `ActivityStreamResponse` |
 | **DAO** | `api/dao/activity_stream_dao.py` | 只读 SQL：activity_logs JOIN users；强制 project_id tenant 过滤；分页 + 过滤条件构建 |
 | **Model** | 无新 model 文件——引用横切 `api/models/activity_log.py` + M01 `api/models/user.py` | 上游模型复用 |
@@ -311,7 +349,7 @@ M15 无自有实体表，无状态字段，无状态机。
 
 ```python
 # api/schemas/activity_stream_schema.py
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, Any
@@ -325,7 +363,8 @@ class ActionType(str, Enum):
     import_ = "import"
     analyze = "analyze"
     archive = "archive"
-    # ⚠️ AI 推断——完整 action_type 枚举需与各业务模块 activity_log 事件清单对齐
+    # 注：完整 action_type 枚举随各模块 accepted 后回写扩展（R10-2）
+    # 各模块 accepted 后集中回写此枚举 + CheckConstraint
 
 
 class TargetType(str, Enum):
@@ -337,7 +376,8 @@ class TargetType(str, Enum):
     relation          = "relation"
     project           = "project"
     project_member    = "project_member"
-    # ⚠️ AI 推断——完整 target_type 枚举需与各业务模块 activity_log 事件清单对齐
+    module_relation   = "module_relation"
+    # 注：完整 target_type 枚举随各模块 accepted 后回写扩展（R10-2）
 
 
 class ActivityStreamFilter(BaseModel):
@@ -349,6 +389,13 @@ class ActivityStreamFilter(BaseModel):
     target_type: Optional[TargetType] = None
     from_dt: Optional[datetime] = None    # 时间范围开始
     to_dt: Optional[datetime] = None      # 时间范围结束
+
+    @model_validator(mode='after')
+    def check_time_range(self) -> "ActivityStreamFilter":
+        """跨字段校验：from_dt 必须 <= to_dt（M15-B4 修复）"""
+        if self.from_dt and self.to_dt and self.from_dt > self.to_dt:
+            raise ValueError("from_dt must be <= to_dt")
+        return self
 
 
 class ActivityLogItem(BaseModel):
@@ -370,11 +417,15 @@ class ActivityStreamResponse(BaseModel):
     """项目操作日志分页响应"""
     project_id: UUID
     items: list[ActivityLogItem]
-    total: int
+    total: int | None   # 首页（offset=0）精确 total；后续分页为 None（D-2 CY ack）
     page: int
     page_size: int
-    has_more: bool               # total > page * page_size
+    has_more: bool      # 是否有更多（后续分页依赖此字段，不依赖 total）
 ```
+
+**前端渲染契约（D-3 CY ack）**：
+- 前端按 action_type dispatch 到对应渲染器（switch-case）
+- 未知 action_type（如新模块 accepted 后回写前的窗口期）：展示 `action_type` 字符串作为标题 + `metadata` 折叠可展开，不隐藏不显示 raw JSON（C-6 CY ack，候选 C fallback UI）
 
 ---
 
@@ -383,8 +434,8 @@ class ActivityStreamResponse(BaseModel):
 | 层 | 检查 | 实现 |
 |----|------|------|
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
-| **Router** | 用户对 project 是否是 admin 角色 | `Depends(check_project_access(project_id, role="admin"))`；US-A2.2 明确是"项目管理员"功能——非 admin 403 |
-| **Service** | project_id 是否真实存在 + 用户真实是 admin | `_check_project_admin(user_id, project_id)`；project 不存在或用户非 admin 抛对应错误 |
+| **Router** | 用户对 project 是否是 owner/editor 角色 | `Depends(check_project_access(project_id, roles=["owner", "editor"]))`；CY ack C-5（候选 β）：owner + editor 可审计，viewer 不可。引用 M02 MemberRole 枚举：owner/editor 合规，viewer 不可。不扩 M02 基线枚举 |
+| **Service** | project_id 是否真实存在 + 用户是 owner 或 editor | `_check_activity_audit_access(user_id, project_id)`（C-5：校验用户角色 in [owner, editor]）；project 不存在或用户非 owner/editor 抛对应错误 |
 
 **异步路径**：M15 无异步，三层即足够（无 Queue 消费者侧权限）。
 
@@ -406,7 +457,7 @@ class ActivityStreamResponse(BaseModel):
 ### 防绕过纪律
 
 - `ActivityStreamDAO.list_stream()` 强制第一个过滤条件为 `activity_logs.project_id = project_id`，此条件不得省略
-- Router 的 project_id 来自 path 参数；Service 层二次校验用户真实有 admin 权限
+- Router 的 project_id 来自 path 参数；Service 层二次校验用户真实是 owner 或 editor（C-5）
 
 ---
 
@@ -423,7 +474,7 @@ class ActivityStreamResponse(BaseModel):
   - M03 Service：写 `create_node` / `delete_node` / `move_node` 等事件
   - M04 Service：写 `create_dimension_record` / `update_dimension_record` 等事件
   - 其他模块同理
-- "用户点击 M15 查看日志"属于只读浏览行为，不记录 activity_log（⚠️ AI 推断，CY 复审必改：若需要"谁查看了操作日志"的审计，追加 view_activity_stream 事件）
+- "用户点击 M15 查看日志"属于只读浏览行为，不记录 activity_log（当前不记录；若需要"谁查看了操作日志"的审计，可追加 view_activity_stream 事件——作为观察项留存）
 - 约束清单 1 规定"所有变更操作必须写 activity_log"——M15 无变更操作，豁免
 
 ---
@@ -453,7 +504,7 @@ class ErrorCode(str, Enum):
     # ... 已有
     # 模块（M15）
     ACTIVITY_STREAM_PROJECT_NOT_FOUND = "ACTIVITY_STREAM_PROJECT_NOT_FOUND"  # project 不存在或无权限
-    ACTIVITY_STREAM_FORBIDDEN         = "ACTIVITY_STREAM_FORBIDDEN"          # 非 admin 角色访问
+    ACTIVITY_STREAM_FORBIDDEN         = "ACTIVITY_STREAM_FORBIDDEN"          # 非 owner/editor 角色访问（viewer / 无成员身份）
     ACTIVITY_STREAM_INVALID_FILTER    = "ACTIVITY_STREAM_INVALID_FILTER"     # 过滤参数不合法（如 from_dt > to_dt）
 ```
 
@@ -468,7 +519,7 @@ class ActivityStreamProjectNotFoundError(NotFoundError):
 class ActivityStreamForbiddenError(AppError):
     code = ErrorCode.ACTIVITY_STREAM_FORBIDDEN
     http_status = 403
-    message = "Only project admin can view activity stream"
+    message = "Only project owner or editor can view activity stream"
 
 
 class ActivityStreamInvalidFilterError(ValidationError):
@@ -492,45 +543,114 @@ class ActivityStreamInvalidFilterError(ValidationError):
 - **边界**：空日志（无操作）/ page 超出范围 / 时间范围 from > to / 过滤条件全不匹配
 - **并发**：M15 纯读无并发场景（显式说明）
 - **tenant**：跨项目越权读 / DAO project_id 过滤覆盖
-- **权限**：未登录 / viewer 访问（403）/ editor 访问（403）/ admin 正常读
+- **权限**：未登录 / viewer 访问（403）/ editor 正常读（200，C-5）/ owner 正常读（200）
 - **错误处理**：project 不存在 / filter 参数非法 / user_id 不存在（filter 无效过滤）
 
 ---
 
-## 15. 完成度判定 checklist + ⚠️ 待 CY 裁决项
+## 15. 完成度判定 checklist + CY 决策记录
 
 ### checklist
 
 - [x] 节 1：职责边界 in/out scope 完整；引 PRD Q3 / Q4 / US-A2.2；显式说明"M15 不写 activity_log"（回应 CY 怀疑点）
 - [x] 节 2：依赖图覆盖上游（M01/M02/横切表 activity_logs）+ 写入模块示意
-- [x] 节 3：无自有表显式声明；两候选方案（A/B）给完整对比；activity_logs model 草案；ActivityStreamDAO 草案；改回成本（R3-4）
+- [x] 节 3：无自有表声明（R3-5）+ 横切表清单 + ADR-003 规则 3 引用 + R10-2 owner 声明 + ImmutableMixin 修复（M15-F3）+ 三重防护 CheckConstraint（M15-F1）（不得误勾 R3-1 "SQLAlchemy class 代码块"）
 - [x] 节 4：无状态实体显式声明（按原则 4 要求）
-- [x] 节 5：4 维必答（含"不涉及"显式说明）；**事务 ❌ 原因详细解释**（回应 CY 怀疑：M15 不写 activity_log，故事务 ❌ 与 catalog 一致）；5 项清单逐项标注；⚠️ 不出现在 4 维表格（符合 R5-1）
+- [x] 节 5：4 维必答（含"不涉及"显式说明）；**事务 ❌ 原因详细解释**（回应 CY 怀疑：M15 不写 activity_log，故事务 ❌ 与 catalog 一致）；5 项清单逐项标注；无 ⚠️ 占位（符合 R5-1）
 - [x] 节 6：分层职责表完整（每层文件路径明确）
 - [x] 节 7：1 个 API endpoint + Pydantic schema 草案（含枚举 ActionType/TargetType）
-- [x] 节 8：权限三层防御 + 异步路径声明（M15 无异步）；明确 admin-only
+- [x] 节 8：权限三层防御 + 异步路径声明（M15 无异步）；明确 owner + editor 可审计（C-5，不含 viewer）
 - [x] 节 9：activity_logs tenant 过滤 + users 豁免说明
 - [x] 节 10：无 activity_log 事件显式说明 + 详细理由（回应 CY 怀疑点）
 - [x] 节 11：idempotency 无显式声明
 - [x] 节 12：Queue 显式 N/A
 - [x] 节 13：3 个 ErrorCode + 对应 AppError 子类（R13-1 满足）
 - [x] 节 14：tests.md 场景大纲
-- [x] 节 15：⚠️ 待 CY 裁决项汇总表
+- [x] 节 15：CY 决策记录表（2026-04-21 ack）
 - [ ] **🔴 第一轮 reviewer audit（完整性）通过**
 - [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
 - [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
 - [ ] CY 全文复审通过 → status 转 accepted
 
-### ⚠️ 待 CY 裁决项汇总表
+### C 类决策补对比（2026-04-21）
 
-| # | 节 | 裁决点 | AI 推断默认值 | 候选 | 影响范围 |
-|---|-----|-------|------------|------|---------|
-| D1 | §1 | 查询范围：单 project vs 跨 project（按 user 维度）| A 单 project | A 单 project / B 按 user 跨 project | 若选 B：需新增路径 `/api/users/{uid}/activity-stream`；Router 权限逻辑变化 |
-| D2 | §1/§7 | 目标名展示：仅 summary vs JOIN 取 target name | A 仅 summary | A 仅 summary（避免多表耦合）/ B JOIN nodes/dimension_records 取 name | 若选 B：DAO 需根据 target_type 动态 JOIN 不同表（复杂度增加）|
-| D3 | §3 | 跨模块 Read 聚合方式 | A M15 独立 DAO 直查 activity_logs | A 独立 DAO / B ADR-003 Read Model 统一层 | **与 M10 D4 联动**：主对话统一决策是否起 ADR-003 |
-| D4 | §1 | 是否引入实时推送（WebSocket/SSE）| 不引入，普通分页 GET | 不引入（默认）/ 引入 WebSocket（需 M17 Queue 消费者配合）| 若引入：complexity 升为 high；需 catalog 更新异步维度标注 |
-| D5 | §10 | 是否记录"用户查看操作日志"的 view 事件 | 不记录 | 不记录 / 记录 view_activity_stream 事件 | 若记录：M15 从"纯读"变为"有写入"，事务维度需补 ✅ |
-| D6 | §7 | ActionType / TargetType 枚举完整性 | 草案列举常见值 | 需与各业务模块 activity_log 事件清单（M02/M03/M04/...）逐一对齐 | 影响 Pydantic schema + 前端过滤器选项；待各模块 accepted 后汇总 |
+> C 类决策补对比，CY 2026-04-21 已 ack（见底部）。候选 α/β/γ / A/B/C 文字结构保留作历史记录。
+
+---
+
+### C-M15-1：admin 角色语义（C 类补对比，2026-04-21）
+
+**当前状态**：§8 权限三层中 `Depends(check_project_access(project_id, role="admin"))` 用 `"admin"` 字符串占位，注释"待确认 M02 枚举"。但 M02 已 accepted，其 MemberRole 枚举为 `owner / editor / viewer`——M02 **没有** `"admin"` 字符串，当前 M15 实现若直接上线将永远拒绝或永远放行（取决于 check_project_access 实现）。
+
+**候选 α/β/γ**（业务场景对比）：
+
+| 候选 | 业务场景（CY 实际用法）| 实现影响 |
+|------|---------------------|---------|
+| **α：改为 role="owner"（仅 project owner 可看日志）** | CY 作为个人知识库的 owner，能看所有操作日志，完全满足她的"可追溯"诉求。但若未来 Mentor 作为 editor 加入项目，Mentor 想查"是谁改了某功能项的描述"→ 无法查看日志；CY 如果想让 Mentor 参与审计 → 无法授权 | 1 行代码改动：`role="admin"` → `role="owner"`；不破坏 M02 枚举基线；无 Alembic 迁移 |
+| **β：改为 role 包含 owner+editor（编辑者集合）** | CY 是 owner 能看日志；Mentor 作为 editor 也能看——协作场景下有合理审计需求（Mentor 和 CY 共编同一 project，Mentor 想知道"我上次改的版本号是什么"）。viewer 仍不能看日志——保留"只读观众无审计权"的合理边界。个人知识库场景（仅 CY 一人）下 β 与 α 等效 | Service 层权限判断改为 `role in ("owner", "editor")`；不改 M02 基线；无 Alembic 迁移；check_project_access 函数需支持多角色参数或在 M15 Service 层自行判断 |
+| **γ：扩 M02 角色枚举加 "admin"（独立权限层）** | 最灵活——"admin" 独立于 owner/editor/viewer，可单独授权给需要查日志的人，而不赋予编辑权限。但 M02 已 accepted，扩枚举 = 触发基线补丁：MemberRole 枚举 + Alembic 迁移 + CheckConstraint 更新 + M15 授权改 role="admin" + 现有 editor/owner 角色升级策略 | **高成本**：M02 MemberRole enum 扩展 + Alembic 迁移 1-2 步 + M15 授权逻辑改动 + 回归测试覆盖 M02 角色体系 |
+
+**AI 倾向**：候选 β（owner + editor）
+
+**理由**：
+1. **不破坏 M02 已 accepted 基线**——M02 的 `owner/editor/viewer` 三档枚举保持不变，M15 只调整权限判断逻辑
+2. **协作场景友好**：CY 的知识库未来若有 Mentor 作为 editor 参与，Mentor 具备合理的审计需求（"我上次在哪个维度加了什么"）——候选 α 将 Mentor 排除在外，协作受限
+3. **个人知识库场景等效**：CY 一人使用时她既是 owner，β 与 α 无差异
+4. **保留核心边界**：viewer 仍不能看日志——"只读观众无审计权"的合理设计保留
+5. 候选 γ 的基线补丁成本与收益不成比例（独立 admin 角色对 CY 的个人知识库场景价值有限）
+
+**改回成本**：
+- Alembic 迁移步数：0 步（β 不改 DB schema）
+- 受影响模块数：1 个（M15 自身 Service 层权限判断逻辑）
+- 数据迁移不可逆性：无
+- 代码改动量：
+  - β→α：1 行代码改动（`role="owner"` 替换多角色判断）；约 10 分钟
+  - β→γ：**高成本**——M02 MemberRole 枚举扩 "admin" + Alembic 迁移（1-2 步）+ M15 授权改 role="admin" + 现有成员角色升级策略 + M02 测试回归；约 4-6 小时
+
+**CY 2026-04-21 ack：候选 β**
+
+---
+
+### C-M15-2：未知 action_type 容错策略（C 类补对比，2026-04-21）
+
+**当前状态**：§7 前端契约中 `ActionType` 枚举是"草案列举常见值，各模块 accepted 后回写"——存在窗口期：某模块（如 M13）accepted 后新增了 `ai.requirement_analyzed` action_type，但 M15 前端 schema 还未回写，前端遇到未知 action_type 时行为未定义。
+
+**候选 A/B/C**（业务场景对比）：
+
+| 候选 | 业务场景（CY 实际用法）| 实现影响 |
+|------|---------------------|---------|
+| **A：展示 raw JSON + warning 提示（"未知操作类型：xxx"）** | 场景：M13 需求分析完成，日志里出现 `ai.requirement_analyzed` 事件，M15 前端未更新。CY 打开活动日志→ 看到一行"未知操作类型：ai.requirement_analyzed + 原始 JSON 结构"——技术味道重，视觉干扰，但保留了所有信息 | 前端 action_type switch-case 的 default 分支渲染 raw JSON；需增加 JSON stringify + "未知操作类型" 标签组件 |
+| **B：过滤隐藏（前端遇到未知 action_type 直接不展示这条日志）** | CY 打开活动日志→ 完全看不到 `ai.requirement_analyzed` 这条操作记录，以为需求分析没有发生过。**审计盲区**：CY 的个人知识库场景最核心诉求是"可追溯"，隐藏记录 = 丢信息 = 违背 M15 设计初衷 | 前端 switch-case default 分支 return null；代码最简单；但产生审计盲区 |
+| **C：展示"未知操作"fallback UI（action_type 字符串作为标题，metadata 折叠展开）** | CY 打开活动日志→ 看到一行标题"ai.requirement_analyzed"（原始字符串，有业务语义可读）+ 折叠的"查看详情"按钮展开 metadata JSON。既保留信息又不难看：标题可读（action_type 命名本身有语义），metadata 折叠不占空间，点击可查 | 前端 switch-case default 分支渲染 fallback 组件（标题=action_type 字符串，body=折叠 JSON）；约 1 小时实现一个通用 fallback card 组件 |
+
+**AI 倾向**：候选 C（fallback UI：action_type 字符串作标题 + metadata 折叠）
+
+**理由**：
+1. **候选 B 违反 CY 核心诉求**：M15 存在的价值就是"可追溯"——隐藏记录等于销毁证据，CY 半年后回看"为什么功能 X 的分析结论是 Y"时无法找到当时的 AI 分析事件
+2. **候选 A 用户体验差**：raw JSON 是开发者语言，CY 的 AI 质量工程师场景不需要看到裸 JSON；`{"action_type": "ai.requirement_analyzed", "metadata": {...}}` 对她来说是噪音
+3. **候选 C 优雅降级**：`ai.requirement_analyzed` 字符串本身有业务语义（AI 分析了需求），作为标题可读；metadata 折叠让界面不乱；用户可按需展开查看原始数据
+4. 实现成本：一个通用 fallback card 组件复用于所有未知 action_type，后续新增模块时自动生效
+5. 候选 C 对 CY 的"边改边查、半年后追溯"场景：保证记录不丢，同时不让界面被"奇怪的 JSON"淹没
+
+**改回成本**：
+- Alembic 迁移步数：0 步（纯前端渲染层决策，无 DB 变更）
+- 受影响模块数：0 个后端模块（M15 API 不变，仅影响前端 action_type switch-case 逻辑）
+- 数据迁移不可逆性：无（日志数据不受前端渲染策略影响）
+- 代码改动量：C→A 约 30 分钟（替换 fallback 组件渲染逻辑）；C→B 约 5 分钟（default 分支 return null）；任何方向切换均为纯前端改动
+
+**CY 2026-04-21 ack：候选 C**
+
+---
+
+### CY 决策记录（2026-04-21）
+
+| # | 节 | 决策点 | 决定（候选 X）| 理由简述 |
+|---|----|-------|--------------|---------|
+| A-10 | §1 | 查询范围：单 project vs 跨 project | **候选 A 单 project** | US-A2.2 明确"项目管理员"单 project 语境 |
+| A-11 | §1/§7 | target name：仅 summary vs JOIN 取 name | **候选 A 仅显示 summary** | 避免 M15 与所有上游模块表耦合；summary 字段已冻结目标名 |
+| A-12 | §1 | 是否引入实时推送 | **无实时推送**（普通分页 GET）| US-A2.2 无实时需求 |
+| C-5 | §8 | admin 角色语义 | **候选 β（owner + editor）** | 不破坏 M02 基线枚举；协作场景 editor 有合理审计需求 |
+| C-6 | §7 | 未知 action_type 容错 | **候选 C fallback UI** | action_type 字符串作标题 + metadata 折叠；不隐藏不 raw JSON |
 
 ---
 

@@ -19,9 +19,13 @@
 | 第二批 | M03 功能模块树 | **accepted（2026-04-21）** | [`M03-module-tree/`](./M03-module-tree/) |
 | 第二批 | M11 冷启动支持 | **accepted（2026-04-21）** | [`M11-cold-start/`](./M11-cold-start/) |
 | 第二批 | M12 对比矩阵 | **accepted（2026-04-21）** | [`M12-comparison/`](./M12-comparison/) |
-| 第二批 | M01 用户账号 | 待开 | — |
-| 第三批 | M13 / M16 / M18 复杂 AI | 待 CY 出业务 | — |
-| 第四批 | M08 / M09 / M10 / M15 / M20 | 待开 | — |
+| 第三批 A1 | M08 模块关系图 | **accepted（2026-04-21）** | [`M08-module-relation/`](./M08-module-relation/) |
+| 第三批 A1 | M09 全局搜索 | **accepted（2026-04-21）** | [`M09-search/`](./M09-search/) |
+| 第三批 A1 | M10 项目全景图 | **accepted（2026-04-21）** | [`M10-overview/`](./M10-overview/) |
+| 第三批 A1 | M15 数据流转可视化 | **accepted（2026-04-21）** | [`M15-activity-stream/`](./M15-activity-stream/) |
+| 第三批 A2 | M01 用户账号（auth pilot 模式）| 待开 | — |
+| 第四批（AI 异步）| M13 需求分析 / M16 AI 快照 / M18 语义搜索 | 待 CY 出业务 | — |
+| 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：
 - 同步模块 → `M04-feature-archive/00-design.md`
@@ -30,6 +34,7 @@
 **Audit 报告归档**：
 - 第一批：[`audit-report-batch1.md`](./audit-report-batch1.md) + [`audit-report-batch1-verify.md`](./audit-report-batch1-verify.md)
 - 第二批：[`audit-report-batch2.md`](./audit-report-batch2.md) + [`audit-report-batch2-verify.md`](./audit-report-batch2-verify.md)
+- 第三批 A1：[`audit-report-batch3.md`](./audit-report-batch3.md) + [`audit-report-batch3-verify.md`](./audit-report-batch3-verify.md)
 - M17 pilot：[`M17-ai-import/audit-report.md`](./M17-ai-import/audit-report.md)
 
 完整能力定位见 [`../00-architecture/07-capability-matrix.md`](../00-architecture/07-capability-matrix.md)。

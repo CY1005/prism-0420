@@ -5,6 +5,7 @@ owner: CY
 created: 2026-04-21
 accepted: null
 module_id: M10
+prism_ref: F10
 ---
 
 # M10 测试场景
@@ -21,7 +22,7 @@ module_id: M10
 |----|------|------|------|
 | G1 | 查询项目全景图（含树 + 统计）| viewer → GET `/api/projects/{pid}/overview` | 200；tree 嵌套结构正确（父子关系）；每个 file 节点含 completion_rate；stats.total_nodes 正确 |
 | G2 | file 节点完善度计算正确 | 项目启用 3 个维度；某 file 节点填了 2 条 dimension_records → GET overview | 该节点 filled_count=2，enabled_count=3，completion_rate≈0.667 |
-| G3 | folder 节点显示子树均值 | folder 下 2 个 file 节点 completion_rate 分别 1.0 和 0.5 → GET overview | folder 节点 completion_rate=0.75（均值）；⚠️ 依赖 D3 裁决"A 均值"方案 |
+| G3 | folder 节点显示子树均值 | folder 下 2 个 file 节点 completion_rate 分别 1.0 和 0.5 → GET overview | folder 节点 completion_rate=0.75（均值）；CY ack A-9 均值方案 |
 | G4 | 单节点完善度查询 | editor → GET `/api/projects/{pid}/nodes/{nid}/completion` | 200；filled_count/enabled_count/completion_rate 准确 |
 | G5 | 查询项目整体统计 | GET `/api/projects/{pid}/overview/stats` | 200；avg_completion_rate = 所有 file 节点均值；fully_complete_nodes 准确 |
 | G6 | 完善度 0% 节点（空节点）| file 节点未填任何维度 → GET overview | filled_count=0，completion_rate=0.0；正常返回不报错 |
@@ -88,7 +89,7 @@ module_id: M10
 | ER1 | project 不存在 | `{"error": {"code": "OVERVIEW_PROJECT_NOT_FOUND", "message": "Project not found or access denied"}}` |
 | ER2 | node 不存在（单节点接口）| `{"error": {"code": "OVERVIEW_NODE_NOT_FOUND", "message": "..."}}` |
 | ER3 | 无启用维度 | `{"error": {"code": "OVERVIEW_NO_DIMENSIONS", "message": "Project has no enabled dimensions configured"}}` |
-| ER4 | DB 超时（节点数量大）| 502 / 504；不暴露内部 SQL；⚠️ AI 推断——若添加超时保护，ErrorCode 待 CY 定 |
+| ER4 | DB 超时（节点数量大）| 502 / 504；不暴露内部 SQL；观察项：若添加超时保护，ErrorCode 待后续精修阶段定 |
 
 ---
 

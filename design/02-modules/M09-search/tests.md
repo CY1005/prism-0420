@@ -5,14 +5,14 @@ owner: CY
 created: 2026-04-21
 accepted: null
 module_id: M09
+prism_ref: F9
 ---
 
 # M09 测试场景
 
 > 主设计文档：[`00-design.md`](./00-design.md)
 > 测试用例命名遵循规约 6（中文允许）+ pytest 标准。
-> 所有 ⚠️ 决策项（Q1-Q5）在 CY 裁决前，测试默认使用 AI 默认值（候选 A：各模块 Service search_by_keyword + ILIKE 算法）。
-> 如 ADR-003 选择候选 B（物化视图），部分 DAO 层测试需重写，但 Service 层和 e2e 测试不变。
+> CY 2026-04-21 已 ack A-4/A-5/A-6/C-1/C-2/C-3（均候选 A），本测试基于：仅成员 project IN 过滤 + ILIKE + created_at DESC 排序 + M14 默认聚合。
 
 ---
 
@@ -43,6 +43,7 @@ module_id: M09
 | E6 | SQL 注入字符 | `q='; DROP TABLE nodes; --` | 200 + 安全（Pydantic + ORM 参数化，不拼 SQL） |
 | E7 | 包含通配符 | `q=%payment%` | 200（ILIKE 中 `%` 被转义，不作为通配符处理） |
 | E8 | 搜索全局 industry_news | 关键词匹配 industry_news.title | 200 + items 含 result_type=industry_news + project_id=null |
+| E9 | JSONB key 名假阳性（CY ack 接受边界，A-6）| 关键词 = dimension_records JSONB key 的名字（如"value"）；内容中无实际业务匹配 | 200 + items 可能出现 result_type=dimension_record 假阳性命中；测试确认不报错、不崩溃；此边界已 CY ack 接受 |
 
 ---
 
@@ -63,7 +64,7 @@ module_id: M09
 | ID | 场景 | 模拟 | 期望 |
 |----|------|------|------|
 | T1 | 越权读取（全局搜索） | userA 无成员身份的 projectB 有匹配节点 | 200 + items 中不出现 projectB 的内容（IN 过滤生效） |
-| T2 | IN 过滤覆盖测试 | 单元测试 `SearchDAO.search_nodes(project_ids=[projectA_id])`，DB 有 projectB 的匹配节点 | 返回结果不含 projectB 数据 |
+| T2 | IN 过滤覆盖测试 | 单元测试 `SearchService.search(query="x", user_id=userA)`（mock 上游各模块 search_by_keyword 只接受 project_ids=[projectA_id]），DB 有 projectB 的匹配节点 | 返回结果不含 projectB 数据（ADR-003 规则 1：各上游 Service 自身 tenant 过滤）|
 | T3 | 多 project 成员合并搜索 | userA 是 projectA + projectB 成员，关键词在两个 project 都命中 | 200 + items 同时包含两个 project 的结果 + project_name 区分 |
 | T4 | 指定 project 越权 | userA 无成员身份，GET `/projects/{projectB_id}/search?q=x` | 403 `SEARCH_PROJECT_ACCESS_DENIED` |
 | T5 | 用户 role 降级后搜索 | userA 被移出 projectB 后搜索 | 200 + 结果不再包含 projectB 内容（实时查 project_members，无缓存延迟） |
@@ -97,24 +98,18 @@ module_id: M09
 
 | 层 | 覆盖率目标 | 备注 |
 |----|----------|------|
-| DAO（search_dao）| ≥ 95% | 含 tenant IN 过滤 + M14 豁免分支 + 每种 result_type 搜索方法 |
-| Service | ≥ 90% | 含 project_ids 获取 + 聚合 + 分页 + snippet 生成 |
-| Router | ≥ 80% | 主要走 e2e |
+| **M09 无 DAO 层**（ADR-003 规则 1：通过上游 Service 读取）| N/A | 上游 Service `search_by_keyword` 的 tenant 过滤由各自模块（M03/M04/M06/M07/M08/M14）各自的测试覆盖 |
+| Service | ≥ 90% | 含 accessible_project_ids 获取 + 6 个上游 Service 聚合（含 M14 无 project_id 例外分支）+ 分页 + snippet 生成 + ILIKE 通配符转义 |
+| Router | ≥ 80% | 主要走 e2e（依赖真实上游 Service）|
 | Component | ≥ 70% | 搜索栏 debounce + 结果渲染 + 高亮标记 |
 
 ---
 
-## 8. ADR-003 决策后测试更新说明
+## 8. 跨模块 Read 聚合方案说明（ADR-003 已定）
 
-当 CY + 主对话确定 Q1 跨模块 Read 聚合方案后，需要更新以下测试：
+CY 2026-04-21 ack 采纳 ADR-003 规则 1（各模块 Service 提供 `search_by_keyword()` 接口，M09 聚合）。
 
-| 候选 | 需更新测试 |
-|------|-----------|
-| **A（各模块 Service search_by_keyword）** | DAO 层测试改为对各模块 Service mock 测试；Service 层测试验证聚合逻辑 |
-| **B（物化视图）** | DAO 层测试改为查 search_view；增加视图刷新测试（验证 REFRESH MATERIALIZED VIEW 触发条件） |
-| **C（直 JOIN，不推荐）** | 不适用（违反 R-X1，不实现） |
-
-G1-G8 Golden Path 测试在三种方案下**结果行为不变**，只有内部实现路径不同。
+本测试文件基于此方案：DAO 层测试改为对各模块 Service mock 测试；Service 层测试验证聚合逻辑。G1-G9 Golden Path / Edge 测试行为不受影响。
 
 ---
 
