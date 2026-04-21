@@ -122,6 +122,14 @@ complexity: low                         # 必填：low / medium / high（来自 
   - 新增/删除表数
   - 受影响模块数（需要联动改动的其他 M 模块）
   - 数据迁移不可逆性（是否丢历史数据）
+- **R3-5**（新增，batch3 audit 沉淀）：**纯读聚合模块 §3 规范**——R3-1 原适用于"有主表"模块，纯读聚合模块（无自有实体表）豁免 SQLAlchemy class 要求，但 §3 必须显式包含：
+  1. 首段声明"本模块无自有实体表，§3 适用纯读聚合规范（R3-5，引 [`adr/ADR-003`](../adr/ADR-003-cross-module-read-strategy.md)）"
+  2. **上游依赖表清单**（表名 / 归属模块 / 访问方式：`Service 接口调用 / 只读 model import / 横切表直查`，三选一对应 ADR-003 规则 1/2/3）
+  3. **DAO 草案代码块**（含 tenant 过滤模式 + 豁免规则引用注释）
+  4. **Pydantic 聚合结构**显式标注"无 SQLAlchemy model（本模块是纯读聚合）"
+  5. 若有核心决策（如 M10 folder 均值规则），候选 B 改回成本块仍适用（R3-4 照常）
+  - §15 checklist 第 3 行改为"§3：无自有表声明 + 上游清单 + DAO 草案 + ADR-003 规则 X 引用"，**不得**误勾"SQLAlchemy class 满足 R3-1"
+  - 适用模块：M09 / M10 / M15 / M18（待设计）/ 未来聚合读模块
 
 ### §4 状态机
 - **R4-1**：无状态实体也要显式声明
@@ -148,6 +156,19 @@ complexity: low                         # 必填：low / medium / high（来自 
 - **R8-2**：🗂️ Queue 模块强制增第 4 行"Queue 消费者侧权限"（参 [`adr/ADR-002`](../adr/ADR-002-queue-consumer-tenant-permission.md)）
 - **R8-3**：含 WebSocket 模块强制增第 5 行"每命令重校 task_id 归属"（防同连接绕过）
 
+### §10 activity_log 事件（batch3 audit 沉淀）
+- **R10-1**：**批量操作写 N 条独立事件，禁止汇总**——涉及批量的操作（`delete_by_node_id` / `batch_create_in_transaction` / 批量导入批量 move 等），每个被影响实体写**一条独立 activity_log 事件**（target_id 独立），不得汇总为单条"批量操作 N 个实体"事件
+  - 理由：M15 数据流转以"操作时间线"为核心价值，细粒度可审计（用户可按 target_id/target_type 精确搜到每条变更）；刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性
+  - 反例：M03 删节点时若 M08 级联删 20 条关联只写 1 条汇总日志 `"deleted 20 relations"`——违反本规则；正确做法是写 20 条独立 `delete` 事件（每条 target_id=relation_id）+ 1 条节点删除事件
+  - 适用：所有批量写操作模块（M02/M03/M08/M11/M17 等）
+- **R10-2**：**`activity_log` 横切表由 M15 own**——M15 是 activity_log model / schema / Alembic 迁移的 owner
+  - 新 action_type / target_type 扩增流程：
+    1. 业务模块在自身 §10 设计新 action_type/target_type 字符串
+    2. 模块 accepted 后**回写 M15 的 `ActionType` / `TargetType` 枚举**（M15 schema 统一维护）
+    3. 同步发起 Alembic 迁移（若 CHECK constraint 启用则需更新）
+  - 新模块 tests.md 验证清单：确保自己写的 action_type 已在 M15 schema 中登记
+  - 反例：M17 / M13 各自独立写 schema 扩枚举导致合并冲突或前端展示"未知操作"
+
 ### §11 idempotency_key
 - **R11-1**：不需要也要显式声明
 - **R11-2**：**必答"project_id 是否参与 key 计算"**——M17 教训：原稿用 `(user_id, source_hash)` 跨项目命中导致租户污染，audit 抓出后改为 `(user_id, project_id, source_hash)`
@@ -168,6 +189,55 @@ complexity: low                         # 必填：low / medium / high（来自 
 - **R-X2**（新增，batch2 audit 沉淀）：**DB CASCADE 不触发下游 activity_log**
   - 若本模块被其他模块 FK 引用且设为 `ON DELETE CASCADE`（如 M03 nodes 被 M04/M06/M07 引用），**本模块删除时必须在 Service 层显式调用下游 Service.delete_by_xxx** 以写入下游 activity_log，DB CASCADE 仅作兜底
   - 反例：M03 若只靠 DB CASCADE 删除节点，M04 dimension_records 删除不写 activity_log——违反清单 1（所有变更操作必须写 activity_log）
+- **R-X3**（新增，batch3 audit 沉淀）：**级联删除必须共享外部 db session**——R-X2 要求 Service 显式调下游 `delete_by_xxx`，R-X3 进一步约束跨模块事务原子性
+  - 下游模块的 `delete_by_xxx` / `batch_create_in_transaction` 等被跨模块调用的 Service 方法**必须接受外部 `db: Session` 参数**，不得自己 `self.db.begin()` 另开事务
+  - 上游发起方（如 M03 删节点）用 `with self.db.begin():` 包住整个流程，所有下游调用共享该 session
+  - 反例：M03 删节点时 M08 `delete_by_node_id` 自己开新事务——若 M08 成功但 M03 失败回滚，M08 的删除和 activity_log 已提交，产生"关联没了但节点还在"的半删状态
+  - **Service 接口签名规范**：
+    ```python
+    # ✅ 接受外部 session
+    def delete_by_node_id(self, db: Session, node_id: UUID, project_id: UUID) -> int:
+        # 不调 self.db.begin()，直接用入参 db
+        ...
+
+    # ❌ 反例：自开事务
+    def delete_by_node_id(self, node_id: UUID, project_id: UUID) -> int:
+        with self.db.begin():    # 违反 R-X3
+            ...
+    ```
+  - 适用：所有"可能被跨模块调用"的 Service 方法（M03/M04/M06/M07/M08/M11/M17 的 batch/delete_by 方法等）
+- **R-X4**（新增，batch3 audit 沉淀）：**聚合读模块必须引 ADR-003**——新增聚合读模块（无自有表 / 跨多模块读）的 §3 必须显式声明适用 [`ADR-003`](../adr/ADR-003-cross-module-read-strategy.md) 的哪条规则（规则 1 上游 Service 接口 / 规则 2 只读 import 豁免 / 规则 3 横切表豁免），禁止默认走"DAO 直 JOIN 业务表"（候选 C 已否决）
+
+---
+
+## TODO：基线补丁（已 accepted 模块回扫）
+
+> batch3 沉淀的 R3-5 / R10-1 / R-X3 / R-X4 新规则 + ADR-003 可能影响已 accepted 模块。下一轮设计前（第四批 M01 pilot 之前或之后）执行基线回扫。
+
+### 扫描清单
+
+| 已 accepted 模块 | 扫描项 | 触发规则 | 预判 |
+|----------------|-------|---------|------|
+| M02 项目 | 批量操作 activity_log 颗粒度（批量成员邀请 / 项目归档级联）| R10-1 | 可能已合规，需核对 |
+| M03 模块树 | `move_subtree` / `batch_create` / `delete_node` 是否 N 条独立事件 + 是否接受外部 session | R10-1 / R-X3 | **高概率**需改：`delete_node` 连带删 M04/M06/M07 目前未明确外部 session |
+| M04 档案页 | Service 方法是否接受外部 db session（M17 orchestrator 调用场景）| R-X3 | **高概率**需改 |
+| M06 竞品 / M07 问题 | 被 M03 级联删除时是否共享 session + N 条独立事件 | R10-1 / R-X3 | **高概率**需改 |
+| M11 冷启动 | CSV 批量导入 activity_log 颗粒度 | R10-1 | 需核对 |
+| M12 对比矩阵 | `bulk_insert_items` 是否写 N 条独立事件 vs 1 条汇总 | R10-1 | 当前 audit 显示 "items_count" 汇总——需改为 N 条独立 |
+| M17 AI 导入 | 批量入库各 Service 是否接受外部 session（已 pilot 确认） + 批量 activity_log 颗粒度 | R-X3 / R10-1 | M17 已对外 session；颗粒度需核对 |
+| **所有已 accepted 模块** | action_type / target_type 枚举是否回写 M15 schema | R10-2 | M15 设计定稿后集中回写 |
+
+### 执行时机
+
+- **不纳入本轮（batch3 A1）**——避免污染第三批流水线节奏
+- 候选时机 1：batch3 A1 全部 accepted 后、A2（M01 pilot）启动前执行（推荐）
+- 候选时机 2：batch4 开始时前置扫描
+- 产出：`design/02-modules/baseline-patch-batch3.md`（记录各模块改动点 + 改回确认）
+
+### 关联
+
+- ADR-003 引用方清单含"基线补丁 TODO"
+- batch3 audit 报告 T4 / T5 提出本补丁需求
 
 ---
 
