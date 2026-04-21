@@ -6,9 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M19
 prism_ref: F19
 pilot: false
+complexity: low
 ---
 
 # M19 导入/导出 - 详细设计
@@ -135,6 +137,23 @@ flowchart LR
 ### M19 无主表
 
 M19 是**只读聚合导出**，不需要新建主数据表。仅读取上游模块的数据。
+
+**复用模型列表（SQLAlchemy 唯一真相源，无新增 class）**：
+
+```python
+# M19 不新建 SQLAlchemy model，复用以下上游模型（只读）
+# 引用路径示例（export_service.py 中）：
+from api.models.node import Node                          # M03
+from api.models.dimension_record import DimensionRecord   # M04
+from api.models.dimension_type import DimensionType       # M02（只读）
+from api.models.version_record import VersionRecord       # M05
+from api.models.competitor import Competitor, CompetitorRef  # M06
+from api.models.issue import Issue                         # M07
+
+# 所有查询均通过上游各模块 DAO 发起（候选 A），不直接写 SQL
+# 示例（复用 DimensionDAO）：
+# dimension_records = dimension_dao.list_by_node(db, node_id=node_id, project_id=project_id)
+```
 
 > ⚠️ **AI 推断，CY 复审必改**——以下可选表仅在需要"导出历史记录"功能时才加。
 
@@ -459,7 +478,12 @@ class ExportEmptyContentError(AppError):
 - [ ] 节 13：ErrorCode 新增清单
 - [ ] 节 14：tests.md 写完
 - [ ] 节 15：本 checklist 全勾过
-- [ ] **🔴 CY 全文复审通过 → status 转 accepted**
+- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
+- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
+- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
+- [ ] CY 全文复审通过 → status 转 accepted
+
+> ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 8 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
 ---
 

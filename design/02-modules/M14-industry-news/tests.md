@@ -4,7 +4,11 @@ status: draft
 owner: CY
 created: 2026-04-21
 accepted: null
+last_reviewed_at: null
 module_id: M14
+prism_ref: F14
+pilot: false
+complexity: low
 ---
 
 # M14 测试场景
@@ -61,7 +65,7 @@ module_id: M14
 | T1 | 跨项目用户读取全局列表 | userA 所在 projectA，userB 所在 projectB，各自 GET `/api/news` | 两者返回**相同完整列表**（无项目过滤） |
 | T2 | 无项目归属用户可读 | 新注册用户（未加入任何项目）GET `/api/news` | 200 + 全局列表（全局数据无需项目归属） |
 | T3 | DAO 无 tenant 过滤确认 | 单元测试 `IndustryNewsDAO.list_all()` 不传 project_id | 返回所有动态（无 tenant 过滤代码路径执行） |
-| T4 | 关联 node 跨项目 | userA 关联 projectB 的 node_id | ⚠️ **待 CY 裁决**：A: 允许（全局动态可关联任意 node）/ B: 拒绝（node 归属检查）— 我倾向 A |
+| T4 | 关联 node 跨项目 | userA 关联 projectB 的 node_id | 待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 8 写权限粒度 + 节 1 灰区 2 |
 
 ---
 

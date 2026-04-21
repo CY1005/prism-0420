@@ -6,8 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M06
 prism_ref: F6
+pilot: false
+complexity: low
 ---
 
 # M06 竞品参考 - 详细设计
@@ -82,36 +85,52 @@ flowchart LR
 
 ```python
 # api/models/competitor.py
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, UniqueConstraint, Index, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+from uuid import UUID as PyUUID, uuid4
+from typing import Any
+from .base import Base, TimestampMixin
 
-class Competitor(Base):
+class Competitor(Base, TimestampMixin):
     """项目级竞品全局实体（可被多个功能项引用）"""
     __tablename__ = "competitors"
+    __table_args__ = (
+        Index("ix_competitor_project", "project_id"),
+    )
 
-    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    display_name: str = Column(Text, nullable=False)            # 竞品名称（重命名自 Prism name）
-    website_url: str = Column(Text, nullable=True)              # 官网（重命名自 Prism website）
-    description: str = Column(Text, nullable=True)
-    created_by: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    created_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)            # 竞品名称（重命名自 Prism name）
+    website_url: Mapped[str | None] = mapped_column(Text, nullable=True)       # 官网（重命名自 Prism website）
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    refs = relationship("CompetitorRef", back_populates="competitor", cascade="all, delete-orphan")
 
 
-class CompetitorRef(Base):
+class CompetitorRef(Base, TimestampMixin):
     """功能项级竞品对标记录（重命名自 Prism competitor_references）"""
     __tablename__ = "competitor_refs"
+    __table_args__ = (
+        UniqueConstraint("node_id", "competitor_id", name="uq_competitor_ref_node_competitor"),
+        Index("ix_competitor_ref_node_project", "node_id", "project_id"),
+        Index("ix_competitor_ref_project", "project_id"),
+        Index("ix_competitor_ref_competitor", "competitor_id"),
+    )
 
-    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    node_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
-    competitor_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="CASCADE"), nullable=False)
-    project_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant
-    competitor_version: str = Column(Text, nullable=True)       # 竞品版本号（重命名自 Prism version，避免与系统 version 混淆）
-    feature_coverage: str = Column(Text, nullable=True)         # 功能覆盖度描述
-    tech_approach: str = Column(Text, nullable=True)            # 技术方案（重命名自 Prism technicalApproach）
-    pros_and_cons: dict = Column(JSONB, nullable=True)          # {"pros": [...], "cons": [...]}
-    created_by: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    created_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    node_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    competitor_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant
+    competitor_version: Mapped[str | None] = mapped_column(Text, nullable=True)   # 竞品版本号（重命名自 Prism version，避免与系统 version 混淆）
+    feature_coverage: Mapped[str | None] = mapped_column(Text, nullable=True)     # 功能覆盖度描述
+    tech_approach: Mapped[str | None] = mapped_column(Text, nullable=True)        # 技术方案（重命名自 Prism technicalApproach）
+    pros_and_cons: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)  # {"pros": [...], "cons": [...]}
+    created_by: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    competitor = relationship("Competitor", back_populates="refs")
 ```
 
 > ⚠️ **AI 推断，CY 复审必改**：
@@ -462,7 +481,13 @@ class CompetitorCrossProjectError(AppError):
 - [ ] 节 12：Queue 显式 N/A
 - [ ] 节 13：ErrorCode 4 个新增
 - [ ] 节 14：tests.md 完整
-- [ ] CY 裁决 4 项全过 → status 转 accepted
+- [ ] 节 15：本 checklist 全勾过
+- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
+- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
+- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
+- [ ] CY 全文复审通过 → status 转 accepted
+
+> ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 8 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
 ### ⚠️ 待 CY 裁决项汇总
 

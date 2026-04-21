@@ -4,7 +4,11 @@ status: draft
 owner: CY
 created: 2026-04-21
 accepted: null
+last_reviewed_at: null
 module_id: M07
+prism_ref: F7
+pilot: false
+complexity: medium
 ---
 
 # M07 测试场景
@@ -39,7 +43,7 @@ module_id: M07
 | E4 | node_id 跨项目 | node_id 属于 projectB，但在 projectA 下创建 | 422 `ISSUE_NODE_CROSS_PROJECT` |
 | E5 | 非法状态转换 closed→open | POST transition target_status="open" on closed issue | 422 `ISSUE_TRANSITION_INVALID` |
 | E6 | 非法状态转换 open→resolved | 跳过 in_progress 直接 resolved | 422 `ISSUE_TRANSITION_INVALID` |
-| E7 | 同状态重复 transition | in_progress → in_progress | ⚠️ 待裁决：A. 200 返回当前状态（幂等）/ B. 422 |
+| E7 | 同状态重复 transition | in_progress → in_progress | 待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 11 |
 | E8 | 删除不存在 issue | DELETE 不存在 id | 404 `ISSUE_NOT_FOUND` |
 | E9 | tags 非字符串数组 | `tags=["valid", 123]` | 422 Pydantic 类型校验 |
 

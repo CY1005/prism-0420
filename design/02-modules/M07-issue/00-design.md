@@ -6,8 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M07
 prism_ref: F7
+pilot: false
+complexity: medium
 ---
 
 # M07 问题沉淀 - 详细设计
@@ -76,6 +79,14 @@ flowchart LR
 
 ```python
 # api/models/issue.py
+import enum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, CheckConstraint, Index, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+from uuid import UUID as PyUUID, uuid4
+from typing import Any
+from .base import Base, TimestampMixin
 
 class IssueStatus(str, enum.Enum):
     open = "open"
@@ -89,22 +100,36 @@ class IssueCategory(str, enum.Enum):
     design_flaw = "design_flaw"
     performance = "performance"
 
-class Issue(Base):
+class Issue(Base, TimestampMixin):
     __tablename__ = "issues"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'resolved', 'closed')",
+            name="ck_issue_status",
+        ),
+        CheckConstraint(
+            "category IN ('bug', 'tech_debt', 'design_flaw', 'performance')",
+            name="ck_issue_category",
+        ),
+        Index("ix_issue_project_status", "project_id", "status"),
+        Index("ix_issue_node_project", "node_id", "project_id"),
+        Index("ix_issue_project_category", "project_id", "category"),
+        Index("ix_issue_created_by", "created_by"),
+    )
 
-    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    node_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="SET NULL"), nullable=True)  # 允许游离问题
-    category: str = Column(Text, nullable=False)           # 使用 IssueCategory 枚举值
-    status: str = Column(Text, nullable=False, default="open")  # 使用 IssueStatus 枚举值
-    title: str = Column(Text, nullable=False)               # 问题标题（Prism 无此字段，补充）
-    description: str = Column(Text, nullable=False)
-    tags: list = Column(JSONB, nullable=True, default=[])
-    created_by: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    assigned_to: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # 责任人
-    resolved_at: datetime = Column(DateTime(timezone=True), nullable=True)
-    created_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    node_id: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="SET NULL"), nullable=True)  # 允许游离问题
+    category: Mapped[str] = mapped_column(Text, nullable=False)           # 使用 IssueCategory 枚举值
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="open")  # 使用 IssueStatus 枚举值
+    title: Mapped[str] = mapped_column(Text, nullable=False)               # 问题标题（Prism 无此字段，补充）
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True, default=list)
+    created_by: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    assigned_to: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # 责任人
+    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    node = relationship("Node", back_populates="issues")
 ```
 
 > ⚠️ **AI 推断，CY 复审必改**：
@@ -207,6 +232,17 @@ stateDiagram-v2
 | **并发控制** | ❌ N/A | 05-module-catalog 标注无并发；07-capability-matrix 标注"问题状态"🟡 有状态机但无并发锁需求 |
 
 > ⚠️ **AI 推断，CY 复审必改**：并发标注参考 05-module-catalog（并发=❌）。若引入 assigned_to 多人协作场景，是否需要乐观锁——目前判断不需要（issue 是单一责任人顺序操作）。
+
+### 状态转换竞态分析（节 4 有状态时强制）
+
+| 状态转换 | 是否存在竞态 | 理由 / 防护 |
+|---------|-------------|------------|
+| open → in_progress | ⚠️ AI 推断待 CY 裁决 | 候选：可能（多 user 同时认领）→ 加 assigned_to UNIQUE 或乐观锁 / 不可能（单 user assigned）→ 无防护 |
+| open → closed（跳过 in_progress）| ⚠️ AI 推断 | 候选：单一 user 操作，无竞态 |
+| in_progress → resolved | ⚠️ AI 推断 | 候选：单一 user 处理，无竞态 |
+| in_progress → open | ⚠️ AI 推断 | 候选：单一 user 操作，无竞态 |
+| resolved → closed | ⚠️ AI 推断 | 候选：单一 user 关闭，无竞态 |
+| resolved → open（问题复现）| ⚠️ AI 推断 | 候选：单一 user 操作，无竞态 |
 
 ### 约束清单逐项检查
 
@@ -465,7 +501,13 @@ class IssueNodeCrossProjectError(AppError):
 - [ ] 节 12：Queue 显式 N/A
 - [ ] 节 13：ErrorCode 4 个新增
 - [ ] 节 14：tests.md 完整
-- [ ] CY 裁决 5 项全过 → status 转 accepted
+- [ ] 节 15：本 checklist 全勾过
+- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
+- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
+- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
+- [ ] CY 全文复审通过 → status 转 accepted
+
+> ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 9 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
 ### ⚠️ 待 CY 裁决项汇总
 

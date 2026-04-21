@@ -6,9 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M14
 prism_ref: F14
 pilot: false
+complexity: low
 ---
 
 # M14 行业动态 - 详细设计
@@ -155,6 +157,61 @@ erDiagram
         timestamp linked_at
     }
 ```
+
+### SQLAlchemy 模型
+
+```python
+# api/models/industry_news.py
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, UniqueConstraint, Index, Text, Date
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy import String
+from datetime import date, datetime
+from uuid import UUID as PyUUID, uuid4
+from .base import Base, TimestampMixin
+
+class IndustryNews(Base, TimestampMixin):
+    """行业动态全局实体（无 project_id —— M14 全局无 tenant）"""
+    __tablename__ = "industry_news"
+    __table_args__ = (
+        # 注意：M14 全局数据，无 project_id 约束
+        Index("ix_industry_news_created_at", "created_at"),
+        Index("ix_industry_news_created_by", "created_by"),
+        Index("ix_industry_news_tags", "tags", postgresql_using="gin"),
+    )
+
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    title: Mapped[str] = mapped_column(Text, nullable=False)           # 动态标题（最长 200 字）
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)   # 摘要（可空）
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # 来源链接（可空）
+    published_date: Mapped[date | None] = mapped_column(Date, nullable=True)  # 发布日期（可空）
+    source_type: Mapped[str] = mapped_column(Text, nullable=False, default="manual")  # 枚举：manual/rss/ai（本期只 manual）
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)  # 标签数组（PG text[]）
+    created_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    updated_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    node_links = relationship("NewsNodeLink", back_populates="news", cascade="all, delete-orphan")
+
+
+# api/models/news_node_link.py
+class NewsNodeLink(Base):
+    """行业动态与功能项 node 的关联表"""
+    __tablename__ = "news_node_links"
+    __table_args__ = (
+        UniqueConstraint("news_id", "node_id", name="uq_news_node_link"),
+        Index("ix_news_node_link_node", "node_id"),
+    )
+
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    news_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("industry_news.id", ondelete="CASCADE"), nullable=False)
+    node_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    linked_by: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    linked_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    news = relationship("IndustryNews", back_populates="node_links")
+```
+
+> ⚠️ **AI 推断，CY 复审必改**——字段设计基于 US-B2.4 + 灰区 1 候选 A（手动录入）推断，细节待 CY 确认。`tags` 使用 PG `text[]` 数组（ARRAY(String)），GIN 索引支持数组检索。
 
 ### 表说明
 
@@ -486,7 +543,12 @@ class NewsForbiddenError(AppError):
 - [ ] 节 13：ErrorCode 新增清单
 - [ ] 节 14：tests.md 测试场景写完
 - [ ] 节 15：本 checklist 全勾过
-- [ ] **🔴 CY 全文复审通过 → status 转 accepted**
+- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
+- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
+- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
+- [ ] CY 全文复审通过 → status 转 accepted
+
+> ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 7 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
 ---
 

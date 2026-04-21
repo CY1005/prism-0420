@@ -4,7 +4,11 @@ status: draft
 owner: CY
 created: 2026-04-21
 accepted: null
+last_reviewed_at: null
 module_id: M19
+prism_ref: F19
+pilot: false
+complexity: low
 ---
 
 # M19 测试场景
@@ -34,7 +38,7 @@ module_id: M19
 | E1 | node_ids 超上限 | `node_ids` 含 21 个 UUID | 422 `EXPORT_NODE_LIMIT_EXCEEDED` |
 | E2 | node_ids 为空 | `node_ids=[]` | 422 `VALIDATION_ERROR`（Pydantic min_length=1） |
 | E3 | node 无维度内容 | 导出一个未填任何维度的 node | 200 + Markdown 含该章节但维度区块显示"（暂无内容）"（不报错） |
-| E4 | 全部 node 无任何内容 | 所有 node 均无维度/版本/竞品/问题 | ⚠️ **待 CY 裁决**：A: 200 + 空报告 / B: 422 `EXPORT_EMPTY_CONTENT`；我倾向 A（空报告也是合法输出） |
+| E4 | 全部 node 无任何内容 | 所有 node 均无维度/版本/竞品/问题 | 待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 13 `EXPORT_EMPTY_CONTENT` 定义 |
 | E5 | node_ids 含重复 UUID | `node_ids=[a, a, b]` | 去重后导出（200 + 2 章节，不报错） |
 | E6 | 所选 node 含已删除 node | node_a 已软删除 | 404 `EXPORT_NODE_NOT_IN_PROJECT`（或 NOT_FOUND） |
 

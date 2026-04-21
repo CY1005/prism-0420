@@ -4,7 +4,11 @@ status: draft
 owner: CY
 created: 2026-04-21
 accepted: null
+last_reviewed_at: null
 module_id: M05
+prism_ref: F5
+pilot: false
+complexity: medium
 ---
 
 # M05 测试场景

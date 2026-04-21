@@ -4,7 +4,11 @@ status: draft
 owner: CY
 created: 2026-04-21
 accepted: null
+last_reviewed_at: null
 module_id: M06
+prism_ref: F6
+pilot: false
+complexity: low
 ---
 
 # M06 测试场景
@@ -46,7 +50,7 @@ module_id: M06
 | E4 | 引用不存在竞品创建对标 | `competitor_id` 不存在 | 404 `COMPETITOR_NOT_FOUND` |
 | E5 | 引用跨项目竞品 | `competitor_id` 属于 projectB，但在 projectA 下建对标 | 422 `COMPETITOR_CROSS_PROJECT` |
 | E6 | 重复关联同一竞品 | 同一 (node_id, competitor_id) 二次 POST | 409 `COMPETITOR_REF_DUPLICATE` |
-| E7 | 删除有对标记录的竞品 | DELETE 有 ref 的竞品 | ⚠️ 待 CY 裁决：A. 级联删（204）/ B. 422 阻止；设计选 A（Prism onDelete cascade），需确认 |
+| E7 | 删除有对标记录的竞品 | DELETE 有 ref 的竞品 | （设计稿决策后补充用例）详见 [00-design.md](./00-design.md) 节 7 `onDelete cascade` 说明 |
 | E8 | pros_and_cons 格式非法 | `pros_and_cons={"pros": "not-a-list"}` | 422 Pydantic 类型校验 |
 
 ---
@@ -78,7 +82,7 @@ module_id: M06
 | P1 | 未登录读竞品列表 | 401 `UNAUTHENTICATED` |
 | P2 | viewer 创建竞品 | 403 `PERMISSION_DENIED`（POST 要求 editor） |
 | P3 | viewer 读取对标列表 | 200（只读允许 viewer） |
-| P4 | editor 删除竞品（有对标记录）| 204 + 级联删对标记录（若选候选 A） |
+| P4 | editor 删除竞品（有对标记录）| （设计稿决策后补充用例）待 CY 裁决决策点：见 [00-design.md](./00-design.md) 节 7 |
 
 ---
 

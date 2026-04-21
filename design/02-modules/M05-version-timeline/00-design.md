@@ -6,8 +6,11 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
+last_reviewed_at: null
 module_id: M05
 prism_ref: F5
+pilot: false
+complexity: medium
 ---
 
 # M05 版本演进时间线 - 详细设计
@@ -92,23 +95,45 @@ flowchart LR
 
 ```python
 # api/models/version_record.py
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, UniqueConstraint, CheckConstraint, Index, Text, Boolean
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+from uuid import UUID as PyUUID, uuid4
+from typing import Any
+from .base import Base, TimestampMixin
 
-class VersionRecord(Base):
+class VersionRecord(Base, TimestampMixin):
     __tablename__ = "version_records"
+    __table_args__ = (
+        UniqueConstraint("node_id", "version_label", name="uq_version_node_label"),
+        CheckConstraint(
+            "change_type IN ('added', 'modified', 'deprecated', 'split', 'merged', 'migrated')",
+            name="ck_version_change_type",
+        ),
+        CheckConstraint(
+            "release_mode IN ('release', 'continuous')",
+            name="ck_version_release_mode",
+        ),
+        Index("ix_version_node_project", "node_id", "project_id"),
+        Index("ix_version_project", "project_id"),
+        # 部分索引：快速找当前版本
+        Index("ix_version_is_current", "node_id", postgresql_where="is_current = true"),
+    )
 
-    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    node_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
-    project_id: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant
-    version_label: str = Column(Text, nullable=False)           # "v3.9.3" 或 "2026-04-07"
-    summary: str = Column(Text, nullable=False)
-    details: str = Column(Text, nullable=True)
-    change_type: str = Column(Text, nullable=False, default="added")  # added|modified|deprecated|split|merged|migrated
-    is_current: bool = Column(Boolean, nullable=False, default=False)
-    snapshot_data: dict = Column(JSONB, nullable=True)          # 创建时维度内容快照
-    release_mode: str = Column(Text, nullable=False, default="release")  # release|continuous（重命名自 Prism mode 字段）
-    created_by: uuid.UUID = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    created_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at: datetime = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    node_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)  # 冗余 tenant
+    version_label: Mapped[str] = mapped_column(Text, nullable=False)           # "v3.9.3" 或 "2026-04-07"
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    change_type: Mapped[str] = mapped_column(Text, nullable=False, default="added")  # added|modified|deprecated|split|merged|migrated
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    snapshot_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)  # 创建时维度内容快照
+    release_mode: Mapped[str] = mapped_column(Text, nullable=False, default="release")  # release|continuous（重命名自 Prism mode 字段）
+    created_by: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    node = relationship("Node", back_populates="version_records")
 ```
 
 > ⚠️ **AI 推断，CY 复审必改**：Prism 原字段 `mode` 重命名为 `release_mode` 以更明确语义；`createdBy` 补充（Prism 原无），用于 activity_log；字段名全用 snake_case（SQLAlchemy 规范）。
@@ -440,7 +465,13 @@ class VersionSnapshotInvalidError(ValidationError):
 - [ ] 节 12：Queue 显式 N/A
 - [ ] 节 13：ErrorCode 3 个新增
 - [ ] 节 14：tests.md 完整
-- [ ] CY 裁决 3 项全过 → status 转 accepted
+- [ ] 节 15：本 checklist 全勾过
+- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
+- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
+- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
+- [ ] CY 全文复审通过 → status 转 accepted
+
+> ✅ 三轮 reviewer audit 已完成 2026-04-21（见 audit-report-batch1.md），但发现 10 条问题需 fix + CY 裁决，转 accepted 前还需 CY 复审。
 
 ### ⚠️ 待 CY 裁决项汇总
 
