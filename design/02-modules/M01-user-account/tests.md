@@ -128,12 +128,17 @@ module_id: M01
 | A6 | P2 | 伪造 internal token（签名正确不可能构造） | 乱填 X-Internal-Token | 401（HMAC 比较失败） |
 | A7 | P2 | internal token 正确但 X-User-Id 不存在 | | 401（user 查不到） |
 | A8 | P2 | internal token 正确但 user disabled | | 401（active 状态校验） |
-| A9 | P1+P2 混合（B1 新语义）| 同时发有效 Bearer 和有效 P2 | 200——**P1 优先**，走 P1 路径（resolve_from_bearer）；P2 即使有效也不用 |
+| A9 | P1+P2 混合（B1 新语义）| 同时发有效 Bearer 和有效 P2 | 200——**P1 优先**，走 P1 路径（resolve_from_bearer）；P2 即使有效也不用。断言：mock `resolve_from_internal` 不被调用（`assert_not_called`）|
+| A9b | P2 兜底路径（NI-04）| Bearer 无效（过期/签名错）+ P2 完整有效 | 200——P1 失败后走 P2 tiebreaker。断言：mock `resolve_from_bearer` 返回 None 后 `resolve_from_internal` 被调用 1 次 |
+| A9c | P1+P2 都无效 | Bearer 过期 + P2 签名错 | 401——两条路径都尝试 |
 | A15 | P2 签名 | 签名材料缺一 header（X-Internal-Timestamp 缺）| 401——4 header 必须齐全 |
 | A16 | P2 签名 | 时间戳超窗口（> 5min 前）| 401 |
 | A17 | P2 签名 | 时间戳未来（> 5min 后）| 401 |
 | A18 | P2 签名 | body 被篡改但签名是旧 body 的 | 401（body_hash 不匹配）|
 | A19 | P2 签名 | path 被篡改（攻击者换 endpoint）| 401（签名材料 path 不匹配） |
+| A19b | P2 签名（NI-01 修正验证）| path 相同但 query string 被篡改（`?dry_run=true` → `?dry_run=false`）| 401——签名材料含 `path_with_query`，query 变化导致 signature 不匹配 |
+| A19c | P2 签名 | 原请求无 query，攻击者加 query（`PATCH /x` → `PATCH /x?foo=bar`）| 401——同上 |
+| A19d | P2 签名 | query 参数顺序改变（`?a=1&b=2` → `?b=2&a=1`）| 401——**本期不做规范化**，顺序变化即签名失败；客户端需固定 query 顺序 |
 | A20 | P2 签名 | method 被篡改（GET 换 POST）| 401 |
 | A21 | P2 签名 | X-User-Id 在签名内但攻击者换了 header 值 | 401（签名材料 user_id 不匹配） |
 | A22 | P2 签名 | 重放攻击：同一有效请求 5min 内多次发 | **本期允许重放**（nonce 防御未实装，§3.4 显式声明）——多次都 200，但 auth_audit_log 每次记录 1 行 |

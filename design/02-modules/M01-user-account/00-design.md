@@ -830,13 +830,16 @@ if grep -rE "from api\.models\.user import (User|RefreshToken)" api/routers/ \
   exit 1
 fi
 
-# 3. 预留 AppError 子类与 ErrorCode 数量一致守护（M3 审计决策）
-ERROR_CODES=$(grep -cE "^\s+[A-Z_]+ = \"[A-Z_]+\"$" api/errors/codes.py)
-APP_ERRORS=$(grep -cE "^class .*Error\(.*\):" api/errors/exceptions.py)
+# 3. AppError 子类与 ErrorCode 数量一致守护（M3 + NI-02 审计决策）
+# 只数 ErrorCode 枚举值（忽略基类 ErrorCode = str, Enum 定义行）
+ERROR_CODES=$(grep -cE "^\s+[A-Z][A-Z_]+ = \"[A-Z_]+\"$" api/errors/codes.py)
+# 只数继承自其他 Error 子类的定义，排除基类 AppError / ValidationError / NotFoundError
+APP_ERRORS=$(grep -cE "^class [A-Z][A-Za-z]*Error\(([A-Z][A-Za-z]*Error)\):" api/errors/exceptions.py)
 if [ "$ERROR_CODES" -ne "$APP_ERRORS" ]; then
   echo "ERROR: ErrorCode($ERROR_CODES) 与 AppError 子类($APP_ERRORS) 数量不一致（R13-1）"
   exit 1
 fi
+# NI-02 增强：若未来 AppError 基类结构变化（如出现 mixin），需同步更新此 grep 正则
 ```
 
 ---
@@ -1218,6 +1221,15 @@ class RegistrationDisabledError(AppError):
 | m5 | 跨表查询预案缺 | **加预案 3 候选** | §10 新段 |
 | m6 | 预留 4 表长期腐化风险 | **加 6 月复审 TODO** | §15 复审 TODO |
 | m1 / m7 / m8 | tests.md frontmatter / 批量乐观锁策略 / MVCC 可见性 | **本轮不修**——m1 是模板继承问题待 README 统一决定；m7 性能问题本期数据量不触发；m8 MVCC 在 PG 14+ repeatable read 下受 session 事务边界自动处理 | 留待下轮或 Phase 2 |
+
+### Verify 后决策（2026-04-24 独立 verify agent 发现）
+
+| # | Verify finding | CY 拍板 | 落地位置 |
+|---|---------------|--------|---------|
+| NI-01 | 签名材料 path 不含 query string → 攻击者可改 query 重放（Major）| **修**——签名材料 path 改为 path_with_query | ADR-004 §3.2 签名材料定义 + resolve_from_internal 代码 + §1 接口签名 + require_user 调用点 + 00-design.md §9 CI grep / tests.md A19b/A19c/A19d |
+| NI-02 | §9 AppError 计数 grep 易误数基类（Minor）| **修**——正则加继承 `Error` 后缀约束 | 00-design.md §9 CI 脚本第 3 条 |
+| NI-04 | tests.md A9 只验 P1 优先未验 P2 兜底（Minor）| **修**——新增 A9b（P2 兜底）+ A9c（双失败）| tests.md §7 |
+| NI-03 | auth_audit_log metadata 无 JSON schema（Minor）| **留观察**——等 M15 分析脚本或实装时统一 schema 化，本期 JSONB 无约束可接受 | — |
 
 ---
 

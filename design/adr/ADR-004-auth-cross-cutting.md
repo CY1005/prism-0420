@@ -63,7 +63,7 @@ class AuthService:
         signature: str,
         timestamp: str,
         method: str,
-        path: str,
+        path_with_query: str,   # NI-01：必须含 query string 防篡改重放
         body: bytes,
     ) -> User | None: ...
     def resolve_from_refresh(self, db: Session, raw_refresh: str) -> tuple[User | None, str | None]: ...  # P3
@@ -105,6 +105,10 @@ async def require_user(
     if (x_internal_token and x_user_id and
         x_internal_signature and x_internal_timestamp):
         body = await request.body()
+        # NI-01：签名材料必须含 query string，防止 query 篡改重放
+        path_with_query = request.url.path + (
+            f"?{request.url.query}" if request.url.query else ""
+        )
         user = svc.resolve_from_internal(
             db=db,
             token=x_internal_token,
@@ -112,7 +116,7 @@ async def require_user(
             signature=x_internal_signature,
             timestamp=x_internal_timestamp,
             method=request.method,
-            path=request.url.path,
+            path_with_query=path_with_query,
             body=body,
         )
         if user:
@@ -140,8 +144,14 @@ async def require_user(
 
 **签名材料**（newline 分隔的规范化字符串）：
 ```
-{timestamp}\n{HTTP_METHOD}\n{URL_PATH}\n{X-User-Id}\n{SHA256_HEX(request_body)}
+{timestamp}\n{HTTP_METHOD}\n{URL_PATH_WITH_QUERY}\n{X-User-Id}\n{SHA256_HEX(request_body)}
 ```
+
+**`URL_PATH_WITH_QUERY` 定义**（NI-01 修正）：必须包含 query string。攻击场景：若仅签 `path`，攻击者抓包 `PATCH /auth/users/{id}?dry_run=true` 后改成 `?dry_run=false` 签名仍通过。
+
+- 发送方：`{request.path}?{request.query_string}`（空 query 时省略 `?`）
+- 接收方（FastAPI）：`request.url.path + ("?" + request.url.query if request.url.query else "")`
+- `body` 为空（GET/DELETE 常见）时 `body_hash = SHA256_HEX(b"")`（即 `e3b0c44298fc1c14...`）
 
 **签名算法**：`HMAC-SHA256(INTERNAL_TOKEN, signature_material)` → hex 小写。
 
@@ -158,7 +168,7 @@ async def require_user(
 
 ```python
 def resolve_from_internal(
-    self, db, token, user_id, signature, timestamp, method, path, body,
+    self, db, token, user_id, signature, timestamp, method, path_with_query, body,
 ) -> User | None:
     # 1. 常量时间比较 token（防时序攻击）
     if not hmac.compare_digest(token, INTERNAL_TOKEN):
@@ -171,9 +181,9 @@ def resolve_from_internal(
     now = int(time.time())
     if abs(now - ts) > 300:
         return None
-    # 3. 重建签名材料
-    body_hash = hashlib.sha256(body).hexdigest()
-    material = f"{timestamp}\n{method}\n{path}\n{user_id}\n{body_hash}"
+    # 3. 重建签名材料（path_with_query 必须含 query string，NI-01 修正）
+    body_hash = hashlib.sha256(body or b"").hexdigest()
+    material = f"{timestamp}\n{method}\n{path_with_query}\n{user_id}\n{body_hash}"
     expected_sig = hmac.new(
         INTERNAL_TOKEN.encode(), material.encode(), hashlib.sha256
     ).hexdigest()
