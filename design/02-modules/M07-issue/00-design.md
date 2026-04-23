@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-04-24
 module_id: M07
 prism_ref: F7
 pilot: false
@@ -265,6 +265,11 @@ stateDiagram-v2
 | **Model** | `api/models/issue.py` | SQLAlchemy 模型 + Enum 定义 |
 | **Schema** | `api/schemas/issue_schema.py` | Pydantic 请求/响应 |
 
+**对外契约（R-X3，batch3 基线补丁补充）**：
+- `batch_create_in_transaction(db: Session, issues: list[IssueCreateData], project_id: UUID) -> list[Issue]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 issue 写独立 `create` activity_log 事件（R10-1）
+- `orphan_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 节点删除时调用；将该 node 下所有 issues 的 node_id 设为 NULL（游离化，与 FK `ON DELETE SET NULL` 语义一致——**issue 不被删除只变游离**）；接受外部 db session；每条受影响 issue 写独立 `orphan` activity_log 事件（R10-1）；返回受影响记录数
+  > **命名说明**（batch3 基线补丁决策 4）：不沿用 M04/M06 的 `delete_by_node_id` 统一命名，改用 `orphan_by_node_id` 以对齐真实行为（SET NULL 而非 DELETE），避免调用方误以为 issue 被真删而遗漏后续处理
+
 ---
 
 ## 7. API 契约
@@ -407,6 +412,8 @@ class IssueDAO:
 | `update` | `issue` | `<issue_id>` | 更新问题：{title} | `{changed_fields}` |
 | `status_change` | `issue` | `<issue_id>` | 状态变更：{old_status}→{new_status} | `{node_id, category, note, assigned_to}` |
 | `delete` | `issue` | `<issue_id>` | 删除问题：{title} | `{node_id, category, final_status}` |
+
+**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条 issue 写独立 `create` 事件；`orphan_by_node_id` 调用时每条受影响 issue 写独立 `orphan` 事件（action_type=`orphan`, target_type=`issue`, target_id=issue_id, metadata 含 `{old_node_id, reason: "cascade_from_node_delete"}`）。
 
 **实现位置**：`api/services/issue_service.py` 每个操作方法内调 `self.activity.log(...)`。
 

@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-04-24
 module_id: M02
 prism_ref: F2
 pilot: false
@@ -591,7 +591,9 @@ class MemberDAO:
 | `invite_member` | `project_member` | `<member_id>` | `{project_id, invited_user_id, role}` |
 | `update_member_role` | `project_member` | `<member_id>` | `{project_id, user_id, old_role, new_role}` |
 | `remove_member` | `project_member` | `<member_id>` | `{project_id, removed_user_id}` |
-| `update_dimension_config` | `project` | `<project_id>` | `{changed_configs: [{dimension_type_id, enabled, sort_order}]}` |
+| `update_dimension_config` | `project_dimension_config` | `<config_id>` | `{project_id, dimension_type_id, old_enabled, new_enabled, old_sort_order, new_sort_order}` |
+
+> **R10-1（batch3 基线补丁）**：批量维度配置更新（PUT `/dimension-configs`）时，每个被修改的 config 写**独立**事件（target_id = config_id），不汇总为单条 project 级事件。
 | `update_ai_provider` | `project` | `<project_id>` | `{new_provider}` （不记录 api_key）|
 
 ---

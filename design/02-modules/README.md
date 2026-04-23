@@ -215,9 +215,10 @@ complexity: low                         # 必填：low / medium / high（来自 
 
 ---
 
-## TODO：基线补丁（已 accepted 模块回扫）
+## ✅ 基线补丁（已 accepted 模块回扫，2026-04-24 完成）
 
-> batch3 沉淀的 R3-5 / R10-1 / R-X3 / R-X4 新规则 + ADR-003 可能影响已 accepted 模块。下一轮设计前（第四批 M01 pilot 之前或之后）执行基线回扫。
+> batch3 沉淀的 R3-5 / R10-1 / R-X3 / R-X4 新规则 + ADR-003 回扫已完成。报告：[`baseline-patch-batch3.md`](./baseline-patch-batch3.md)（15 发现 / 6 决策 / accepted 2026-04-24）。
+> 改动范围：M02/M03/M04(pilot 破例)/M06/M07/M12/M15 schema。核心决策：M12 改走 M04 Service 接口（不扩 ADR-003 规则 2）；M07 改名 `orphan_by_node_id`（对齐 SET NULL 语义）；M15 ActionType +22 / TargetType +4，移除 `relation`。
 
 ### 扫描清单
 

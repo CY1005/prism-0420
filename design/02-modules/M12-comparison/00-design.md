@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-04-24
 module_id: M12
 prism_ref: F12
 pilot: false
@@ -271,7 +271,7 @@ erDiagram
 | **Server Action** | `web/src/actions/comparison.ts` | session 校验 / 参数收集 / 调 FastAPI |
 | **Router** | `api/routers/comparison_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic 入参出参 |
 | **Service** | `api/services/comparison_service.py` | 矩阵数据聚合（读 M03/M04）/ 快照 CRUD / 事务管理 |
-| **DAO** | `api/dao/comparison_dao.py`<br>（依赖 `node_dao.py` / `dimension_dao.py`）| SQL 构建 + tenant 过滤 + 快照 CRUD |
+| **DAO** | `api/dao/comparison_dao.py` | SQL 构建 + tenant 过滤 + 快照 CRUD（**不跨模块直查**——维度数据走 M04 `DimensionService.batch_get_by_nodes` 接口，节点存在性校验走 M03 Service，batch3 基线补丁决策 6）|
 | **Model** | `api/models/comparison_snapshot.py` | SQLAlchemy 模型 |
 | **Schema** | `api/schemas/comparison_schema.py` | Pydantic 请求/响应 |
 
@@ -283,7 +283,8 @@ def create_snapshot(db, user_id, project_id, name, node_ids, dimension_type_ids)
         # 1. INSERT comparison_snapshots（含 nodes_ref/dimensions_ref 元数据）
         snapshot = dao.create_snapshot(...)
         # 2. 遍历选中 node×dim 拷贝 content 到 items 表
-        records = dimension_dao.batch_get(node_ids, dimension_type_ids, project_id)
+        #    batch3 基线补丁决策 6：走 M04 Service 接口（不直查 DimensionRecord）
+        records = dimension_service.batch_get_by_nodes(db, node_ids, dimension_type_ids, project_id)
         items = [
             ComparisonSnapshotItem(
                 snapshot_id=snapshot.id,
@@ -454,28 +455,45 @@ class ComparisonDAO:
         return rows  # 0 = 冲突或不存在
 ```
 
-### 矩阵渲染 DAO（跨模块只读）
+### 矩阵渲染（跨模块读：走 M04 Service 接口）
+
+**batch3 基线补丁决策 6（2026-04-24 CY ack）**：原稿 `ComparisonDAO.get_matrix_data` 直查 `DimensionRecord` 违反 R-X1（跨模块直读破坏分层），改为通过 M04 Service 接口获取维度数据。ADR-003 规则 2 保持严格（仅适用无主表纯读聚合模块，不扩展到 M12 这种有主表模块）。
 
 ```python
+# comparison_service.py
+class ComparisonService:
     def get_matrix_data(
         self,
         db: Session,
         project_id: UUID,
         node_ids: list[UUID],
-        dimension_type_ids: list[int]
+        dimension_type_ids: list[int],
     ) -> list[DimensionRecord]:
-        """从 dimension_records 批量读取矩阵数据
-        ★ 带 project_id 过滤——即使 node_ids 从 URL 传入，也双重过滤防越权
+        """矩阵数据聚合：调 M04 Service 接口拿 dimension_records
+
+        替代原直查 DimensionRecord 的 DAO 方法（R-X1 合规）。性能差异：
+        本期数据量下 <10ms（对比 3 feature × 20 dim = 60 records，单次 IN 查询）。
         """
-        return (
-            db.query(DimensionRecord)
-            .filter(
-                DimensionRecord.project_id == project_id,          # ← tenant 过滤
-                DimensionRecord.node_id.in_(node_ids),
-                DimensionRecord.dimension_type_id.in_(dimension_type_ids),
-            )
-            .all()
+        # ADR-003 规则 1 精神：聚合读通过上游 Service 接口
+        return self.dimension_service.batch_get_by_nodes(
+            db=db,
+            node_ids=node_ids,
+            dimension_type_ids=dimension_type_ids,
+            project_id=project_id,  # 双重 tenant 过滤在 M04 Service 内执行
         )
+```
+
+**M04 Service 接口签名**（见 M04 §6 对外契约）：
+```python
+def batch_get_by_nodes(
+    self,
+    db: Session,
+    node_ids: list[UUID],
+    dimension_type_ids: list[int],
+    project_id: UUID,
+) -> list[DimensionRecord]:
+    """只读查询，不写 activity_log、不开事务；双重 tenant 过滤防越权"""
+    ...
 ```
 
 ```python

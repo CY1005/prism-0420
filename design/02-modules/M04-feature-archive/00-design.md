@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-24
 module_id: M04
 prism_ref: F4
 pilot: true
@@ -229,7 +229,7 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE dimension_records.project_id = ?`（候选 B 冗余字段）；Service 层创建时校验 `node.project_id == 入参 project_id` |
-| **多表事务** | ✅ 必须 | Service 层 `with self.db.transaction():` 包：① upsert dimension_records ② log activity_log；任一失败回滚 |
+| **多表事务** | ✅ 必须 | Service 层 `with db.begin():` 包：① upsert dimension_records ② log activity_log；任一失败回滚。**batch3 基线补丁**：被跨模块调用的 `batch_create_in_transaction` / `delete_by_node_id` 接受外部 db session，不自开事务（R-X3，见 §6 对外契约） |
 | **异步处理** | ❌ N/A | M04 全同步——维度编辑是用户即时交互，无后台任务、无 Queue、无流式 |
 | **并发控制** | ✅ 乐观锁 | `dimension_records.version` 字段；UPDATE 带 `WHERE version=expected`；rows=0 → `ConflictError`（前端 toast"有人刚改过，请刷新重试"） |
 
@@ -257,6 +257,11 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 | **DAO** | `api/dao/dimension_dao.py`<br>（依赖 `node_dao.py` / `activity_dao.py`） | SQL 构建 + 强制 tenant 过滤 + 乐观锁 SQL |
 | **Model** | `api/models/dimension_record.py` | SQLAlchemy 模型（schema 真相源） |
 | **Schema** | `api/schemas/dimension_schema.py` | Pydantic 请求 / 响应 |
+
+**对外契约（R-X3，batch3 基线补丁补充）**：
+- `batch_create_in_transaction(db: Session, dimensions: list[DimensionCreateData], project_id: UUID) -> list[DimensionRecord]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 dimension_record 写独立 `create` activity_log 事件（R10-1）
+- `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 级联删除调用；接受外部 db session；每条被删 dimension_record 写独立 `delete` activity_log 事件（R10-1）；返回被删记录数
+- `batch_get_by_nodes(db: Session, node_ids: list[UUID], dimension_type_ids: list[int], project_id: UUID) -> list[DimensionRecord]`——M12 对比矩阵聚合读取；**只读**查询，不写 activity_log、不开事务；双重 tenant 过滤（`project_id` + `node_id IN`）防越权。**batch3 基线补丁决策 6**：替代 M12 原 DAO 直查 `DimensionRecord`，保持 ADR-003 规则 2"纯读聚合豁免"严格边界——有主表模块通过 Service 接口访问他模块数据
 
 **禁止**（呼应规约 5.4 反例）：
 - ❌ Router 直 `db.query(DimensionRecord)`
@@ -406,6 +411,8 @@ class DimensionDAO:
 | `create` | `dimension_record` | `<dim_record_id>` | 创建维度：{type_name} | `{node_id, type_id, content_size}` |
 | `update` | `dimension_record` | `<dim_record_id>` | 更新维度：{type_name} | `{node_id, type_id, old_version, new_version}` |
 | `delete` | `dimension_record` | `<dim_record_id>` | 删除维度：{type_name} | `{node_id, type_id}` |
+
+**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条新建的 dimension_record 写独立 `create` 事件（target_id = dim_record_id）；`delete_by_node_id` 调用时每条被删的 dimension_record 写独立 `delete` 事件。批量刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性。
 
 ### 实现位置
 

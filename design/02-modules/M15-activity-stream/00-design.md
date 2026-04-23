@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-04-24
 module_id: M15
 prism_ref: F15
 pilot: false
@@ -176,12 +176,20 @@ class ActivityLog(Base, ImmutableMixin):
         # 三重防护（R3-2）：CheckConstraint 枚举值显式列出
         # 枚举值清单会随各模块 accepted 回写扩展（R10-2）——新 action_type/target_type 扩增时同步更新此 CHECK
         CheckConstraint(
-            "action_type IN ('create', 'update', 'delete', 'import', 'analyze', 'archive')",
+            "action_type IN ("
+            "'create','update','delete','import','analyze','archive',"
+            "'invite_member','update_member_role','remove_member','update_dimension_config','update_ai_provider',"
+            "'reorder','move','status_change','orphan',"
+            "'cold_start.create','cold_start.completed','cold_start.failed',"
+            "'snapshot.create','snapshot.rename','snapshot.delete',"
+            "'import.create','import.status_change','import.ai_step_complete','import.review_confirmed',"
+            "'import.batch_insert','import.cancel','import.failed','import.partial_failed')",
             name="ck_activity_log_action_type",
         ),
         CheckConstraint(
-            "target_type IN ('node', 'dimension_record', 'version_record', 'competitor', "
-            "'issue', 'relation', 'project', 'project_member', 'module_relation')",
+            "target_type IN ('node', 'dimension_record', 'version_record', 'competitor', 'competitor_ref', "
+            "'issue', 'project', 'project_member', 'project_dimension_config', "
+            "'module_relation', 'cold_start_task', 'comparison_snapshot', 'import_task')",
             name="ck_activity_log_target_type",
         ),
     )
@@ -357,27 +365,60 @@ from enum import Enum
 
 
 class ActionType(str, Enum):
-    create  = "create"
-    update  = "update"
-    delete  = "delete"
-    import_ = "import"
-    analyze = "analyze"
-    archive = "archive"
-    # 注：完整 action_type 枚举随各模块 accepted 后回写扩展（R10-2）
-    # 各模块 accepted 后集中回写此枚举 + CheckConstraint
+    create                   = "create"
+    update                   = "update"
+    delete                   = "delete"
+    import_                  = "import"
+    analyze                  = "analyze"
+    archive                  = "archive"
+    # M02 项目管理
+    invite_member            = "invite_member"
+    update_member_role       = "update_member_role"
+    remove_member            = "remove_member"
+    update_dimension_config  = "update_dimension_config"
+    update_ai_provider       = "update_ai_provider"
+    # M03 模块树
+    reorder                  = "reorder"
+    move                     = "move"
+    # M07 问题沉淀
+    status_change            = "status_change"
+    orphan                   = "orphan"              # M07 节点级联删除后 issue 游离化
+    # M11 冷启动
+    cold_start_create        = "cold_start.create"
+    cold_start_completed     = "cold_start.completed"
+    cold_start_failed        = "cold_start.failed"
+    # M12 对比矩阵
+    snapshot_create          = "snapshot.create"
+    snapshot_rename          = "snapshot.rename"
+    snapshot_delete          = "snapshot.delete"
+    # M17 AI 导入
+    import_create            = "import.create"
+    import_status_change     = "import.status_change"
+    import_ai_step_complete  = "import.ai_step_complete"
+    import_review_confirmed  = "import.review_confirmed"
+    import_batch_insert      = "import.batch_insert"
+    import_cancel            = "import.cancel"
+    import_failed            = "import.failed"
+    import_partial_failed    = "import.partial_failed"
+    # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
 
 
 class TargetType(str, Enum):
-    node              = "node"
-    dimension_record  = "dimension_record"
-    version_record    = "version_record"
-    competitor        = "competitor"
-    issue             = "issue"
-    relation          = "relation"
-    project           = "project"
-    project_member    = "project_member"
-    module_relation   = "module_relation"
-    # 注：完整 target_type 枚举随各模块 accepted 后回写扩展（R10-2）
+    node                      = "node"
+    dimension_record          = "dimension_record"
+    version_record            = "version_record"
+    competitor                = "competitor"
+    competitor_ref            = "competitor_ref"             # M06 竞品对标记录
+    issue                     = "issue"
+    project                   = "project"
+    project_member            = "project_member"
+    project_dimension_config  = "project_dimension_config"   # M02 维度配置（R10-1 独立事件）
+    module_relation           = "module_relation"
+    cold_start_task           = "cold_start_task"            # M11 冷启动任务
+    comparison_snapshot       = "comparison_snapshot"         # M12 对比快照
+    import_task               = "import_task"                # M17 导入任务
+    # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
+    # 注：原 "relation" 枚举值已移除——无模块使用；M08 使用 "module_relation"
 
 
 class ActivityStreamFilter(BaseModel):

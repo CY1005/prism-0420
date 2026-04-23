@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-04-24
 module_id: M06
 prism_ref: F6
 pilot: false
@@ -231,6 +231,10 @@ erDiagram
 | **Model** | `api/models/competitor.py` | SQLAlchemy 模型 |
 | **Schema** | `api/schemas/competitor_schema.py` | Pydantic 请求/响应 |
 
+**对外契约（R-X3，batch3 基线补丁补充）**：
+- `batch_create_in_transaction(db: Session, competitors: list[CompetitorCreateData], project_id: UUID) -> list[Competitor]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 competitor 写独立 `create` activity_log 事件（R10-1）
+- `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 级联删除调用；删除该 node 下所有 competitor_refs；接受外部 db session；每条被删 competitor_ref 写独立 `delete` activity_log 事件（R10-1）；返回被删记录数
+
 ---
 
 ## 7. API 契约
@@ -381,6 +385,8 @@ class CompetitorDAO:
 | `delete` | `competitor_ref` | `<ref_id>` | 删除对标：{node_name}×{competitor_name} | `{node_id, competitor_id}` |
 
 **级联删除时的 activity_log 写入**：Service 层在调用 `competitor_dao.delete(competitor_id)` 前，先查询所有关联 refs 并逐条写入 `delete competitor_ref` 日志，再删除竞品（DB CASCADE 自动清 refs）。
+
+**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条 competitor 写独立 `create` 事件；`delete_by_node_id` 调用时每条被删 competitor_ref 写独立 `delete` 事件（target_type=`competitor_ref`, target_id=ref_id）。
 
 ---
 
