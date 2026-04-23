@@ -1,12 +1,12 @@
 ---
 title: M01 用户账号 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-24
-accepted: null
+accepted: 2026-04-24
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-24
 module_id: M01
 prism_ref: F1
 pilot: true
@@ -1160,12 +1160,13 @@ class RegistrationDisabledError(AppError):
 - [x] 节 13：ErrorCode 新增 17 个 + AppError 子类 17 个（含 VERSION_CONFLICT）（R13-1 1:1 对应）
 - [x] 节 14：tests.md 测试场景写完（独立文件）
 - [x] 节 15：本 checklist 全勾过
-- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
-- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**——重点审 §8 ADR-004 路径声明 + §11 idempotency 幂等场景完备性 + §5 version 乐观锁冲突回退语义 + §10 auth_audit_log 与 M15 activity_log 职责分工是否清晰
-- [ ] **🔴 第三轮 reviewer audit（演进 / pilot 可复用性）通过**——重点审"本期最简 + schema 都支持"模式是否可被其他横切源头模块复用
-- [ ] CY 全文复审通过 → status 转 accepted
-- [ ] ADR-004 status 转 accepted（本模块 accepted 后同步）
+- [x] **🔴 第一轮 reviewer audit（完整性）通过**（audit-report.md R1 ✅ + fix v1 闭合）
+- [x] **🔴 第二轮 reviewer audit（边界场景）通过**（audit-report.md R2 + fix v1 含 B1 签名 + fix v2 NI-01 query）
+- [x] **🔴 第三轮 reviewer audit（演进 / pilot 可复用性）通过**（audit-report.md R3 正面判定 4 条）
+- [x] CY 全文复审通过 → status 转 accepted（2026-04-24）
+- [x] ADR-004 status 转 accepted（同步，2026-04-24）
 - ✅ **M15 schema 无需改动**（Concern 2+3 分表决策后移除）
+- [x] README §10 R10-2 例外回写（2026-04-24，M01 accepted 同时完成）
 
 ### 部署前置 TODO（非 Phase 1 阻塞项，Phase 2 实装阶段必须完成）
 

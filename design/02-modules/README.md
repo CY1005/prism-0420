@@ -23,13 +23,14 @@
 | 第三批 A1 | M09 全局搜索 | **accepted（2026-04-21）** | [`M09-search/`](./M09-search/) |
 | 第三批 A1 | M10 项目全景图 | **accepted（2026-04-21）** | [`M10-overview/`](./M10-overview/) |
 | 第三批 A1 | M15 数据流转可视化 | **accepted（2026-04-21）** | [`M15-activity-stream/`](./M15-activity-stream/) |
-| 第三批 A2 | M01 用户账号（auth pilot 模式）| 待开 | — |
+| **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
 | 第四批（AI 异步）| M13 需求分析 / M16 AI 快照 / M18 语义搜索 | 待 CY 出业务 | — |
 | 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：
 - 同步模块 → `M04-feature-archive/00-design.md`
 - 异步 Queue 模块 → `M17-ai-import/00-design.md`
+- **Auth 横切源头模块** → `M01-user-account/00-design.md` + [`ADR-004`](../adr/ADR-004-auth-cross-cutting.md)（"实现最简 + schema 都支持"模式 / 独立审计表 R10-2 例外）
 
 **Audit 报告归档**：
 - 第一批：[`audit-report-batch1.md`](./audit-report-batch1.md) + [`audit-report-batch1-verify.md`](./audit-report-batch1-verify.md)
@@ -173,6 +174,15 @@ complexity: low                         # 必填：low / medium / high（来自 
     3. 同步发起 Alembic 迁移（若 CHECK constraint 启用则需更新）
   - 新模块 tests.md 验证清单：确保自己写的 action_type 已在 M15 schema 中登记
   - 反例：M17 / M13 各自独立写 schema 扩枚举导致合并冲突或前端展示"未知操作"
+- **R10-2 例外**（M01 auth pilot 沉淀 2026-04-24）：**横切专用审计表由归属模块自身 own**，不强制归 M15
+  - 当前唯一适用例外：`auth_audit_log`（M01 own）
+  - **适用条件**（全部满足）：
+    1. 该表仅服务单一模块的审计职责（M01 auth 事件）
+    2. 事件高频（100+/用户/天级别）进 M15 activity_log 会淹没业务时间线
+    3. 事件无 `project_id` 归属（系统级 / 跨项目事件）
+  - 采用此例外的模块 §10 必须**显式引用本例外条目**并说明三个适用条件各自满足情况
+  - 不适用例外的模块仍走 R10-2 主规则（回写 M15 schema）
+  - 跨表查询预案（若出现"查某用户全系统操作"场景）：模块 §10 给 PG view 或 UNION ALL 候选，参 [`M01-user-account/00-design.md`](./M01-user-account/00-design.md) §10 末段
 
 ### §11 idempotency_key
 - **R11-1**：不需要也要显式声明
@@ -302,7 +312,9 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 - [x] **Pilot M17 完成 + audit + 7 问题修复 + accept（2026-04-21）→ 异步字段补完**
 - [x] **模板调整 5 条建议沉淀到 README（2026-04-21）+ ADR-002 起**
 - [x] **第二批 4 模块批量生成 + audit + fix v2 + verify + 精修 accept（2026-04-21）**：M02/M03/M11/M12；模板追加 TA-01~05 + R3-4 + R-X2
-- [ ] 第三批 AI 类（M13 / M16 / M18）—— 异步流式 / 后台 子模板待补完
-- [ ] 第四批（M08 / M09 / M10 / M15 / M20）
-- [ ] 20 模块全部 status=accepted
+- [x] **第三批 A1 4 模块（M08/M09/M10/M15）accepted（2026-04-21）**+ ADR-003 跨模块读策略 + R3-5/R-X3/R-X4
+- [x] **第三批 A2 M01 auth pilot accepted（2026-04-24）**：ADR-004 auth 横切范式 + "实现最简+schema 都支持" 模式 + R10-2 例外（独立审计表）
+- [ ] 第四批 AI 异步类（M13 流式 / M16 后台 / M18 语义搜索）—— 待 CY 出业务；流式 / 后台 §12 子模板待补完
+- [ ] 扩展 M20 团队 / 空间 —— 待开
+- [ ] 20 模块全部 status=accepted（剩 4 个：M13 / M16 / M18 / M20）
 - [ ] 99-comparison/ 对照报告：每模块一份

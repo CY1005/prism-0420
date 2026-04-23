@@ -1,10 +1,16 @@
 ---
 title: M01 用户账号 - 测试场景
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-24
-accepted: null
+accepted: 2026-04-24
+supersedes: []
+superseded_by: null
+last_reviewed_at: 2026-04-24
 module_id: M01
+prism_ref: F1
+pilot: true
+complexity: high
 ---
 
 # M01 用户账号 - 测试场景

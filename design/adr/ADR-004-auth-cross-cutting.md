@@ -1,12 +1,12 @@
 ---
 title: ADR-004 Auth 横切范式（用户/Session/权限源头）
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-24
-accepted: null
+accepted: 2026-04-24
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-24
 related_modules: [M01, M02, M15, 所有需要 require_user 的路由, 所有需要 TaskPayload.user_id 的异步模块]
 ---
 
