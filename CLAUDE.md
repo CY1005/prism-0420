@@ -82,6 +82,23 @@ GitHub：https://github.com/CY1005/prism-0420
 - ❌ 原则稀释（>5 条等于没有）
 - ❌ 异步模式混用同一 ✅（流式 / 后台 / Queue 要区分）
 
+## Phase 2 代码落地时的合并前体检
+
+进入 Phase 2 写代码后，每次完成一个模块、三 Agent 流水线（Implementer + Spec Reviewer + Code Quality Reviewer）通过 **之后**，commit **之前**，跑 simplify 体检。
+
+**清单**：`/root/workspace/projects/ai-quality-engineering/02-技术/AI工具与工作流/Prism-simplify-checklist.md`
+
+**三维并行**：派 3 个 subagent 分别扫
+- 横向（Reuse）：跟仓库已有代码的关系
+- 纵向（Quality）：通用 + Prism 特有坑（契约漂移 / 版本兼容 / 空状态 / 租户隔离 / 静默吞错 / Migration）
+- 动态（Efficiency）：重复 I/O、N+1、useMemo 缺失等
+
+**门槛**：改 ≥ 50 行或跨 ≥ 2 文件才跑。小改动主 AI 自扫。
+
+**findings 处理**：false positive 记 `SKIP: ... — 理由：...`，不辩论。修完一句话总结。
+
+**踩新坑就回流**：同一根因踩 ≥ 2 次 → 必须加清单新条目。
+
 ## 快速上手（新 session 读这个顺序）
 
 1. 本文件（协作规则）
