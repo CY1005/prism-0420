@@ -264,7 +264,7 @@ stateDiagram-v2
 
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
-| **Tenant 隔离** | ✅ project_id（URL 路径参数 + Service 层校验 node 归属）| 所有 3 个端点 URL 含 `{project_id}/{node_id}`；Service 入口统一调 `node_service.get_node_with_path(project_id, node_id, user_id)`——node 不存在 / 不属于该 project → 404；AI 分析 context 聚合严格限制在本 project 内 |
+| **Tenant 隔离** | ✅ project_id（URL 路径参数 + Service 层校验 node 归属）| 所有 3 个端点 URL 含 `{project_id}/{node_id}`；Service 入口统一调 `node_service.get_by_id(db, node_id, project_id)`——node 不存在 / 不属于该 project → 返回 None，M13 wrap 为 404；AI 分析 context 聚合严格限制在本 project 内 |
 | **多表事务** | ❌ 不触发（save 只调 `M04.create_dimension_record` 单个 Service 方法；activity_log 由 M04 在同一事务内代写）| save 阶段 M13 Service 层 `with self.db.begin():` 包住 `M04.create_dimension_record(db, ...)` 调用——M04 在此事务内写 dimension_record + activity_log 两表；M13 自身不直接 INSERT 任何表。依赖 M04 Service 接受外部 session（R-X3 兼容，**M04 pilot 基线补丁已满足 `create_dimension_record(db, ...)` 签名**）。流式请求不写 DB 完全无事务 |
 | **异步处理** | 🌊 **流式 SSE**（pilot 核心覆盖维度）| POST body + `StreamingResponse(media_type="text/event-stream")`；前端 fetch + ReadableStream 解析；**不走 arq Queue**（ADR-001 §4.1：交互式 AI 用 stream()）；详见 §12 |
 | **并发控制** | ✅ 无 lock（CY Q4 ack）| 同一用户 / 同一 node 允许并发多个流式请求互不影响；save 端点无幂等（多次点保存 = 多条 dimension_record 历史记录，前端 Component 层做按钮防抖兜底，见 §6）；不使用乐观锁 version（save 是 INSERT 非 UPDATE）。**流式 DB session 释放策略**：Service 层在 `async for chunk in provider.analyze(...)` 循环**开始前**完成所有上游 Service 调用（context 聚合）并释放 db session；流式循环内不持 DB 连接；save 由前端新起 POST 请求，另开一个 request scope session——避免流式长连接占用连接池（默认 Postgres pool 10-20，5 并发流式即可打满的风险） |
@@ -465,10 +465,10 @@ data: {"error": "AI Provider 调用失败", "error_code": "ANALYSIS_PROVIDER_ERR
 
 M13 不拥有自有表，故不存在"M13 DAO"。tenant 过滤由上游 Service 承担：
 
-- **M02 Service**：`get_project_ai_config(project_id)` 内部过滤 `WHERE project_id = ?`
-- **M03 Service**：`get_node_with_path(project_id, node_id, user_id)` 内部 `WHERE project_id = ? AND id = ?`——跨项目拿 node 返回 None
-- **M04 Service**：`list_dimension_records_for_node(project_id, node_id, ...)` / `create_dimension_record` 内部强制 `WHERE project_id = ?`
-- **M07 Service**：`list_issues_by_node(project_id, node_id)` 内部过滤
+- **M02 Service**：`get_by_id_for_user(db, project_id, user_id)` 内部过滤 `WHERE project_id = ? AND user 是 project member`
+- **M03 Service**：`get_by_id(db, node_id, project_id)` 内部 `WHERE project_id = ? AND id = ?`——跨项目返回 None；`list_subtree(db, node_id, project_id, depth)` 同上
+- **M04 Service**：`list_by_node(db, node_id, project_id)` / `create_dimension_record(db, ..., project_id=...)` / `get_latest(db, ..., project_id=...)` 内部强制 `WHERE project_id = ?`
+- **M07 Service**：`list_by_project(db, project_id, node_id=..., limit=20)` 内部 `WHERE project_id = ? AND node_id = ?`
 
 ### 横切表（M15 activity_log）
 
@@ -720,6 +720,9 @@ class AnalysisInvalidLevelError(AppError):
 
 - [x] **M04 baseline-patch**：§6 对外契约追加 `create_dimension_record(db, ..., extra_activity_metadata=None)` + `get_latest(db, ...)` 两方法；两方法接受外部 session（R-X3），M04 `create_dimension_record` 内部代写 `create` / target_type=`dimension_record` activity_log 事件并合并 `extra_activity_metadata`（M13 精修期间已同步修改 M04 §6，commit 同批次）
 - [ ] **M07 baseline-patch**（轻量）：`list_by_project(db, project_id, node_id=None, limit=20)` 签名追加 `node_id` 可选参数（现有方法加 filter 参数，不破坏既有调用方）
+- **M03 无需 baseline-patch**：M13 只用 M03 既有的 `get_by_id` + `list_subtree`（直接读 Node.path 自解析面包屑），不需要新方法
+- **M02 无需 baseline-patch**：M13 用 M02 既有 `get_by_id_for_user` 读 Project 对象的 `.ai_provider` / `.ai_api_key_enc` / `.ai_model` 字段（Prism 已有列）
+- **M15 无需 baseline-patch**：M13 的 activity_log 由 M04 代写（见 §10 + §15 末段"驳回 reviewer B3/B5 M15 部分"声明），M15 schema / Service / Alembic 均不动
 - [ ] **ADR-001 §4.1 补一句**：声明所有 Provider 必须支持 `AsyncIterator.aclose()` 协议，MockProvider 必须实现 `aclose_called` 断言标志
 - [ ] **ADR-002 L116 替换**：把 "M13（流式 SSE）：虽然不用 Queue……另起 ADR 或扩展本 ADR" 替换为 M13 pilot 结论（见 §8 末段建议原文）
 

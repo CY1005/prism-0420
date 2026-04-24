@@ -156,7 +156,7 @@ Playwright 启动，editor 登录，完成流式分析。断言：
 ### T2. URL 路径 project_id 与 body node_id 跨项目混淆
 
 A 是 P1 editor。POST `/api/projects/P1/nodes/<P2 的 node N2>/analyze/requirement`。断言：
-- 404（`node_service.get_node_with_path(P1, N2)` 返回 None，wrap 为 `AnalysisNodeNotFoundError`）
+- 404（`node_service.get_by_id(db, N2, P1)` 返回 None，wrap 为 `AnalysisNodeNotFoundError`）
 - 不泄露"N2 存在于 P2"信息（统一 404 而非 403）
 
 ### T3. save 时 node_id 跨项目
@@ -366,7 +366,7 @@ C3 场景后 GET affected-nodes，断言返回**最后一次 save** 的 affected
 ### R4. 历史分析后 node 被删
 
 save 后删掉 node（M03 软删 / 硬删）。断言：
-- GET affected-nodes 行为由 M04 `get_latest_dimension_record` 定义（若 node 级联删 dimension_records，返回空；若保留，返回历史）
+- GET affected-nodes 行为由 M04 `get_latest(db, ..., dimension_type_key="requirement_analysis")` 定义（若 node 级联删 dimension_records，返回空；若保留，返回历史）
 - 本断言**不在 M13 tests 里**，属于 M03 级联删测试（M13 tests 只验证"存在的 node → 正确返回"）
 
 ---
