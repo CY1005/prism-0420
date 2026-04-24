@@ -34,10 +34,10 @@ pilot: true
 - SSE 收到 5 个 `chunk` + 1 个 `complete` event，顺序正确
 - `complete.full_result = "".join(chunks)`
 - `complete.metadata` 含 `ai_provider / ai_model / analysis_level="L2" / analysis_time_ms / matched_template_id`
-- `/analyze/save` 返回 200 + `dimension_record_id`（UUID）
+- `/analyze/save` 返回 200 + `dimension_record_id`（UUID） + `analysis_saved_at`（ISO 8601 字符串）
 - M04 `dimension_records` 表新增 1 行：`dimension_type_key="requirement_analysis"`, `node_id=N1`, `content.analysis_result=full_result`, `content.metadata.affected_node_ids=[N2,N3]`
-- M15 `activity_log` 新增 1 行：`action_type="requirement_analysis.save"`, `target_type="node"`, `target_id=N1`, `user_id=A`, metadata 7 字段齐
-- `/analyze/affected-nodes?node_id=N1` 返回 `affected_node_ids=[N2, N3]`, `analysis_record_id=<上一步返回的 id>`
+- M15 `activity_log` 新增 1 行（**由 M04 Service 代写**）：`action_type="create"`, `target_type="dimension_record"`, `target_id=<新建 dim_record_id>`, `user_id=A`, `metadata` 合并 M04 默认（`node_id, type_id, content_size`）+ M13 注入（`dimension_type_key="requirement_analysis", analysis_level, affected_node_count=2, ai_provider, ai_model, analysis_time_ms, requirement_text_hash`）
+- `/analyze/affected-nodes?node_id=N1` 返回 `affected_node_ids=[N2, N3]`, `analysis_record_id=<上一步返回的 id>`, `analysis_saved_at=<response 的同一时间戳>`
 
 ### G2. L1 快速分析（更短 chunks）
 
@@ -119,13 +119,21 @@ provider.analyze 立即 StopAsyncIteration，无 chunk。断言：
 
 3 个 node 同时分析。断言：每个流互不影响 + context 拼装严格按各自 node_id 独立。
 
-### C3. 同 user 对同分析结果 save 3 次
+### C3. 同 user 对同分析结果 save 3 次（**后端允许 + 前端防抖兜底**）
 
-流跑完后，快速点"保存"3 次（前端 UX 失误）。断言：
-- 3 个 POST `/analyze/save` 全部成功
+**后端**：直接用 HTTP client 快速调 `/analyze/save` 3 次（绕过前端）。断言：
+- 3 个 POST 全部成功
 - M04 `dimension_records` 新增 3 行（允许重复，Q6 ack）
-- M15 `activity_log` 写 3 条 `requirement_analysis.save`
-- `/analyze/affected-nodes` 返回 **最新一条**（M04 `get_latest_dimension_record` 按 created_at desc）
+- M15 `activity_log` 写 3 条 `action_type="create"` / `target_type="dimension_record"`（M04 代写）
+- `/analyze/affected-nodes` 返回 **最新一条**（M04 `get_latest(db, ..., dimension_type_key="requirement_analysis")` 按 `created_at DESC`）
+
+### C3b. `[E2E]` 前端保存按钮防抖（R2-04 修复验证）
+
+Playwright 启动，editor 登录，完成流式分析。断言：
+- 点击"保存"第 1 次：按钮立即变 disabled + loading 态
+- save response 返回前，用户疯点 10 次：network 面板只能看到 1 个 `/analyze/save` 请求
+- save response 返回后：按钮变"已保存"不可再点；若用户手动清空并重输相同 full_result，同一抽屉生命周期内仍拒绝第 2 次（基于 SHA256 hash 判重，见 §6 Component 层职责）
+- DB 验证：`dimension_records` 仅 1 新行
 
 ### C4. 不同 user 并发 save 到同一 node
 
@@ -198,18 +206,27 @@ viewer 可读。断言：200 正常返回。
 
 platform_admin 可访问任意项目。断言：流式 + save 正常通过。
 
-### P8. 流式中途 JWT 过期（接受窗口）
+### P8. JWT **自然过期**（`exp` 到期）中途（接受窗口）
 
 JWT 有效期剩 10s，发起 L3 分析（预计 30s）。断言：
-- 流式正常跑完（HTTP 长连接内不校验）
-- 流完后 save 请求用新旧 JWT：旧 JWT 返回 401；用 refresh 换新 JWT 后 save 正常
-- 记录该行为为"接受的脱节窗口"，非 bug
+- 流式正常跑完（HTTP 长连接内不校验自然过期，与 ADR-004 原语义一致，非脱节）
+- 流完后 save 请求用旧 JWT 返回 401；用 refresh token 换新 JWT 后 save 正常
+- tests 记录：此行为**不是脱节**，是 ADR-004 预期行为
 
-### P9. 用户被禁用（`status=disabled`）期间的流
+### P9. token **主动作废**（ADR-004 §5）场景
 
-- 流开始前被禁用：第一次 `require_user` 校验时发现 `status != active` → 401
-- 流中途被禁用：流继续跑完（连接级 auth 不重校）+ save 时新请求 401（ADR-004 §5 token_invalidated_at 更新）
-- 断言：两种情况均不产生 dimension_record（被禁用 user 无法 save）
+覆盖 ADR-004 §5 的 4 个触发事件：管理员禁用 / 用户改密 / 管理员强制登出 / 刷新令牌被盗。
+
+**P9a 流开始前被作废**：
+- 第一次 `require_user` 校验时 `iat < token_invalidated_at` → 401
+- 断言：无流建立，无 dimension_record，无 activity_log
+
+**P9b 流中途被作废**（接受脱节窗口）：
+- 流运行时管理员触发 `revoke_all_user_tokens` → 更新 `users.token_invalidated_at`
+- 当前已建流**继续跑完**（M13 设计明确接受，见 §8）
+- 流完后用户尝试 save：新请求 `require_user` 时 `iat < token_invalidated_at` → 401
+- 断言：流的 chunks 返回完整；save 被拦，无 dimension_record 产生
+- 此行为**是已知脱节**（M13 设计 §8 声明，≤5min 暴露窗口）
 
 ---
 
@@ -257,11 +274,12 @@ affected_node_ids = [非法 UUID / 跨项目的 node / 软删 node]。断言：
 - `/analyze/affected-nodes` 返回这些 ID 原样
 - 关系图渲染时 M08 自行过滤已删节点（M08 职责）
 
-### E7. M02 找不到 AI provider 配置
+### E7. 项目未配置 AI provider（配置错误 vs 瞬时故障区分）
 
-M02 `get_project_ai_config` 返回 None（项目未配 AI provider）。断言：
-- 流式请求立即返回 SSE `error` event：`error="请先配置 AI Provider"`, `error_code="ANALYSIS_PROVIDER_ERROR"`
+Mock M02 `get_by_id_for_user` 返回 Project 对象但 `.ai_provider = None` / `.ai_api_key_enc = None`（项目未配 AI）。断言：
+- 流式请求立即返回 SSE `error` event：`error="AI provider is not configured for this project; go to project settings to configure"`, `error_code="ANALYSIS_PROVIDER_NOT_CONFIGURED"`（http 422 语义，但 SSE 已开则 status 仍 200——前端按 error_code 路由"去配置页"UX）
 - 无 chunk 发出
+- **对比 E1**（provider 瞬时失败）：E1 的 `error_code="ANALYSIS_PROVIDER_ERROR"` 语义是"重试可能恢复"；E7 的 `_NOT_CONFIGURED` 语义是"重试也没用，去配置"。前端据此差异化 UX（E1 展示"重试"按钮，E7 展示"去配置"链接）
 
 ---
 

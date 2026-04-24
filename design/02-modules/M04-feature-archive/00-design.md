@@ -262,6 +262,8 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 - `batch_create_in_transaction(db: Session, dimensions: list[DimensionCreateData], project_id: UUID) -> list[DimensionRecord]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 dimension_record 写独立 `create` activity_log 事件（R10-1）
 - `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 级联删除调用；接受外部 db session；每条被删 dimension_record 写独立 `delete` activity_log 事件（R10-1）；返回被删记录数
 - `batch_get_by_nodes(db: Session, node_ids: list[UUID], dimension_type_ids: list[int], project_id: UUID) -> list[DimensionRecord]`——M12 对比矩阵聚合读取；**只读**查询，不写 activity_log、不开事务；双重 tenant 过滤（`project_id` + `node_id IN`）防越权。**batch3 基线补丁决策 6**：替代 M12 原 DAO 直查 `DimensionRecord`，保持 ADR-003 规则 2"纯读聚合豁免"严格边界——有主表模块通过 Service 接口访问他模块数据
+- `create_dimension_record(db: Session, *, project_id: UUID, node_id: UUID, dimension_type_key: str, content: dict, user_id: UUID, extra_activity_metadata: dict | None = None) -> DimensionRecord`——**M13 pilot 基线补丁追加**。单条 dimension_record 创建（区别于 `batch_create_in_transaction` 批量）；接受外部 db session；按 `dimension_type_key` 在 `dimension_types` 表 upsert 对应 id；写一条 `create` activity_log 事件（target_type=`dimension_record`, target_id=<新建 id>, metadata 含 `{node_id, type_id, content_size, dimension_type_key}` + 调用方传入的 `extra_activity_metadata` 合并）；M13 的"1 条 save 日志"就由此方法代写，M13 自身不直写 activity_log。
+- `get_latest(db: Session, *, project_id: UUID, node_id: UUID, dimension_type_key: str) -> DimensionRecord | None`——**M13 pilot 基线补丁追加**。按 `dimension_type_key` 拿某 node 上最新一条记录（`ORDER BY created_at DESC LIMIT 1`）；纯读，不写 activity_log、不开事务；双重 tenant 过滤。M13 `GET /analyze/affected-nodes` 走此接口。
 
 **禁止**（呼应规约 5.4 反例）：
 - ❌ Router 直 `db.query(DimensionRecord)`
