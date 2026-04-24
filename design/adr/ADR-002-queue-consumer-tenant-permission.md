@@ -113,7 +113,7 @@ async def handle_client_command(self, command: ClientCommand):
 
 ### 横切影响
 
-- M13（流式 SSE）：虽然不用 Queue，但需要"流式响应中的 chunk 鉴权"——本 ADR 不覆盖，M13 设计时另起 ADR 或扩展本 ADR
+- M13（流式 SSE）：M13 pilot 已结论（2026-04-25 accepted）——流式鉴权走 ADR-004 P1（浏览器 fetch + Authorization Bearer JWT 直连 FastAPI），本 ADR 不覆盖；流式无客户端→服务器命令通道，连接级 auth 已覆盖，无 chunk 级鉴权需求。参见 [M13-requirement-analysis/00-design.md §8](../02-modules/M13-requirement-analysis/00-design.md)
 - M16（后台 fire-and-forget）：使用本 ADR 的 TaskPayload 基类即可（即使没有 arq Queue）
 - M18（Queue 嵌入）：完全适用本 ADR
 

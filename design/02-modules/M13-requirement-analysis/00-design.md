@@ -1,12 +1,12 @@
 ---
 title: M13 需求分析 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-25
-accepted: null
+accepted: 2026-04-25
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-25
 module_id: M13
 prism_ref: F13
 pilot: true
@@ -713,23 +713,24 @@ class AnalysisInvalidLevelError(AppError):
 - [x] **第二轮 reviewer audit（边界场景 + 流式特化）完成**（同上报告）
 - [x] **第三轮 reviewer audit（§12A 子模板可复用性 / 未来 M16/M18 对照）完成**（同上报告）
 - [x] 主对话精修 blocker + non-blocker（2026-04-25，含 reviewer B3 M15 部分驳回——见下方）
-- [ ] **🔴 verify agent 独立复审 fix 质量**
-- [ ] CY 全文复审通过 → status 转 accepted
+- [x] **verify agent 独立复审 fix 质量**（2026-04-25，verify-agent；🔵 Rebutted-Valid 驳回 M15；2 残余项已补；见 [`audit-verify.md`](./audit-verify.md)）
+- [x] CY 全文复审通过 → status 转 accepted（2026-04-25）
 
-### accept **前置条件**（必须先于 M13 accept 完成）
+### accept **前置条件**（全部完成）
 
-- [x] **M04 baseline-patch**：§6 对外契约追加 `create_dimension_record(db, ..., extra_activity_metadata=None)` + `get_latest(db, ...)` 两方法；两方法接受外部 session（R-X3），M04 `create_dimension_record` 内部代写 `create` / target_type=`dimension_record` activity_log 事件并合并 `extra_activity_metadata`（M13 精修期间已同步修改 M04 §6，commit 同批次）
-- [ ] **M07 baseline-patch**（轻量）：`list_by_project(db, project_id, node_id=None, limit=20)` 签名追加 `node_id` 可选参数（现有方法加 filter 参数，不破坏既有调用方）
-- **M03 无需 baseline-patch**：M13 只用 M03 既有的 `get_by_id` + `list_subtree`（直接读 Node.path 自解析面包屑），不需要新方法
-- **M02 无需 baseline-patch**：M13 用 M02 既有 `get_by_id_for_user` 读 Project 对象的 `.ai_provider` / `.ai_api_key_enc` / `.ai_model` 字段（Prism 已有列）
-- **M15 无需 baseline-patch**：M13 的 activity_log 由 M04 代写（见 §10 + §15 末段"驳回 reviewer B3/B5 M15 部分"声明），M15 schema / Service / Alembic 均不动
-- [ ] **ADR-001 §4.1 补一句**：声明所有 Provider 必须支持 `AsyncIterator.aclose()` 协议，MockProvider 必须实现 `aclose_called` 断言标志
-- [ ] **ADR-002 L116 替换**：把 "M13（流式 SSE）：虽然不用 Queue……另起 ADR 或扩展本 ADR" 替换为 M13 pilot 结论（见 §8 末段建议原文）
+- [x] **M04 baseline-patch**：§6 对外契约追加 `create_dimension_record(db, ..., extra_activity_metadata=None)` + `get_latest(db, ...)` 两方法（commit ba97381）
+- [x] **M07 §6 对外契约登记**：`list_by_project(db, project_id, node_id=..., ...)` DAO 已支持，Service pass-through；§6 对外契约补登记（commit 本批次）——**无代码改动，仅补文档登记**
+- [x] **ADR-001 §4.1 补 aclose 协议约定**：声明 AsyncIterator 必须支持 PEP 533 `aclose()`；消费方断开检测后**必须** `await stream.aclose()`（commit 本批次）
+- [x] **ADR-002 L116 替换**：原"M13 设计时另起 ADR 或扩展本 ADR"替换为"M13 pilot 已结论：流式走 ADR-004 P1，本 ADR 不覆盖"（commit 本批次）
+- **M03 / M02 / M15 无需 baseline-patch**：
+  - M03：M13 只用既有 `get_by_id` + `list_subtree`，不需新方法
+  - M02：用既有 `get_by_id_for_user` 读 Project 字段
+  - M15：activity_log 由 M04 代写，M15 schema / Service / Alembic 均不动（驳回见下方）
 
-### accepted **同期补丁**（M13 accept 后立即做）
+### accepted **同期补丁**（Phase 2 实装时落地，非设计阶段任务）
 
-- [ ] M04 Service 实现 `dimension_types` 表中 `key="requirement_analysis"` 的 upsert 幂等逻辑（首次 `create_dimension_record` 调用自动登记，不需额外迁移）
-- [ ] M15 UI 侧理解 `metadata.dimension_type_key` 字段，在时间线展示"需求分析"图标 / 标签（UI 层增强，不涉及 schema）
+- [ ] M04 Service 实现 `dimension_types` 表中 `key="requirement_analysis"` 的 upsert 幂等逻辑（首次 `create_dimension_record` 调用自动登记，不需额外迁移）—— Phase 2 代码落地时做
+- [ ] M15 UI 侧理解 `metadata.dimension_type_key` 字段，在时间线展示"需求分析"图标 / 标签（UI 层增强，不涉及 schema）—— Phase 2 代码落地时做
 
 ### 驳回 reviewer B3 / B5 的 M15 部分（2026-04-25 主对话决策）
 

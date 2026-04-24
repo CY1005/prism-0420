@@ -265,7 +265,9 @@ stateDiagram-v2
 | **Model** | `api/models/issue.py` | SQLAlchemy 模型 + Enum 定义 |
 | **Schema** | `api/schemas/issue_schema.py` | Pydantic 请求/响应 |
 
-**对外契约（R-X3，batch3 基线补丁补充）**：
+**对外契约（R-X3，batch3 基线补丁补充；M13 pilot 2026-04-25 补登记）**：
+- `IssueService.list_by_project(db: Session, project_id: UUID, *, node_id: UUID | None = None, category: str | None = None, status: str | None = None, tag: str | None = None, limit: int = 50) -> list[Issue]`——**M13 pilot 登记跨模块调用契约**。现有 DAO 已支持 `node_id` 过滤（见 §9 L372），Service 层 pass-through；M13 需求分析上下文聚合 `list_by_project(db, pid, node_id=N, limit=20)` 只取该 node 关联 issues 做 AI prompt context；本方法不写 activity_log、不开事务。**无代码改动，仅补登记**。
+
 - `batch_create_in_transaction(db: Session, issues: list[IssueCreateData], project_id: UUID) -> list[Issue]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 issue 写独立 `create` activity_log 事件（R10-1）
 - `orphan_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 节点删除时调用；将该 node 下所有 issues 的 node_id 设为 NULL（游离化，与 FK `ON DELETE SET NULL` 语义一致——**issue 不被删除只变游离**）；接受外部 db session；每条受影响 issue 写独立 `orphan` activity_log 事件（R10-1）；返回受影响记录数
   > **命名说明**（batch3 基线补丁决策 4）：不沿用 M04/M06 的 `delete_by_node_id` 统一命名，改用 `orphan_by_node_id` 以对齐真实行为（SET NULL 而非 DELETE），避免调用方误以为 issue 被真删而遗漏后续处理

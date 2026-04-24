@@ -168,6 +168,8 @@ class LLMProvider:
 - **交互式 AI 功能**（F13 / F12 / F14）用 `stream()`——用户盯着屏幕等，避免空白焦虑
 - **后台任务**（F17 导入 worker）用 `generate()`——用户不在等，不需要流式复杂度
 
+**aclose 协议约定**（M13 pilot 2026-04-25 补充）：`stream()` 返回的 `AsyncIterator[str]` 必须支持 PEP 533 的 `aclose()` 协议，用于客户端断开时释放底层 HTTP / SDK 连接。真实 Provider（anthropic ≥0.x / openai ≥1.x / Kimi SDK）的 streaming 对象原生满足；Mock / 测试 Provider 必须实现可断言的 `aclose_called` 标志（见 M13 tests.md S4）。消费方（如 M13 Service 层）在检测 `request.is_disconnected()` 后**必须** `await stream.aclose()`，不得依赖 GC 隐式释放。
+
 #### 4.2 失败重试 — 3 次指数退避 1s/2s/4s
 
 ```python
