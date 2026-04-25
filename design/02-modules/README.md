@@ -26,7 +26,7 @@
 | **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
 | **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
-| **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **draft（2026-04-25 brainstorming + 三轮 audit + fix v1 完成，待 verify）** | [`M18-semantic-search/`](./M18-semantic-search/) |
+| **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **accepted（2026-04-26，三轮 audit + fix v1/v2/v3/v4/v4.1/v4.2/v4.3 + verify v1-v4.2 共 6 轮独立审）** | [`M18-semantic-search/`](./M18-semantic-search/) |
 | 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：
@@ -35,7 +35,7 @@
 - **流式 SSE 模块** → `M13-requirement-analysis/00-design.md`（§12A 流式子模板定稿；**仅服务 🌊 场景**，不跨形态复用）
 - **Auth 横切源头模块** → `M01-user-account/00-design.md` + [`ADR-004`](../adr/ADR-004-auth-cross-cutting.md)（"实现最简 + schema 都支持"模式 / 独立审计表 R10-2 例外）
 - **后台 fire-and-forget 模块** → `M16-ai-snapshot/00-design.md`（§12B 子模板定稿）
-- **embedding/索引持久化模块** → `M18-semantic-search/00-design.md`（§12D 子模板 draft；双触发链 + 失败容忍 + 模型版本回填 + 跨模读双路豁免）
+- **embedding/索引持久化模块** → `M18-semantic-search/00-design.md`（§12D 子模板 **accepted 2026-04-26**；双触发链 + 失败容忍 + 模型版本回填 + 跨模读双路豁免）
 
 **§12D 半年回看触发器**（2026-10-25）：M18 accept 后半年评估——若 §12D 仅 M18 一个实例使用、且字段⑥/⑦与 §12C 高度重合，**降级为 §12C 扩展段落 + 删 §12D 行**（防模板膨胀）。**记录方式**：见本 README 末尾「设计回看触发器」清单（手动审查，不挂自动 cron）。
 
@@ -106,7 +106,7 @@ complexity: low                         # 必填：low / medium / high（来自 
 | **流式（SSE）** | 🌊 | §12A 流式 schema | **定稿（M13 accepted 2026-04-25）** | 7 字段：①端点路径 ②SSE event 类型 ③data payload schema ④鉴权路径（ADR-004 P1）⑤超时策略 ⑥取消机制（AbortController + is_disconnected + aclose）⑦断线重连（不支持续传）**仅服务 🌊 场景，字段语义不跨 3 形态通用** |
 | **后台异步**（fire-and-forget）| 🪷 | §12B 后台任务 schema | **定稿（M16 accepted 2026-04-25）** | 7 字段：①任务表 schema（核心字段）②任务状态机 ③创建+查询 endpoint 风格（创建嵌套+查询独立）④鉴权路径（ADR-004 P1+P2 + 独立 GET 反查）⑤超时策略（asyncio.timeout 600s）⑥失败/重试策略（不重试+手动重发）⑦清理+zombie 兜底（CAS UPDATE，cron 频率 ≤ 阈值/2）**字段位次与 §12A/§12C 不语义对等，照抄须按 emoji 选模板**。详见 [M16-ai-snapshot/00-design.md §12](./M16-ai-snapshot/00-design.md) |
 | **Queue 异步**（持久化 + 重试）| 🗂️ | §12C **Queue payload schema**（M17 范式）| **M17** | TaskPayload 基类（强制 user_id + project_id）+ 任务清单 + 重试策略 + 死信处理 |
-| **embedding/索引持久化**（派生数据 + 双触发链）| 🗂️ (embedding 子类) | §12D **embedding 持久化 schema**（M18 范式）| **draft（M18 brainstorming 2026-04-25）** | 7 字段：①双触发链（增量+backfill）+ Payload schema ②embeddings 表 + model_version + content_hash ③跨模读双路豁免（规则 1 + 规则 4）④鉴权路径（无用户端 endpoint，admin only）⑤超时（单 task 60s + batch 15min + query 2s）⑥失败容忍 + monitor cron（**不通知用户**——核心区别于 §12C 死信通知）⑦模型升级回填路径 + zombie + 90 天清理。**字段位次与 §12C 不语义对等**——核心区别：双触发链 / 失败容忍 / 必有 model_version 回填 / 跨模读双路。详见 [M18-semantic-search/00-design.md §12](./M18-semantic-search/00-design.md) |
+| **embedding/索引持久化**（派生数据 + 双触发链）| 🗂️ (embedding 子类) | §12D **embedding 持久化 schema**（M18 范式）| **accepted（M18 2026-04-26）** | 7 字段：①双触发链（增量+backfill）+ Payload schema ②embeddings 表 7 字段 PK (project_id, modality, target_type, target_id, provider, model_name, model_version) + 异维列 (embedding_512/1536/3072) + content_hash ③跨模读双路豁免（规则 1 + 规则 4）④鉴权路径（无用户端 endpoint，admin only）⑤超时（单 task 60s + batch 15min + query 1s）⑥失败容忍 + monitor cron（**不通知用户**——核心区别于 §12C 死信通知）⑦模型升级三段回填路径 + zombie + 8 cron 矩阵 + 90 天清理。**字段位次与 §12C 不语义对等**——核心区别：双触发链 / 失败容忍 / 必有 (provider, model_name, model_version) 三段回填 / 跨模读双路 / dim 锁定 {512,1536,3072} / mock provider 必 mock-* 前缀。详见 [M18-semantic-search/00-design.md §12](./M18-semantic-search/00-design.md) |
 
 **M17 §12C 范式核心**（所有 Queue 模块照抄）：
 1. 定义模块 `TaskPayload` 基类继承 `api/queue/base.py:TaskPayload`（强制 user_id + project_id）
@@ -339,4 +339,6 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 | 触发日期 | 触发对象 | 评估什么 | 决策路径 |
 |---------|---------|---------|---------|
 | **2026-10-25** | §12D embedding 持久化子模板 | 半年内是否仅 M18 一个实例使用？字段⑥/⑦ 是否与 §12C 高度重合？ | 是 → 降级为 §12C 扩展段落 + 删 §12D 行（防模板膨胀）<br>否 → 保留 §12D，记录新增使用模块 |
+| **2026-10-25** | M18 §3 schema 7 字段 PK + 异维列拆分 | embeddings 行数是否 > 50万？ivfflat lists=100 在 dim_3072 列召回质量是否退化？mock provider mock-* 前缀约束在 Phase 2 是否引发开发阻力？ | 行数超 → §15 演进锚点 R3 E3 触发（按月 partition / lists 调 sqrt(N)~700）<br>mock 阻力 → 评估改 sanity check warning 而非 ConfigError |
+| **2027-04-26** | M18 search_evaluation_log | 1 年累计采样数据是否够做离线分析？RRF k=60 是否需要按真实数据调？query embedding cache 命中率是否符合预期？ | 数据够 → 触发离线 metric 分析 + RRF 参数调优<br>数据不足 → 评估提高采样率或废弃 search_eval 表 |
 | _（未来 trigger 加在这里）_ | | | |
