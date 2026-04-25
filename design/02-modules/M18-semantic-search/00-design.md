@@ -283,7 +283,7 @@ class EmbeddingTargetType(str, Enum):
 |---------|------|---------|
 | 启动期一次性选定（CY 部署时改 env `EMBEDDING_PROVIDER`）| 启动 EmbeddingProvider 抽象层按 env 加载 | 无 |
 | 运行期切 provider（**同维度**，如 OpenAI v3-small → 同维度 bge）| 改 env + 重启 + 触发 model_upgrade 回填 cron 写新 provider 行 | 重启窗口（秒级）+ 回填期间新旧并存 |
-| 运行期切 provider（**不同维度**，如 OpenAI 1536 → bge 384）| **fix v2 异维列后支持但仍需回填**：① 改 env（dim 自动 detect）；② 重启；③ 跑 model_upgrade 写新 provider/dim 行到对应列（如 embedding_512）；④ 旧 1536 列行 30 天宽限保留以防回滚 | 重启 + 回填期（无停服，新旧并存于不同列） |
+| 运行期切 provider（**不同维度**，如 OpenAI 1536 → bge-small-zh 512）| **fix v2 异维列后支持但仍需回填**（fix v4 verify R4：示例 dim 改 512，与新 CHECK `dim IN (512,1536,3072)` 对齐；切到 768/1024 等需先走 ADR + Alembic 加列）：① 改 env（dim 自动 detect）；② 重启；③ 跑 model_upgrade 写新 provider/dim 行到对应列（如 embedding_512）；④ 旧 1536 列行 30 天宽限保留以防回滚 | 重启 + 回填期（无停服，新旧并存于不同列） |
 | 双 provider 并行（同时跑 OpenAI + bge 不同 modality 或 A/B 试验）| **本期 schema 物理支持**（多 provider 行共存于不同列），但 §6 EmbeddingProvider 抽象只允许单 instance；演进退路见 R3 E6（升级 ProviderRegistry） | — |
 
 **fix v2 改进**：原 (3) "不同维度切换 = 数据丢失"被异维列拆分消除——切到不同维度时新行写新列，旧行保留 30 天回滚。代价：同一逻辑实体在两个 provider/dim 下各占一行。
@@ -998,11 +998,14 @@ class Embedding:
 ```python
 # api/services/embedding.py
 class EmbeddingBackfillService:
-    def detect_and_resume_pending_backfill(self, db: Session):
-        """fix v3 决策 2=A：真做 re-enqueue（verify v2 抓出 fix v2 仅 logger.info 是名实不符）
-        触发：启动钩子 + 每小时 backfill_recovery_cron
-        语义：检测 status=pending 且 enqueued_by=backfill 且 enqueued > 1h 的残留 task → 真 enqueue 到 arq
-        防重复：依赖 EmbeddingTask.idempotency_key（§3）+ worker 端 ON CONFLICT DO NOTHING；同 task_id 重复 enqueue 仅多一次 worker 取出+幂等返回，无业务副作用
+    async def detect_and_resume_pending_backfill(self, db: Session, arq_pool: ArqRedis) -> int:
+        """fix v4 verify R1 修复（async def + caller 协程化）：消除 fix v3 在 sync 函数里 await 的 SyntaxError
+        触发：FastAPI lifespan startup 钩子（async context）+ arq cron 每小时一次（与 zombie/monitor 等 7 cron 同 arq worker 进程托管）
+        语义：检测 status=pending 且 enqueued_by=backfill 且 enqueued > 1h 的残留 task → 真 enqueue 回 arq
+        防重复（fix v4 verify R6 修：澄清两层去重分工）：
+          - **入队层**：arq `_job_id=f"backfill_recovery:{task.id}"` 1 小时内同 id 拒绝重复入队（cron 与 startup 并发触发的天然去重）
+          - **处理层**：worker 消费时按 `EmbeddingTask.idempotency_key`（§3）做 ON CONFLICT DO NOTHING 兜底（防 _job_id 过期窗口外的并发）
+          两层是串联保险，不冗余；优先看入队层挡住的常态，处理层只在跨小时窗口生效
         """
         stale = db.query(EmbeddingTask).filter(
             EmbeddingTask.status == "pending",
@@ -1021,7 +1024,7 @@ class EmbeddingBackfillService:
                     project_id=str(task.project_id),
                     target_type=task.target_type,
                     target_id=str(task.target_id),
-                    _job_id=f"backfill_recovery:{task.id}",   # arq 自带 job_id 去重，1 小时内同 id 不会重复入队
+                    _job_id=f"backfill_recovery:{task.id}",
                 )
                 resumed += 1
             except Exception as e:

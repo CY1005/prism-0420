@@ -104,14 +104,14 @@ related_design: ./00-design.md
 
 ### tc_M18_golden_05_模型升级回填路径（Q3=A + §12D ⑦）
 
-**前提**：embeddings 表 5 万行（model_version=`text-embedding-3-small`）；env 改为 `DEFAULT_EMBEDDING_MODEL=text-embedding-4`；服务重启
+**前提**：embeddings 表 5 万行（provider=`openai`, model_version=`text-embedding-3-small`, dim=1536, embedding_1536 列写入）；env 改为 `EMBEDDING_PROVIDER=openai` + `EMBEDDING_MODEL_VERSION=text-embedding-3-large`（dim=3072）；服务重启（fix v4 verify R5：env 名同步 §11 表，删除残留的 `DEFAULT_EMBEDDING_MODEL`）
 
 **步骤**：
 1. platform_admin 调 `POST /api/admin/embedding/model-upgrade`
 2. 端点扫所有 `embeddings WHERE model_version != current_model`（5 万行）
 3. 按 project 分批 enqueue（enqueued_by="model_upgrade"）
-4. worker 用新 model 算 + 写入新行（PK 含 model_version 物理共存）
-5. 回填期间 search 路由按 `current_model=text-embedding-4` filter，旧 embedding 不参与召回但保留
+4. worker 用新 model 算 + 写入新行（6 字段 PK 含 (provider, model_version) 物理共存；新行 dim=3072 写入 embedding_3072 列，旧 embedding_1536 列保留）
+5. 回填期间 search 路由按 `current=(provider=openai, model_version=text-embedding-3-large)` filter + dim 路由查 embedding_3072 列，旧 embedding 不参与召回但保留
 6. 30 天后 cron 扫 `model_version != current AND created_at < NOW-30d` → 物理删除旧行
 
 **期望**：
@@ -209,17 +209,18 @@ related_design: ./00-design.md
 
 ---
 
-### tc_M18_boundary_07_embedding 维度不匹配（切 provider 后未迁移）
+### tc_M18_boundary_07_embedding 维度不在支持档位（切到不在 {512,1536,3072} 的 dim）
 
-**前提**：env 切 bge（512 维）但 Alembic 未跑（embeddings.embedding 仍 1536 维）
+**前提**（fix v4 verify R5：与 fix v2 异维列 + fix v3 dim CHECK 收紧 `dim IN (512,1536,3072)` 同步）：env 切 bge-base-zh（768 维），CHECK `ck_embeddings_dim_range` 直接拒绝写入；不存在"列已有 1536 写 768"的运行时维度比对失败，而是 schema 层硬拒
 
-**步骤**：worker 跑增量 task 写入
+**步骤**：worker 跑增量 task → INSERT 触发 CHECK 约束失败
 
 **期望**：
-- pgvector 报错 → AppError EmbeddingProviderFailedError
-- 写 embedding_failures `error_code=EMBEDDING_PROVIDER_FAILED + error_message="vector dimension mismatch"`
-- 重试 3 次仍失败 → dead_letter
-- monitor cron 阈值告警 CY
+- DB 抛 IntegrityError (CHECK violation: ck_embeddings_dim_range)
+- 包装为 AppError EmbeddingProviderFailedError
+- 写 embedding_failures `error_code=EMBEDDING_DIM_NOT_SUPPORTED + error_message="dim=768 not in supported set {512,1536,3072}; require ADR + Alembic migration"`
+- 重试 3 次仍失败 → dead_letter（同 dim 永远过不去）
+- monitor cron 阈值告警 CY → CY 触发 §3 Alembic breaking 迁移流程加 embedding_768 列
 
 ---
 
@@ -260,7 +261,7 @@ related_design: ./00-design.md
 **前提**：debounce 已过期；2 个 worker 同时拿到同 (target_id) 的 task（罕见但可能）
 
 **步骤**：
-1. worker_A 入口：`pg_advisory_xact_lock(hashtext(target_id))` → 成功
+1. worker_A 入口：`pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(project_id::text || '/' || target_id::text))` → 成功
 2. worker_B 入口：同 lock → 等待
 3. worker_A 调 OpenAI + 写 embedding + commit → lock 释放
 4. worker_B 拿到 lock → SELECT 已有 embedding → content_hash 比对
@@ -280,7 +281,7 @@ related_design: ./00-design.md
 **步骤**：
 1. backfill enqueue 100 task
 2. 增量 enqueue 1 task（同 target_id 在 backfill 列表中）
-3. 任一 worker 先跑：advisory_xact_lock 互斥
+3. 任一 worker 先跑：advisory_xact_lock 双参 (namespace + project/target hash) 互斥
 4. 后跑的 worker：content_hash 比对 → skip
 
 **期望**：
@@ -544,7 +545,7 @@ related_design: ./00-design.md
 
 ### tc_M18_error_07_切到不存在的 model（model_upgrade 验证）
 
-**前提**：env 改 `DEFAULT_EMBEDDING_MODEL=text-embedding-foo`（不存在）
+**前提**：env 改 `EMBEDDING_MODEL_VERSION=text-embedding-foo`（不存在）（fix v4 verify R5：env 名同步 §11 表）
 
 **步骤**：
 1. 服务启动时 EmbeddingProvider 抽象层尝试初始化失败 → 启动报错
@@ -651,7 +652,7 @@ related_design: ./00-design.md
 
 | §0-15 章节 | 覆盖 case |
 |-----------|----------|
-| §3 数据模型（4 字段 PK 含 model_version）| golden_05 模型升级共存 / boundary_07 维度不匹配 |
+| §3 数据模型（6 字段 PK：project_id + modality + target_type + target_id + provider + model_version；fix v2 异维列 embedding_512/1536/3072 拆分）| golden_05 模型升级共存 / boundary_07 维度不匹配 |
 | §4 状态机 5 状态 | error_01 死信 / error_03 zombie / error_04 noop succeeded / error_05 delete 失败 |
 | §5 4 维 | tenant_01 Tenant / concurrent_02 并发 advisory lock / golden_02 异步 backfill |
 | §7 endpoints 4 个 | golden_03 search / golden_02 backfill / golden_05 model-upgrade / 隐式 stats |
