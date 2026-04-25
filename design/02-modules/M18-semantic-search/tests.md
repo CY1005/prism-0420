@@ -104,15 +104,15 @@ related_design: ./00-design.md
 
 ### tc_M18_golden_05_模型升级回填路径（Q3=A + §12D ⑦）
 
-**前提**：embeddings 表 5 万行（provider=`openai`, model_version=`text-embedding-3-small`, dim=1536, embedding_1536 列写入）；env 改为 `EMBEDDING_PROVIDER=openai` + `EMBEDDING_MODEL_VERSION=text-embedding-3-large`（dim=3072）；服务重启（fix v4 verify R5：env 名同步 §11 表，删除残留的 `DEFAULT_EMBEDDING_MODEL`）
+**前提**：embeddings 表 5 万行（provider=`openai`, model_name=`text-embedding-3-small`, model_version=`v1`, dim=1536, embedding_1536 列写入）；env 改为 `EMBEDDING_PROVIDER=openai` + `EMBEDDING_MODEL_NAME=text-embedding-3-large` + `EMBEDDING_MODEL_VERSION=v1`（dim=3072）；服务重启（fix v4.1 R5'=B：env 三段拆 + 同步 §11 表，model_name 是 provider-level 模型名，model_version 是 product-level 业务版本号）
 
 **步骤**：
 1. platform_admin 调 `POST /api/admin/embedding/model-upgrade`
-2. 端点扫所有 `embeddings WHERE model_version != current_model`（5 万行）
+2. 端点扫所有 `embeddings WHERE (provider, model_name, model_version) != current_triple`（5 万行）
 3. 按 project 分批 enqueue（enqueued_by="model_upgrade"）
-4. worker 用新 model 算 + 写入新行（6 字段 PK 含 (provider, model_version) 物理共存；新行 dim=3072 写入 embedding_3072 列，旧 embedding_1536 列保留）
-5. 回填期间 search 路由按 `current=(provider=openai, model_version=text-embedding-3-large)` filter + dim 路由查 embedding_3072 列，旧 embedding 不参与召回但保留
-6. 30 天后 cron 扫 `model_version != current AND created_at < NOW-30d` → 物理删除旧行
+4. worker 用新 model 算 + 写入新行（7 字段 PK 含 (provider, model_name, model_version) 物理共存；新行 dim=3072 写入 embedding_3072 列，旧 embedding_1536 列保留）
+5. 回填期间 search 路由按 `current=(provider=openai, model_name=text-embedding-3-large, model_version=v1)` filter + dim 路由查 embedding_3072 列，旧 embedding 不参与召回但保留
+6. 30 天后 cron 扫 `(provider, model_name, model_version) != current_triple AND created_at < NOW-30d` → 物理删除旧行
 
 **期望**：
 - 回填中 embeddings 表行数从 5 万 → 10 万（新旧共存）
@@ -631,12 +631,12 @@ related_design: ./00-design.md
 
 ### tc_M18_provider_switch_01_mock 切换后已有 OpenAI embedding 处理（audit M8 #4）
 
-**前提**：embeddings 表已有 5000 行 `provider='openai', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock`
+**前提**：embeddings 表已有 5000 行 `provider='openai', model_name='text-embedding-3-small', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock`（fix v4.1 R5'=B 同步）
 
 **步骤**：
 1. 服务重启（部署期一次性切 provider，audit C3=C 决策）
 2. M6 启动 sanity check：`EmbeddingService._validate_current_model_on_startup`
-3. 检测 current=`('mock', 'v1')` 不在 `embeddings` 已有 distinct (provider, model_version) 集合中
+3. 检测 current=`('mock', 'mock-default', 'v1')` 不在 `embeddings` 已有 distinct (provider, model_name, model_version) 集合中
 4. logger.warning + 自动 fallback `_effective_model_for_search = ('openai', 'v1')`（latest）
 5. CY 收到 warning 决定：(a) 触发 `model-upgrade` 端点回填 mock embedding / (b) 接受语义路径暂时用 OpenAI 已有 embedding
 
@@ -652,7 +652,7 @@ related_design: ./00-design.md
 
 | §0-15 章节 | 覆盖 case |
 |-----------|----------|
-| §3 数据模型（6 字段 PK：project_id + modality + target_type + target_id + provider + model_version；fix v2 异维列 embedding_512/1536/3072 拆分）| golden_05 模型升级共存 / boundary_07 维度不匹配 |
+| §3 数据模型（7 字段 PK：project_id + modality + target_type + target_id + provider + model_name + model_version；fix v2 异维列 embedding_512/1536/3072 拆分；fix v4.1 R5'=B 拆 model_name + model_version 两层语义）| golden_05 模型升级共存 / boundary_07 维度不匹配 |
 | §4 状态机 5 状态 | error_01 死信 / error_03 zombie / error_04 noop succeeded / error_05 delete 失败 |
 | §5 4 维 | tenant_01 Tenant / concurrent_02 并发 advisory lock / golden_02 异步 backfill |
 | §7 endpoints 4 个 | golden_03 search / golden_02 backfill / golden_05 model-upgrade / 隐式 stats |

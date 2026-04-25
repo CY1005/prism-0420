@@ -161,12 +161,13 @@ from pgvector.sqlalchemy import Vector
 class Embedding(Base, TimestampMixin):
     __tablename__ = "embeddings"
 
-    # 6 字段复合主键（audit B4 修复：加 modality + provider 字段拆分 model_version）
+    # 7 字段复合主键（fix v4.1 verify R5'=B 拆分修复：拆 model_name 与 model_version 两层语义）
     # 决策来源：
     #   - Q5=B project_id 冗余 + Q3=A 多版本共存
     #   - audit B4 R3 升级：缺 modality/dim/provider 是结构性死局（图片/音频/双 provider 演进）
     #   - audit C3=C 部署期固定 provider，运行时不切（迁移=重大运维事件）
-    # 字符串约定：provider/model_name/version 三段式（如 openai/text-embedding-3-small/v1）
+    #   - fix v4.1 R5'=B：原 model_version 字段过载（既存 model 名又存业务版本）→ 拆为 schema-level dim / provider-level model_name / product-level model_version 三层独立
+    # 字符串示例：(provider='openai', model_name='text-embedding-3-small', model_version='v1')
     project_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -176,7 +177,8 @@ class Embedding(Base, TimestampMixin):
     target_type: Mapped[str] = mapped_column(Text, primary_key=True)
     target_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     provider: Mapped[str] = mapped_column(VARCHAR(32), primary_key=True)   # ★ B4 新增（如 'openai' / 'bge' / 'mock'）
-    model_version: Mapped[str] = mapped_column(Text, primary_key=True)     # 业务版本号（如 'v1'）
+    model_name: Mapped[str] = mapped_column(Text, primary_key=True)        # ★ fix v4.1 R5'=B 新增 provider-level 模型名（如 'text-embedding-3-small' / 'text-embedding-3-large'）；同 provider 下区分不同 model
+    model_version: Mapped[str] = mapped_column(Text, primary_key=True)     # product-level 业务版本号（如 'v1' / 'v2'）；同 model 多 v1/v2 调参时区分
 
     # 向量维度显式记录（fix v3 决策 1=D：M18 v1 仅支持 {512, 1536, 3072} 三档；新 dim 走 ADR 升级 + 加列）
     dim: Mapped[int] = mapped_column(nullable=False)         # 512 / 1536 / 3072
@@ -241,7 +243,7 @@ class Embedding(Base, TimestampMixin):
             postgresql_where=text("embedding_3072 IS NOT NULL"),
         ),
         # project filter 索引（Q5=B 选型核心收益）
-        Index("ix_embeddings_project_provider_model", "project_id", "provider", "model_version"),
+        Index("ix_embeddings_project_provider_model", "project_id", "provider", "model_name", "model_version"),
     )
 ```
 
@@ -267,7 +269,7 @@ class EmbeddingTargetType(str, Enum):
 ```
 
 **关键设计点**：
-- **6 字段复合主键** (project_id, modality, target_type, target_id, provider, model_version)
+- **7 字段复合主键** (project_id, modality, target_type, target_id, provider, model_name, model_version)（fix v4.1 R5'=B 拆 model_name + model_version 两层语义）
 - **fix v2 决策 1=B：异维列拆分**（embedding_512 / embedding_1536 / embedding_3072 三 nullable 列 + dim 路由）—— verify 抓出 fix v1 的 dim 字段死配问题，本期真做物理拆分消除"结构性死局"
 - **维度区段而非 provider 拆列**：避免新 provider 入场时再加列；M18 v1 锁定 {512, 1536, 3072} 三档（fix v3 决策 1=D：CHECK 与 dim_range 完全对齐，消除 768/1024 中间维度的"物理 INSERT 不进表"死局；新维度走 ADR 升级 + Alembic 加列 + 同步两个 CHECK）
 - **CHECK 约束保证恰好一列非 NULL**：dim 字段决定哪列写入，DB 层强制一致性
@@ -413,13 +415,13 @@ class SearchEvaluationLog(Base, TimestampMixin):
 | 受影响模块数 | 1（M18 自身）—— project_id 仅 M18 用，业务表不依赖 |
 | 删表数 | 0（只改列） |
 
-### 候选 B 改回成本块 #2（R3-4 audit m5：PK 含 model_version 改回方案）
+### 候选 B 改回成本块 #2（R3-4 audit m5：PK 含 (model_name, model_version) 改回方案）
 
-如果未来证实 Q3=A 选错（多版本共存的 600MB/300MB-per-version 占用在大规模下不可接受），改回 PK 不含 model_version（覆盖式更新，放弃回滚能力）的成本：
+如果未来证实 Q3=A 选错（多版本共存的 600MB/300MB-per-version 占用在大规模下不可接受），改回 PK 不含 (model_name, model_version)（覆盖式更新，放弃回滚能力）的成本：
 
 | 维度 | 成本 |
 |------|------|
-| Alembic 迁移步数 | 4 步（清理非 current_model 行 / 移除 model_version PK / 改 model_version 为普通列 / 重建索引）|
+| Alembic 迁移步数 | 5 步（清理非 current_model 行 / 移除 model_name PK / 移除 model_version PK / 改两列为普通列 / 重建索引；fix v4.1 R5'=B 拆分后从原 4 步增 1 步）|
 | 数据迁移不可逆性 | 高——清理旧版本 embedding 不可恢复，**回滚能力永久丢失** |
 | 受影响模块数 | 1（M18 自身）+ §6 model_upgrade 端点改语义（不再有"渐进回填"，直接覆盖）|
 | 删表数 | 0（只改列+索引） |
@@ -451,12 +453,12 @@ stateDiagram-v2
 
 ### embedding 行级状态（隐式）
 
-`embeddings` 表自身**无 status 字段**——存在性 + model_version 即为状态：
+`embeddings` 表自身**无 status 字段**——存在性 + (model_name, model_version) 即为状态（fix v4.1 R5'=B：从单 model_version 扩为 (model_name, model_version) 二元组判定）：
 - 不存在 → 未算 / 失败 / 删除
-- 存在 + model_version=current → 可参与召回
-- 存在 + model_version!=current → 旧版本（回填中），不参与召回但保留以防回滚
+- 存在 + (model_name, model_version)=current → 可参与召回
+- 存在 + (model_name, model_version)!=current → 旧版本（回填中），不参与召回但保留以防回滚
 
-**回滚场景**：模型升级后发现新 model 召回质量下降 → CY 改 env `DEFAULT_EMBEDDING_MODEL` 回旧 model + 重启 → 旧 embedding 立即恢复参与召回（无需重算）
+**回滚场景**：模型升级后发现新 model 召回质量下降 → CY 改 env `EMBEDDING_MODEL_NAME` 回旧 model（如需要也可同步改 `EMBEDDING_MODEL_VERSION`）+ 重启 → 旧 embedding 立即恢复参与召回（无需重算）
 
 ---
 
@@ -478,7 +480,7 @@ stateDiagram-v2
 | 1 | activity_log | ❌ 不写——search 高频 / embedding 派生（CY ack: Q7=C，写 embedding_failures 自有表） |
 | 2 | 乐观锁 version | ❌ 不需要——embedding 行覆盖式更新，不存在并发改同一行的"协作场景"（worker 互斥用 advisory_xact_lock） |
 | 3 | Queue payload tenant | ✅ §12D Payload 强制带 user_id + project_id（继承 TaskPayload 基类）|
-| 4 | idempotency_key | ✅ enqueue 阶段 = `embedding:debounce:{project_id}:{target_type}:{target_id}`（Redis SET TTL 60s）；worker 阶段 = (project_id, target_type, target_id, model_version, content_hash) 比对 |
+| 4 | idempotency_key | ✅ enqueue 阶段 = `embedding:debounce:{project_id}:{target_type}:{target_id}`（Redis SET TTL 60s）；worker 阶段 = (project_id, target_type, target_id, provider, model_name, model_version, content_hash) 比对（fix v4.1 R5'=B：加 model_name） |
 | 5 | DAO tenant 过滤 | 三类查询（见 §9）：搜索时 project_id IN (...)；增量 worker 单 task project_id；backfill 按 project 分批 |
 
 ### 状态转换竞态分析（R5-2）
@@ -487,7 +489,7 @@ stateDiagram-v2
 |---------|---------|
 | **同 (project_id, target_type, target_id) 两个 task 并发 worker 跑**（debounce 过期时） | worker 入口 `pg_advisory_xact_lock(hashtext(target_id))` —— 一个 commit 后另一个查 content_hash 跳过 |
 | **enqueue 时 task 已 pending（用户连改）** | Redis SET 标记 `embedding:debounce:{...}` TTL 60s，存在则 enqueue 跳过；过期后允许新 task（防 worker 永不跑被卡死） |
-| **worker 跑到一半 model_version 被 env 改了**（模型升级期间） | worker 入口读一次 `current_model_version`，全程用这个；commit 时按这个版本写——若 env 又改了，下次 backfill cron 会再触发回填 |
+| **worker 跑到一半 (model_name, model_version) 被 env 改了**（模型升级期间） | worker 入口读一次 `(current_model_name, current_model_version)` 二元组锁定，全程用这个；commit 时按这个写——若 env 又改了，下次 backfill cron 会再触发回填 |
 | **embedding 写入 commit 后业务表 target_id 被删** | 业务表删除 CASCADE 通过 ondelete='CASCADE' 删 embeddings 行（embeddings.project_id FK→projects + 业务表 FK 通过软关联，不在 DB 层强制——见 §9 删除策略）|
 | **backfill cron 与增量 worker 并发** | backfill 只 enqueue 不直写；entry advisory_xact_lock 互斥 |
 
@@ -505,7 +507,10 @@ stateDiagram-v2
 | **Service** | `api/services/embedding.py` | `EmbeddingService.enqueue / get_or_compute_embedding / embed_query / batch_backfill / enqueue_delete` —— **fix v2 决策 1=B**：write/read 操作内部按 (provider, dim) 路由到 embedding_512/1536/3072 列；search 时按 current provider 的 dim 选目标列 |
 | **Service** | `api/services/embedding_provider.py` | `EmbeddingProvider` 基类 + OpenAI / bge / Mock 实现（仿 ADR-001 §4 LLM provider 抽象） |
 | **Queue Worker** | `api/queue/embedding_tasks.py` | `embed_single` task —— 入口校验 payload + advisory_xact_lock + content_hash 比对 + Provider 调用 + 写 embeddings or embedding_failures |
-| **Cron** | `api/cron/embedding_backfill.py` | 每日 0 点扫 backfill / 每 5min 扫 zombie / 每小时扫 failures 阈值 |
+| **Cron** | `api/cron/embedding_backfill.py` | 每日 0 点扫 backfill / 每 5min 扫 zombie / 每小时扫 failures 阈值（详见 §15.1 cron 矩阵） |
+| **Cron** | `api/cron/embedding_backfill_recovery.py` | fix v4.1 verify R5' 新增：arq cron 每小时调 `EmbeddingBackfillService.detect_and_resume_pending_backfill(db, arq_pool)` 真 re-enqueue 残留 task |
+| **Lifespan** | `api/main.py` FastAPI lifespan startup | fix v4.1 verify R5' 新增：startup 钩子调一次 `await EmbeddingBackfillService(...).detect_and_resume_pending_backfill(db, arq_pool)` 防 cron 第一次 fire 前丢残留 |
+| **Imports** | `from arq.connections import ArqRedis` | fix v4.1 verify R5' 新增：backfill recovery + cron + worker 三处依赖类型注解 |
 | **DAO** | `api/dao/embedding.py` | `find_by_target / upsert_embedding / find_failures_by_window / find_zombie_tasks` |
 | **DAO** | `api/dao/embedding_backfill.py`（规则 4 豁免） | 只读 import M03/M04/M06/M07 model 跑批量 SELECT，找出"业务表有但 embeddings 表无 / model_version 旧"的 (target_type, target_id) 列表 |
 | **Schema** | `api/schemas/search.py` | `SearchRequest / SearchResult / SearchResponse` Pydantic |
@@ -517,8 +522,8 @@ stateDiagram-v2
 | env 变量 | 默认 | 用途 | audit 来源 |
 |---------|------|------|-----------|
 | `EMBEDDING_PROVIDER` | `openai` | 部署期固定，三选一 `openai` / `bge` / `mock` | C3=C 明文化 |
-| `DEFAULT_EMBEDDING_MODEL` | `text-embedding-3-small` | 当前默认 model name（搜索 filter 用） | Q3=A |
-| `EMBEDDING_MODEL_VERSION` | `v1` | 当前 model 业务版本号 | B4 三段式拆分 |
+| `EMBEDDING_MODEL_NAME` | `text-embedding-3-small` | 当前 provider-level 模型名（搜索 filter 用，写入 embeddings.model_name 字段；fix v4.1 verify R5'：从原 `DEFAULT_EMBEDDING_MODEL` 改名，与 product-level 业务版本号拆分清楚） | Q3=A |
+| `EMBEDDING_MODEL_VERSION` | `v1` | 当前 product-level 业务版本号（同 model 多 v1/v2 调参时用，写入 embeddings.model_version PK 字段；fix v4.1 verify R5'：与 model_name 语义层拆分——schema-level dim / provider-level model_name / product-level version 三层不混） | B4 三段式拆分 |
 | `SEARCH_MODE` | `hybrid` | kill switch 三档 `hybrid` / `keyword_only` / `semantic_only` | **B5 kill switch** |
 | `IVFFLAT_LISTS` | `100` | ivfflat 索引 lists 参数（演进锚点：行数 > 50 万 时调到 sqrt(N) ~ 700） | **M9 演进锚点** |
 | `EMBEDDING_FAILURE_THRESHOLD_ABS` | `500` | 单小时全局绝对失败数告警（**fix v2 verify N3 修复**：从 100 改 500，与 PER_PROJECT 拉开数量级，避免单 project 触发即全局触发的语义重合）| M10 三维 |
@@ -573,7 +578,9 @@ class EmbedSinglePayload(TaskPayload):
     """§12D Queue payload（继承 TaskPayload 基类强制 user_id + project_id）"""
     target_type: EmbeddingTargetType                  # ★ 枚举非 str
     target_id: UUID
-    model_version: str                                # 调度时锁定的 model 版本
+    provider: str                                     # 调度时锁定的 provider（如 'openai'）
+    model_name: str                                   # ★ fix v4.1 R5'=B 新增：调度时锁定的 model_name（如 'text-embedding-3-small'）
+    model_version: str                                # 调度时锁定的业务版本号（如 'v1'）
     enqueued_by: Literal["incremental", "backfill", "model_upgrade"]    # ★ 限定取值
     # 注意：source_text 不放 payload（防大 zip 任务塞爆 Redis）——worker 内调上游 Service 拉取
 ```
@@ -616,7 +623,7 @@ class EmbedSinglePayload(TaskPayload):
 | 查询类型 | DAO 函数 | tenant 过滤模式 | 适用 ADR-003 规则 |
 |---------|---------|---------------|-----------------|
 | **搜索关键词路径** | `SearchService` 调上游 `search_by_keyword(query, project_id, limit)` | 上游负责 project_id filter（M09 已 batch3 沉淀） | **规则 1** 主规则 |
-| **搜索向量路径** | `EmbeddingDAO.vector_search(db, query_vector, project_id, model_version, limit)` | DAO 内 SQL `WHERE project_id = :pid AND model_version = :mv` + ivfflat ORDER BY | M18 自有表，无规则适用 |
+| **搜索向量路径** | `EmbeddingDAO.vector_search(db, query_vector, project_id, provider, model_name, model_version, limit)` | DAO 内 SQL `WHERE project_id = :pid AND provider = :p AND model_name = :mn AND model_version = :mv` + dim 路由 + ivfflat ORDER BY | M18 自有表，无规则适用 |
 | **增量 worker 单条 embedding** | 调上游 `Service.get_for_embedding(target_id, project_id)` | 上游负责 project access | **规则 1** 主规则 |
 | **Backfill 批量扫描** | `EmbeddingBackfillDAO.list_pending_by_project(project_id, limit)` —— 只读 import M03/M04/M06/M07 model 跑 LEFT JOIN embeddings | DAO 内 `WHERE project_id = :pid AND embeddings.id IS NULL` | **规则 4 新增** embedding/索引专用豁免 |
 | **Failure 监控扫描** | `EmbeddingFailureDAO.count_in_window(window_minutes, project_id=None)` | 全局或按 project | M18 自有表 |
@@ -652,14 +659,16 @@ class EmbedSinglePayload(TaskPayload):
 ```python
 # ✅ 规则 4 豁免：backfill DAO 只读 import + LEFT JOIN
 class EmbeddingBackfillDAO:
-    def list_pending_node_ids(self, db: Session, project_id: UUID, model_version: str, limit: int):
-        # 只读 import Node
+    def list_pending_node_ids(self, db: Session, project_id: UUID, provider: str, model_name: str, model_version: str, limit: int):
+        # 只读 import Node；fix v4.1 R5'=B：按 (provider, model_name, model_version) 三段过滤
         return (
             db.query(Node.id, Node.name)
             .outerjoin(
                 Embedding,
                 (Embedding.target_type == "node")
                 & (Embedding.target_id == Node.id)
+                & (Embedding.provider == provider)
+                & (Embedding.model_name == model_name)
                 & (Embedding.model_version == model_version),
             )
             .filter(Node.project_id == project_id)
@@ -712,13 +721,13 @@ class EmbeddingService:
 启动时 `EmbeddingService` 检查：
 ```python
 def _validate_current_model_on_startup(self, db: Session):
-    """audit M6 修复：current_model 不在 embeddings 已有 (provider, model_version) 集合中时
-    启动 warn + 自动 fallback 最近 model_version，防"启动成功但搜索全 miss"。"""
-    current = (settings.EMBEDDING_PROVIDER, settings.EMBEDDING_MODEL_VERSION)
-    existing = db.query(distinct(Embedding.provider, Embedding.model_version)).all()
+    """audit M6 修复 + fix v4.1 R5'=B 同步：current_model 三元组 (provider, model_name, model_version)
+    不在 embeddings 已有集合中时启动 warn + 自动 fallback 最近三元组，防"启动成功但搜索全 miss"。"""
+    current = (settings.EMBEDDING_PROVIDER, settings.EMBEDDING_MODEL_NAME, settings.EMBEDDING_MODEL_VERSION)
+    existing = db.query(distinct(Embedding.provider, Embedding.model_name, Embedding.model_version)).all()
     if existing and current not in existing:
         logger.warning(f"current_model {current} not in embeddings table; falling back to latest")
-        # search 路由临时按 latest model_version filter 直到 backfill 完成
+        # search 路由临时按 latest 三元组 filter 直到 backfill 完成
         self._effective_model_for_search = self._latest_model_in_db(db, existing)
     else:
         self._effective_model_for_search = current
@@ -985,7 +994,7 @@ class Embedding:
 | **orphan cleanup cron**（B1 兜底，fix v3 verify L2 文字修订）| **每周一次（周日 0 点）** | embeddings | 按 `target_type` 分组左外联到对应业务表（node→nodes / dimension_record→dimension_records / competitor→competitors / issue→issues），筛 `business.id IS NULL` 即孤儿 | 孤儿且 `embeddings.created_at < NOW - 30d`（避免误删刚 enqueue 但业务事务未 commit 的窗口）→ DELETE |
 | **model_version cleanup cron** | 每周一次（同 orphan） | embeddings | 模型升级旧版本清理 | `(provider, model_version) != current AND created_at < NOW - 30d` → DELETE |
 | **search_eval cleanup cron** | 每月一次 | search_evaluation_log | 评估日志清理 | sampled_at > 1 年 → DELETE |
-| **backfill recovery cron**（fix v3 决策 2=A 真做 re-enqueue）| **启动时 + 每小时一次** | embedding_tasks | 检测 `status='pending' AND enqueued_by='backfill' AND created_at < NOW - 1h` 的残留 task | 不删，**真调 `arq_pool.enqueue_job` 重新入队**（用 `_job_id=backfill_recovery:{task.id}` 1h 内幂等去重，防止 cron 重复入队风暴）|
+| **backfill recovery**（fix v3 决策 2=A 真做 re-enqueue；fix v4.1 verify R5' 命名澄清：本行涵盖两个触发器——arq cron + FastAPI lifespan startup，统称"recovery 任务"非纯 cron）| **arq cron 每小时一次 + FastAPI startup 钩子调一次** | embedding_tasks | 检测 `status='pending' AND enqueued_by='backfill' AND created_at < NOW - 1h` 的残留 task | 不删，**真调 `await arq_pool.enqueue_job` 重新入队**（用 `_job_id=backfill_recovery:{task.id}` 1h 内幂等去重，防止 cron 与 startup 并发触发的重复入队风暴）|
 
 **为什么不合并**：每个 cron 频率、扫描对象、删除策略不同，合并会失去观测性（CY 排查问题时需知道"是哪个 cron 把数据删了"）。
 
