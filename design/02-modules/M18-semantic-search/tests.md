@@ -32,7 +32,7 @@ related_design: ./00-design.md
 6. worker 拉起 → advisory_xact_lock → 调 `NodeService.get_for_embedding` 拿 "配额管理" → 调 OpenAI embed → upsert embeddings 表
 
 **期望**：
-- embeddings 表新增 1 行 `(project_X, node, node.id, current_model_version)`
+- embeddings 表新增 1 行 PK 7 字段 `(project_X, text, node, node.id, openai, text-embedding-3-small, v1)`（fix v4.2 verify B6 同步：从单 model_version 升 7 字段元组，与 §3 真 PK 对齐）
 - embedding 维度 = 1536（OpenAI default）
 - content_hash 非空
 - embedding_tasks 表新增 1 行 status=succeeded
@@ -74,7 +74,7 @@ related_design: ./00-design.md
 1. CY 搜 query="配额"
 2. M18 search 路由：
    - 关键词路径：`SearchService` 调 `NodeService.search_by_keyword(db, "配额", project_X, limit=20)` → 返回 [node_A]
-   - 语义路径：调 OpenAI embed("配额") → 缓存 miss → ivfflat 召回 + WHERE project_id=project_X AND model_version=current → 返回 [node_A(0.85), node_B(0.62)]（>0.3 阈值）
+   - 语义路径：调 OpenAI embed("配额") → 缓存 miss → ivfflat 召回 + WHERE project_id=project_X AND provider=current AND model_name=current AND model_version=current（fix v4.2 verify B7 同步三段过滤）→ 返回 [node_A(0.85), node_B(0.62)]（>0.3 阈值）
    - RRF 融合（k=60）：node_A score 高（双命中）/ node_B score 低（仅语义）
 
 **期望**：
@@ -290,14 +290,14 @@ related_design: ./00-design.md
 
 ---
 
-### tc_M18_concurrent_04_search 时 embedding 正在重算（model_version 切换瞬间）
+### tc_M18_concurrent_04_search 时 embedding 正在重算（(model_name, model_version) 三元组切换瞬间）
 
-**前提**：env 已切新 model 但 backfill 进行中（5 万旧 + 1 万新已写）
+**前提**：env 已切新 model（`EMBEDDING_MODEL_NAME` 改 + 如需要 `EMBEDDING_MODEL_VERSION` 同改）但 backfill 进行中（5 万旧 + 1 万新已写）（fix v4.2 verify B6：标题 + 步骤升级二元组）
 
 **步骤**：CY 此时搜索
 
 **期望**：
-- search 按 `current_model_version` filter → 只命中 1 万新 embedding
+- search 按 `current_triple = (provider, model_name, model_version)` filter → 只命中 1 万新 embedding
 - 关键词路径仍全量召回
 - 结果可能"语义召回少"但不出错（PRD AC4 精神：不阻塞用户）
 - search_mode 仍 "hybrid"
@@ -629,15 +629,28 @@ related_design: ./00-design.md
 
 ---
 
+### tc_M18_provider_switch_02_mock_prefix mock provider 校验（fix v4.2 R2=A 新增）
+
+**前提**：env 改 `EMBEDDING_PROVIDER=mock` 但 `EMBEDDING_MODEL_NAME=text-embedding-3-small`（漏改成 mock-* 前缀）
+
+**步骤**：服务启动 → `_validate_current_model_on_startup` 被调用
+
+**期望**：
+- 启动失败 ConfigError："mock provider 要求 EMBEDDING_MODEL_NAME 以 'mock-' 前缀..."
+- 服务不进入 ready 状态（FastAPI lifespan startup 抛错 = 进程退出）
+- 防止 OpenAI 模型名挂 mock provider 上的语义自相矛盾持续到 runtime
+
+---
+
 ### tc_M18_provider_switch_01_mock 切换后已有 OpenAI embedding 处理（audit M8 #4）
 
-**前提**：embeddings 表已有 5000 行 `provider='openai', model_name='text-embedding-3-small', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock`（fix v4.1 R5'=B 同步）
+**前提**：embeddings 表已有 5000 行 `provider='openai', model_name='text-embedding-3-small', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock` + `EMBEDDING_MODEL_NAME=mock-default`（fix v4.2 R2=A 强制：mock provider 必须 `mock-*` 前缀，否则 startup ConfigError）
 
 **步骤**：
 1. 服务重启（部署期一次性切 provider，audit C3=C 决策）
 2. M6 启动 sanity check：`EmbeddingService._validate_current_model_on_startup`
 3. 检测 current=`('mock', 'mock-default', 'v1')` 不在 `embeddings` 已有 distinct (provider, model_name, model_version) 集合中
-4. logger.warning + 自动 fallback `_effective_model_for_search = ('openai', 'v1')`（latest）
+4. logger.warning + 自动 fallback `_effective_model_for_search = ('openai', 'text-embedding-3-small', 'v1')`（latest 三元组）
 5. CY 收到 warning 决定：(a) 触发 `model-upgrade` 端点回填 mock embedding / (b) 接受语义路径暂时用 OpenAI 已有 embedding
 
 **期望**：

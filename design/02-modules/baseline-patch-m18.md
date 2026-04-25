@@ -390,11 +390,12 @@ class ActionType(str, Enum):
 
 ```python
 # api/schemas/embedding.py
-class EmbedSinglePayload(TaskPayload):
+class EmbedSinglePayload(TaskPayload):    # fix v4.2 verify O1 同步 R5'=B：加 model_name 字段，对齐 M18 §6 真定义
     target_type: EmbeddingTargetType
     target_id: UUID
     provider: str             # B4 拆分
-    model_version: str
+    model_name: str           # fix v4.2 verify O1 R5'=B：provider-level 模型名
+    model_version: str        # product-level 业务版本号
     enqueued_by: Literal["incremental", "backfill", "model_upgrade", "batch_import"]    # ★ M3 新增
 ```
 
