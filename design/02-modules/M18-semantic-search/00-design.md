@@ -178,15 +178,15 @@ class Embedding(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(VARCHAR(32), primary_key=True)   # ★ B4 新增（如 'openai' / 'bge' / 'mock'）
     model_version: Mapped[str] = mapped_column(Text, primary_key=True)     # 业务版本号（如 'v1'）
 
-    # 向量维度显式记录（B4 + N1 修复：上限放宽到 4096 覆盖 OpenAI 3-large/Cohere）
-    dim: Mapped[int] = mapped_column(nullable=False)         # 384 / 512 / 768 / 1536 / 3072 / ...
+    # 向量维度显式记录（fix v3 决策 1=D：M18 v1 仅支持 {512, 1536, 3072} 三档；新 dim 走 ADR 升级 + 加列）
+    dim: Mapped[int] = mapped_column(nullable=False)         # 512 / 1536 / 3072
 
     # ★ fix v2 决策 1=B 真做异维列：3 列按维度区段路由，恰好填一列其余为 NULL
     # 决策来源：verify 抓出 fix v1 假修——dim 字段加了但 Vector(1536) 未拆 → 无法异维共存
     # 设计：按 "维度区段" 而非 "provider" 拆列，避免新 provider 入场时再加列；维度区段覆盖主流模型生态
-    embedding_512: Mapped[list[float] | None] = mapped_column(Vector(512), nullable=True)        # bge-small / bge-base 等小维度
-    embedding_1536: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)      # OpenAI text-embedding-3-small（主流）
-    embedding_3072: Mapped[list[float] | None] = mapped_column(Vector(3072), nullable=True)      # OpenAI text-embedding-3-large / Cohere embed-v3 等大维度
+    embedding_512: Mapped[list[float] | None] = mapped_column(Vector(512), nullable=True)        # bge-small-zh-v1.5 等 512 维模型
+    embedding_1536: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)      # OpenAI text-embedding-3-small（M18 v1 主流）
+    embedding_3072: Mapped[list[float] | None] = mapped_column(Vector(3072), nullable=True)      # OpenAI text-embedding-3-large（fix v3 verify N9：Cohere embed-v3 实际 1024 维不在本期支持范围）
 
     # 内容哈希（CY ack: Q8=D worker 内兜底）
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
@@ -205,8 +205,9 @@ class Embedding(Base, TimestampMixin):
             "provider IN ('openai', 'bge', 'mock')",
             name="ck_embeddings_provider",
         ),
-        # N1 修复：上限从 1536 放宽到 4096（覆盖未来 4096 维生态）；超 4096 需 §3 加新列
-        CheckConstraint("dim > 0 AND dim <= 4096", name="ck_embeddings_dim_range"),
+        # fix v3 verify 抓出死局修复：dim_range 必须与 dim_column_consistency 完全对齐，否则 768/1024 等中间维度物理上无法 INSERT
+        # 决策 1=D：M18 v1 仅 {512, 1536, 3072}；新增 dim（如 768/1024）走 ADR 升级 + Alembic 加列 + 同步两个 CHECK
+        CheckConstraint("dim IN (512, 1536, 3072)", name="ck_embeddings_dim_range"),
         # 异维列互斥约束：恰好一列非 NULL，且与 dim 字段一致
         CheckConstraint(
             "(dim = 512 AND embedding_512 IS NOT NULL AND embedding_1536 IS NULL AND embedding_3072 IS NULL) "
@@ -268,7 +269,7 @@ class EmbeddingTargetType(str, Enum):
 **关键设计点**：
 - **6 字段复合主键** (project_id, modality, target_type, target_id, provider, model_version)
 - **fix v2 决策 1=B：异维列拆分**（embedding_512 / embedding_1536 / embedding_3072 三 nullable 列 + dim 路由）—— verify 抓出 fix v1 的 dim 字段死配问题，本期真做物理拆分消除"结构性死局"
-- **维度区段而非 provider 拆列**：避免新 provider 入场时再加列；3 列覆盖主流模型生态（bge 384/512 / OpenAI 1536 / OpenAI 3-large 3072 / Cohere 4096——4096 仍需新列）
+- **维度区段而非 provider 拆列**：避免新 provider 入场时再加列；M18 v1 锁定 {512, 1536, 3072} 三档（fix v3 决策 1=D：CHECK 与 dim_range 完全对齐，消除 768/1024 中间维度的"物理 INSERT 不进表"死局；新维度走 ADR 升级 + Alembic 加列 + 同步两个 CHECK）
 - **CHECK 约束保证恰好一列非 NULL**：dim 字段决定哪列写入，DB 层强制一致性
 - **三个独立 ivfflat 索引**：每列各自索引，搜索时按 (provider, dim) 路由到对应索引
 - **content_hash 必填**——同 PK 已有 embedding 时比对 hash 跳过 Provider 调用（Q8 兜底）
@@ -399,6 +400,7 @@ class SearchEvaluationLog(Base, TimestampMixin):
 - 启用扩展：`CREATE EXTENSION IF NOT EXISTS vector;`（与 Prism 一致）
 - 四表一次迁移上线（embeddings + embedding_tasks + embedding_failures + search_evaluation_log）
 - pgvector 不可用时降级处理：FastAPI 启动时探测扩展存在性，不存在则 search 路由全程 keyword-only（PRD AC4）+ embedding 写入直接 noop（不报错只静默 + 写一条 `embedding_failures` 记录 error_code=PGVECTOR_UNAVAILABLE）
+- **Breaking 迁移声明**（fix v3 verify N8）：M18 v1 上线后若新增 dim 维度（如 768/1024），**必须** 同步改两处 CHECK（`ck_embeddings_dim_range` + `ck_embeddings_dim_column_consistency`）+ 加 `embedding_<dim>` 列 + 加对应 ivfflat 索引；改 PK / 改维度 CHECK 是 **不可在线滚动** 的 breaking 迁移（要求停服窗口或 expand-then-contract 两阶段），写 ADR 升级单
 
 ### 候选 B 改回成本块（R3-4：embedding 表加 project_id 列方案）
 
@@ -499,7 +501,7 @@ stateDiagram-v2
 | **Server Action** | `web/src/actions/projectSettings.ts`（M02 baseline-patch 扩） | 编辑 rrf_k / similarity_threshold（管理员 UI） |
 | **Router** | `api/routers/search.py` | `POST /api/projects/{pid}/search` —— Bearer JWT auth + project access check + 调 SearchService |
 | **Router** | `api/routers/embedding_admin.py`（CY 内部用，platform_admin 限定） | `POST /api/admin/embedding/backfill` 手动触发 / `POST /api/admin/embedding/model-upgrade` 触发回填 |
-| **Service** | `api/services/search.py` (M18 接管 M09) | `SearchService.hybrid_search(db, query, project_id, user_id)` —— 入口读 env `SEARCH_MODE`（hybrid / keyword_only / semantic_only，audit B5 kill switch）+ 调上游 search_by_keyword + 调 EmbeddingService.embed_query + RRF 融合 + filter + 超时事件埋点（audit M12） |
+| **Service** | `api/services/search.py` (M18 接管 M09) | `SearchService.hybrid_search(db, query, project_id, user_id)` —— 入口读 env `SEARCH_MODE`（hybrid / keyword_only / semantic_only，audit B5 kill switch）+ 调上游 search_by_keyword + 调 EmbeddingService.embed_query + RRF 融合 + filter + 超时事件埋点（audit M12）。**dim 路由**（fix v3 verify N5）：query embed 返回的 dim 决定查哪一列——512 → `embedding_512 <=> :q`、1536 → `embedding_1536 <=> :q`、3072 → `embedding_3072 <=> :q`，并附 `WHERE embedding_<dim> IS NOT NULL AND provider = :p`，由部署期 EMBEDDING_PROVIDER 决定走哪一档，不在 query path 跨列 union |
 | **Service** | `api/services/embedding.py` | `EmbeddingService.enqueue / get_or_compute_embedding / embed_query / batch_backfill / enqueue_delete` —— **fix v2 决策 1=B**：write/read 操作内部按 (provider, dim) 路由到 embedding_512/1536/3072 列；search 时按 current provider 的 dim 选目标列 |
 | **Service** | `api/services/embedding_provider.py` | `EmbeddingProvider` 基类 + OpenAI / bge / Mock 实现（仿 ADR-001 §4 LLM provider 抽象） |
 | **Queue Worker** | `api/queue/embedding_tasks.py` | `embed_single` task —— 入口校验 payload + advisory_xact_lock + content_hash 比对 + Provider 调用 + 写 embeddings or embedding_failures |
@@ -939,7 +941,7 @@ class Embedding:
 **monitor cron 三维告警**（audit M10 修复 - 替代原 5%/h 单维）：
 - 每小时跑：`SELECT project_id, error_code, COUNT(*) FROM embedding_failures WHERE failed_at > NOW() - INTERVAL '1 hour' GROUP BY project_id, error_code`
 - 三维独立阈值，**任一超过即告警 CY**（不是用户）：
-  - **绝对值阈值** `EMBEDDING_FAILURE_THRESHOLD_ABS=100`：单小时全局失败 ≥ 100 条
+  - **绝对值阈值** `EMBEDDING_FAILURE_THRESHOLD_ABS=500`：单小时全局失败 ≥ 500 条（fix v3 verify N3：与 §11 env 表一致；从 100 改 500 拉开与 PER_PROJECT=100 的数量级，避免单 project 触发即全局触发的语义重合）
   - **百分比阈值** `EMBEDDING_FAILURE_THRESHOLD_PCT=5`：单小时失败率 ≥ 5%
   - **单 project 阈值** `EMBEDDING_FAILURE_THRESHOLD_PER_PROJECT=100`：任一 project 单小时失败 ≥ 100 条
 - 三维设计避免"5%/h 单维死参数"在规模化时失效（CY 单人 5% = 1 条 vs 50 用户 5% = 100+ 条/h 告警风暴的 R3 E2 风险）
@@ -980,10 +982,10 @@ class Embedding:
 | **monitor cron** | 每 1h | embedding_failures | 三维阈值告警（ABS / PCT / PER_PROJECT） | 不删，仅 logger.error + bulletin |
 | **task cleanup cron** | 每日 0 点 | embedding_tasks | 终态行清理 | succeeded > 30 天 / failed+dead_letter > 90 天 → DELETE |
 | **failure cleanup cron** | 每日 0 点 | embedding_failures | 失败记录清理 | failed_at > 90 天 → DELETE |
-| **orphan cleanup cron**（B1 兜底）| **每周一次（周日 0 点）** | embeddings | 扫"target_id 不在对应业务表的行" | 任意 dim 列存在 30 天以上的孤儿 → DELETE |
+| **orphan cleanup cron**（B1 兜底，fix v3 verify L2 文字修订）| **每周一次（周日 0 点）** | embeddings | 按 `target_type` 分组左外联到对应业务表（node→nodes / dimension_record→dimension_records / competitor→competitors / issue→issues），筛 `business.id IS NULL` 即孤儿 | 孤儿且 `embeddings.created_at < NOW - 30d`（避免误删刚 enqueue 但业务事务未 commit 的窗口）→ DELETE |
 | **model_version cleanup cron** | 每周一次（同 orphan） | embeddings | 模型升级旧版本清理 | `(provider, model_version) != current AND created_at < NOW - 30d` → DELETE |
 | **search_eval cleanup cron** | 每月一次 | search_evaluation_log | 评估日志清理 | sampled_at > 1 年 → DELETE |
-| **backfill recovery cron**（fix v2 verify L4 新增）| **启动时 + 每小时一次** | embedding_tasks | 检测 `status='pending' AND enqueued_by='backfill' AND created_at < NOW - 1h` 的残留 task | 不删，仅触发 worker 继续消费（防止 backfill 中断后永远不动）|
+| **backfill recovery cron**（fix v3 决策 2=A 真做 re-enqueue）| **启动时 + 每小时一次** | embedding_tasks | 检测 `status='pending' AND enqueued_by='backfill' AND created_at < NOW - 1h` 的残留 task | 不删，**真调 `arq_pool.enqueue_job` 重新入队**（用 `_job_id=backfill_recovery:{task.id}` 1h 内幂等去重，防止 cron 重复入队风暴）|
 
 **为什么不合并**：每个 cron 频率、扫描对象、删除策略不同，合并会失去观测性（CY 排查问题时需知道"是哪个 cron 把数据删了"）。
 
@@ -997,26 +999,44 @@ class Embedding:
 # api/services/embedding.py
 class EmbeddingBackfillService:
     def detect_and_resume_pending_backfill(self, db: Session):
-        """fix v2 verify L4 修复：启动时 + 每小时 backfill recovery cron 调用
-        检测 status=pending 且 enqueued_by=backfill 且 enqueued > 1h 的残留 task
-        触发 arq worker 继续消费（不重新入队，避免重复）"""
+        """fix v3 决策 2=A：真做 re-enqueue（verify v2 抓出 fix v2 仅 logger.info 是名实不符）
+        触发：启动钩子 + 每小时 backfill_recovery_cron
+        语义：检测 status=pending 且 enqueued_by=backfill 且 enqueued > 1h 的残留 task → 真 enqueue 到 arq
+        防重复：依赖 EmbeddingTask.idempotency_key（§3）+ worker 端 ON CONFLICT DO NOTHING；同 task_id 重复 enqueue 仅多一次 worker 取出+幂等返回，无业务副作用
+        """
         stale = db.query(EmbeddingTask).filter(
             EmbeddingTask.status == "pending",
             EmbeddingTask.enqueued_by == "backfill",
             EmbeddingTask.created_at < datetime.utcnow() - timedelta(hours=1),
         ).all()
+        if not stale:
+            return 0
 
-        if stale:
-            logger.info(f"resumed backfill: {len(stale)} pending tasks detected")
-            # arq Queue Redis AOF 持久化保证 task 不丢，无需重新入队
-            # 仅触发 worker 进程检查（worker 启动时自然 poll Queue）
-            return len(stale)
-        return 0
+        resumed = 0
+        for task in stale:
+            try:
+                await arq_pool.enqueue_job(
+                    "embed_text",
+                    task_id=str(task.id),
+                    project_id=str(task.project_id),
+                    target_type=task.target_type,
+                    target_id=str(task.target_id),
+                    _job_id=f"backfill_recovery:{task.id}",   # arq 自带 job_id 去重，1 小时内同 id 不会重复入队
+                )
+                resumed += 1
+            except Exception as e:
+                logger.warning(f"resume failed for task {task.id}: {e}")
+        logger.info(f"backfill_recovery: detected={len(stale)}, re-enqueued={resumed}")
+        return resumed
 ```
 
 启动钩子调用 + 每小时 backfill_recovery_cron 调用，保证最坏延迟 ≤ 1 小时。
 
-**arq Queue 持久化前提**：M18 部署时 Redis 必须开启 AOF（`appendonly yes`）—— 在 ADR-001 §基础设施已 ack。**清理策略**：
+**arq Queue 持久化前提**：M18 部署时 Redis 必须开启 AOF（`appendonly yes`）—— 在 ADR-001 §基础设施已 ack。AOF 是第一道保险（worker 重启 task 不丢）；`detect_and_resume_pending_backfill` 是第二道保险（AOF 也丢的极端场景下从 DB 真重发）。
+
+**advisory lock 双参形式说明**（fix v3 决策 3=B）：§6 中 `pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(project_id::text || '/' || target_id::text))` 使用 PG 官方支持的 `(int4, int4)` 双参重载，namespace + project/target 复合 key 已经满足并发隔离需求；不改单参 int8 拼接形式，避免重写 lock helper + 全部并发用例为完美主义买单。
+
+**清理策略**：
 - 各 cleanup cron 见上方矩阵
 - 删除 embedding 异步清理（audit B1 修复）：业务 commit 后 enqueue `delete_embedding` task；orphan 兜底 cleanup cron 每周扫"target 不在业务表"
 
