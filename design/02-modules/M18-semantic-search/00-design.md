@@ -161,41 +161,70 @@ from pgvector.sqlalchemy import Vector
 class Embedding(Base, TimestampMixin):
     __tablename__ = "embeddings"
 
-    # 4 字段复合主键（含 model_version——多版本共存支持回滚 / 渐进回填）
-    # CY ack: Q5=B（project_id 冗余）+ Q3=A（model_version 回填）
-    # PK 含 model_version 决策：与 §4 行级状态"回滚场景" + §12D 字段⑦"保留旧 model 30 天宽限"逻辑统一
+    # 6 字段复合主键（audit B4 修复：加 modality + provider 字段拆分 model_version）
+    # 决策来源：
+    #   - Q5=B project_id 冗余 + Q3=A 多版本共存
+    #   - audit B4 R3 升级：缺 modality/dim/provider 是结构性死局（图片/音频/双 provider 演进）
+    #   - audit C3=C 部署期固定 provider，运行时不切（迁移=重大运维事件）
+    # 字符串约定：provider/model_name/version 三段式（如 openai/text-embedding-3-small/v1）
     project_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    modality: Mapped[str] = mapped_column(VARCHAR(16), default="text", primary_key=True)   # ★ B4 新增
     target_type: Mapped[str] = mapped_column(Text, primary_key=True)
     target_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    model_version: Mapped[str] = mapped_column(Text, primary_key=True)   # ★ PK 字段（多版本共存）
+    provider: Mapped[str] = mapped_column(VARCHAR(32), primary_key=True)   # ★ B4 新增（如 'openai' / 'bge' / 'mock'）
+    model_version: Mapped[str] = mapped_column(Text, primary_key=True)     # 业务版本号（如 'v1'）
 
-    # 向量主体（维度由 provider 决定，env 静态选，迁移时改）
-    embedding: Mapped[list[float]] = mapped_column(Vector(1536))   # OpenAI 默认；bge=512 时改
+    # 向量维度显式记录（B4 新增）
+    dim: Mapped[int] = mapped_column(nullable=False)         # 1536 / 512 / 384 / 768 / ...
+
+    # 向量主体（维度由 provider+model 决定，env 部署期固定）
+    # 注：pgvector Vector 类型本身不强制运行时维度——迁移期间双 provider 不同 dim 可共存
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536))   # 物理上限 1536（OpenAI 主流），bge 等小维度填零或专用列演进
 
     # 内容哈希（CY ack: Q8=D worker 内兜底）
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
-        # CHECK target_type 枚举（R3-2 三重防护——纯字符串 + CHECK）
+        # R3-2 三重防护——modality + target_type + provider 各自 CHECK
+        CheckConstraint(
+            "modality IN ('text', 'image', 'audio')",
+            name="ck_embeddings_modality",
+        ),
         CheckConstraint(
             "target_type IN ('node', 'dimension_record', 'competitor', 'issue')",
             name="ck_embeddings_target_type",
         ),
-        # ivfflat 索引（lists=100，参 Prism）
+        CheckConstraint(
+            "provider IN ('openai', 'bge', 'mock')",
+            name="ck_embeddings_provider",
+        ),
+        CheckConstraint("dim > 0 AND dim <= 1536", name="ck_embeddings_dim_range"),
+        # ivfflat 索引（lists 从 ORM 移到 env，audit M9 修复——Phase 2 实施时按 IVFFLAT_LISTS=os.getenv 注入）
         Index(
             "ix_embeddings_vector",
             "embedding",
             postgresql_using="ivfflat",
             postgresql_ops={"embedding": "vector_cosine_ops"},
-            postgresql_with={"lists": 100},
+            postgresql_with={"lists": 100},   # 默认 100，配置见 §6 env 表
         ),
-        # project filter 索引（B 选型核心收益）
-        Index("ix_embeddings_project_model", "project_id", "model_version"),
+        # project filter 索引（Q5=B 选型核心收益）
+        Index("ix_embeddings_project_provider_model", "project_id", "provider", "model_version"),
     )
+```
+
+**StatusEnum**（audit m1 修复——满足 R3-2 第 1 重防护）：
+
+```python
+class EmbeddingTaskStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DEAD_LETTER = "dead_letter"
 ```
 
 **TargetType 枚举**（M03/M04/M06/M07 各对应一个）：
@@ -209,11 +238,25 @@ class EmbeddingTargetType(str, Enum):
 ```
 
 **关键设计点**：
-- **4 字段复合主键** (project_id, target_type, target_id, model_version)——同 (target_type, target_id) 在不同 model_version 下可并存（多版本回滚/渐进回填的物理基础）；project 删除时 CASCADE 清理
-- **embedding 列维度 1536**（OpenAI 默认）——切 bge 时通过 Alembic 迁移改维度（项目早期一次性切换，不支持运行时切——见 Q2 反方）
-- **model_version 是 PK 字段**——查询时按当前默认 model filter，回填期间新旧 model 行物理共存；回填完成后 cron 清理旧 model_version 行（30 天宽限）
-- **content_hash 必填**（worker 内填）——同 (project_id, target_type, target_id, model_version) 已有 embedding 时比对 hash，相同跳过 OpenAI（Q8 兜底）
-- **多版本占用代价**：5 万条 × 1536 维 × float32 ≈ 300MB / model_version；回填期间双倍占用 600MB → 30 天宽限后回收（接受）
+- **6 字段复合主键** (project_id, modality, target_type, target_id, provider, model_version)——audit B4 修复后的 schema，预留多模态/多 provider 演进空间
+- **modality + provider + dim 显式分离**（audit B4 R3 升级）：避免未来加图片/音频时回填全表 + 重建 ivfflat 索引（结构性死局规避）
+- **embedding 列物理维度上限 1536**（OpenAI 主流维度）—— bge-small (384/512) 等小维度可放入；未来 text-embedding-3-large (3072) 需要单独的 embedding_3072 列或新表（见「provider 切换路径」段）
+- **model_version 是 PK 字段**——查询按 (provider, current_model_version) filter，多版本物理共存（Q3=A 渐进回填）
+- **content_hash 必填**——同 PK 已有 embedding 时比对 hash 跳过 Provider 调用（Q8 兜底）
+- **多版本占用代价**：5 万条 × 1536 维 × float32 ≈ 300MB / (provider, model_version)；回填期间双倍 600MB → 30 天宽限回收
+
+### Provider 切换路径（audit B2 / C3=C 明文化）
+
+**承诺级别**：M18 EmbeddingProvider 抽象（§6）的"3 provider 实现"是**接口预留 + 部署期可选**，**不承诺运行时切换**。
+
+| 切换场景 | 路径 | 服务影响 |
+|---------|------|---------|
+| 启动期一次性选定（CY 部署时改 env `EMBEDDING_PROVIDER=openai/bge/mock`）| 启动 EmbeddingProvider 抽象层按 env 加载 | 无 |
+| 运行期切 provider（同维度，如 bge-v1 → bge-v2）| 改 env + 重启 + 触发 model_upgrade 回填 cron | 重启窗口（秒级） |
+| 运行期切 provider（**不同维度**，如 OpenAI 1536 → bge 384）| **不支持**——必须走"全量数据迁移"运维事件：① drop 旧 provider 所有 embeddings 行；② 改 env；③ 重启；④ 跑全量 backfill 重建 | 数小时停服 + 数据丢失（旧 embedding 全删） |
+| 双 provider 并行（如同时跑 OpenAI + bge）| **本期不支持**——PK schema 物理支持（多 provider 行共存），但 §6 EmbeddingProvider 抽象只允许单 instance；演进退路见 R3 演进 audit E6 |
+
+**reviewer 承诺**：本期承诺 (1) + (2)，明示否决 (3) 的"零停机"和 (4) 的并行模式。CY 若未来需要 (3) 必须申请运维窗口；(4) 必须重新设计 §6 ProviderRegistry。
 
 ### 自有表 2：embedding_failures（失败计数 + 监控源）
 
@@ -262,7 +305,7 @@ class EmbeddingTask(Base, TimestampMixin):
     target_type: Mapped[str] = mapped_column(Text, nullable=False)
     target_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     model_version: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")    # 见 §4
+    status: Mapped[EmbeddingTaskStatus] = mapped_column(Text, nullable=False, default="pending")    # audit m1 修复：从裸 Mapped[str] 改 Mapped[StatusEnum] 满足 R3-2 第 1 重防护
     retry_count: Mapped[int] = mapped_column(default=0)
     enqueued_by: Mapped[str] = mapped_column(Text, nullable=False)       # 'incremental' | 'backfill' | 'model_upgrade'
     error_code: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -288,10 +331,42 @@ class EmbeddingTask(Base, TimestampMixin):
     )
 ```
 
+### 自有表 4：search_evaluation_log（audit M13 修复 - 1% 采样离线评估）
+
+```python
+class SearchEvaluationLog(Base, TimestampMixin):
+    """audit M13 修复：1% 采样记录三模式（keyword/semantic/hybrid）top5 + 用户点击，
+    用于半年后离线分析"RRF k=60 是否真的优于 k=80"等调优问题。
+    PRD F18 没"质量评估"机制——这是补盲点。"""
+    __tablename__ = "search_evaluation_log"
+
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    project_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    keyword_top5: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)    # [{target_type, target_id, score}]
+    semantic_top5: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
+    hybrid_top5: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
+    user_clicked_target_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_clicked_target_id: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rrf_k: Mapped[int] = mapped_column(nullable=False)             # 当时 project 配置
+    similarity_threshold: Mapped[float] = mapped_column(nullable=False)
+    sampled_at: Mapped[datetime] = mapped_column(server_default=text("NOW()"))
+
+    __table_args__ = (
+        Index("ix_search_eval_sampled_at", "sampled_at"),
+        Index("ix_search_eval_project_query", "project_id", "query"),
+    )
+```
+
+**采样逻辑**：search 路由按 env `SEARCH_EVAL_SAMPLE_RATE=0.01` (1%) 采样写入。点击事件由前端独立 endpoint 上报 `POST /api/search-eval/{eval_id}/click`。
+
+**保留策略**：1 年保留（评估目的），cron 清理。
+
 ### Alembic 要点
 
 - 启用扩展：`CREATE EXTENSION IF NOT EXISTS vector;`（与 Prism 一致）
-- 三表一次迁移上线
+- 四表一次迁移上线（embeddings + embedding_tasks + embedding_failures + search_evaluation_log）
 - pgvector 不可用时降级处理：FastAPI 启动时探测扩展存在性，不存在则 search 路由全程 keyword-only（PRD AC4）+ embedding 写入直接 noop（不报错只静默 + 写一条 `embedding_failures` 记录 error_code=PGVECTOR_UNAVAILABLE）
 
 ### 候选 B 改回成本块（R3-4：embedding 表加 project_id 列方案）
@@ -304,6 +379,18 @@ class EmbeddingTask(Base, TimestampMixin):
 | 数据迁移不可逆性 | 中——project_id 可从 nodes/dimension_records 等业务表反查回填，但删主键索引时存在窗口 |
 | 受影响模块数 | 1（M18 自身）—— project_id 仅 M18 用，业务表不依赖 |
 | 删表数 | 0（只改列） |
+
+### 候选 B 改回成本块 #2（R3-4 audit m5：PK 含 model_version 改回方案）
+
+如果未来证实 Q3=A 选错（多版本共存的 600MB/300MB-per-version 占用在大规模下不可接受），改回 PK 不含 model_version（覆盖式更新，放弃回滚能力）的成本：
+
+| 维度 | 成本 |
+|------|------|
+| Alembic 迁移步数 | 4 步（清理非 current_model 行 / 移除 model_version PK / 改 model_version 为普通列 / 重建索引）|
+| 数据迁移不可逆性 | 高——清理旧版本 embedding 不可恢复，**回滚能力永久丢失** |
+| 受影响模块数 | 1（M18 自身）+ §6 model_upgrade 端点改语义（不再有"渐进回填"，直接覆盖）|
+| 删表数 | 0（只改列+索引） |
+| 业务影响 | 模型升级路径变成"全停服重算"，与 §12D 字段⑦ 冲突需重新设计 |
 
 ---
 
@@ -381,7 +468,7 @@ stateDiagram-v2
 | **Server Action** | `web/src/actions/projectSettings.ts`（M02 baseline-patch 扩） | 编辑 rrf_k / similarity_threshold（管理员 UI） |
 | **Router** | `api/routers/search.py` | `POST /api/projects/{pid}/search` —— Bearer JWT auth + project access check + 调 SearchService |
 | **Router** | `api/routers/embedding_admin.py`（CY 内部用，platform_admin 限定） | `POST /api/admin/embedding/backfill` 手动触发 / `POST /api/admin/embedding/model-upgrade` 触发回填 |
-| **Service** | `api/services/search.py` (M18 接管 M09) | `SearchService.hybrid_search(db, query, project_id, user_id)` —— 调上游 search_by_keyword + 调 EmbeddingService.embed_query + RRF 融合 + filter |
+| **Service** | `api/services/search.py` (M18 接管 M09) | `SearchService.hybrid_search(db, query, project_id, user_id)` —— 入口读 env `SEARCH_MODE`（hybrid / keyword_only / semantic_only，audit B5 kill switch）+ 调上游 search_by_keyword + 调 EmbeddingService.embed_query + RRF 融合 + filter + 超时事件埋点（audit M12） |
 | **Service** | `api/services/embedding.py` | `EmbeddingService.enqueue / get_or_compute_embedding / embed_query / batch_backfill` |
 | **Service** | `api/services/embedding_provider.py` | `EmbeddingProvider` 基类 + OpenAI / bge / Mock 实现（仿 ADR-001 §4 LLM provider 抽象） |
 | **Queue Worker** | `api/queue/embedding_tasks.py` | `embed_single` task —— 入口校验 payload + advisory_xact_lock + content_hash 比对 + Provider 调用 + 写 embeddings or embedding_failures |
@@ -391,6 +478,23 @@ stateDiagram-v2
 | **Schema** | `api/schemas/search.py` | `SearchRequest / SearchResult / SearchResponse` Pydantic |
 | **Schema** | `api/schemas/embedding.py` | `EmbedSinglePayload(TaskPayload)` |
 | **Errors** | `api/errors/codes.py` | M18 ErrorCode + AppError 子类（§13） |
+
+### env 配置清单（audit B5 / M9 / M10 / M12 修复）
+
+| env 变量 | 默认 | 用途 | audit 来源 |
+|---------|------|------|-----------|
+| `EMBEDDING_PROVIDER` | `openai` | 部署期固定，三选一 `openai` / `bge` / `mock` | C3=C 明文化 |
+| `DEFAULT_EMBEDDING_MODEL` | `text-embedding-3-small` | 当前默认 model name（搜索 filter 用） | Q3=A |
+| `EMBEDDING_MODEL_VERSION` | `v1` | 当前 model 业务版本号 | B4 三段式拆分 |
+| `SEARCH_MODE` | `hybrid` | kill switch 三档 `hybrid` / `keyword_only` / `semantic_only` | **B5 kill switch** |
+| `IVFFLAT_LISTS` | `100` | ivfflat 索引 lists 参数（演进锚点：行数 > 50 万 时调到 sqrt(N) ~ 700） | **M9 演进锚点** |
+| `EMBEDDING_FAILURE_THRESHOLD_ABS` | `100` | 单小时绝对失败数告警 | M10 三维 |
+| `EMBEDDING_FAILURE_THRESHOLD_PCT` | `5` | 单小时失败率 % 告警 | M10 三维 |
+| `EMBEDDING_FAILURE_THRESHOLD_PER_PROJECT` | `100` | 单 project 单小时绝对失败数告警 | M10 三维 |
+| `QUERY_EMBEDDING_TIMEOUT_MS` | `1000` | query embedding 超时（**M5 修复：从 2s 改 1s** 留更多预算给 RRF + DB） | M5 边界修复 |
+| `EMBEDDING_TASK_TIMEOUT_S` | `60` | 单 embedding task 超时 | §12D ⑤ |
+| `BACKFILL_BATCH_TIMEOUT_S` | `900` | batch backfill 整批超时（对齐 ADR-001 §4.2 ai_embedding=15min） | §12D ⑤ |
+| `SEARCH_EVAL_SAMPLE_RATE` | `0.01` | search 路由 1% 采样写 search_evaluation_log（M13 离线评估） | **M13 新增** |
 
 ---
 
@@ -484,18 +588,31 @@ class EmbedSinglePayload(TaskPayload):
 | **Backfill 批量扫描** | `EmbeddingBackfillDAO.list_pending_by_project(project_id, limit)` —— 只读 import M03/M04/M06/M07 model 跑 LEFT JOIN embeddings | DAO 内 `WHERE project_id = :pid AND embeddings.id IS NULL` | **规则 4 新增** embedding/索引专用豁免 |
 | **Failure 监控扫描** | `EmbeddingFailureDAO.count_in_window(window_minutes, project_id=None)` | 全局或按 project | M18 自有表 |
 
-### 规则 4 的提案（待 ADR-003 扩条）
+### 规则 4 全文嵌入（audit B3 修复 - 不依赖 ADR-003 时序）
+
+> **B3 修复说明**：原稿引用"规则 4"作为 backfill DAO 合规依据，但 ADR-003 尚未扩条（baseline-patch 实施顺序第 1 步）。本节按 audit 决策 **全文嵌入规则 4**——M18 自身定义自身遵守，accepted 时与 ADR-003 修订**同步**生效。
+
+**规则 4：embedding/索引派生模块的批量 backfill 豁免**
 
 **适用条件**（必须全部满足）：
 - 模块定位是"为业务表生成派生索引数据"（embedding / 全文索引 / 物化统计），而非"展示业务内容"
-- 单条增量必须走规则 1（保持分层），但批量回填的性能要求使规则 1 不可行（5 万条调 5 万次 Service 接口，用户场景下 ≥ 1h）
-- 仅做**只读 SELECT**，禁止 UPDATE/DELETE（写入仍走自有表）
+- **仅 backfill 路径**走规则 4（baseline-patch 决策 1 收紧）；增量单条 / search 关键词路径仍走规则 1
+- 批量回填的性能要求使规则 1 不可行（5 万条调 5 万次 Service 接口，本项目场景 ≥ 1h 不可接受）
+- 仅做**只读 SELECT**（含 LEFT JOIN），禁止 UPDATE/DELETE（写入仍走自有表）
 
 **豁免内容**：
-- backfill DAO 可以 `from api.models.nodes import Node` 等只读 import 上游 model，跑 LEFT JOIN embeddings + WHERE project_id 等批量 SELECT
+- backfill DAO 可以 `from api.models.nodes import Node` 等只读 import 上游 SQLAlchemy model
+- 跑 LEFT JOIN 自有表 + WHERE project_id 等批量 SELECT
 - 严禁在豁免 DAO 中 INSERT/UPDATE/DELETE 上游表
 
-**与规则 2 的区别**：规则 2 适用"DB 层聚合计算"（M10 完善度），规则 4 适用"派生索引批量构建"（M18 backfill）。语义不同避免规则 2 边界稀释。
+**与规则 2 的区别**：规则 2 适用"DB 层聚合计算"（M10 完善度，GROUP BY/aggregate）；规则 4 适用"派生索引批量构建"（M18 backfill，LEFT JOIN 找差异）。两者不重叠，避免规则 2 边界稀释。
+
+**M18 自身适用声明**：
+- §6 已分文件：`api/dao/embedding.py`（增量，规则 1）/ `api/dao/embedding_backfill.py`（backfill，规则 4）
+- 只读 import 上游 model 清单：`Node` (M03) / `DimensionRecord` (M04) / `Competitor` (M06) / `Issue` (M07)
+- M14 不列入（M14 不接入 M18，见 §1 边界灰区）
+
+**ADR-003 修订同步要求**：M18 accepted commit 时一并修订 ADR-003 §Decision 加规则 4 全文（baseline-patch 第 1 步），文字与本节保持一致。
 
 **示例**：
 
@@ -532,15 +649,49 @@ class EmbeddingService:
         ...
 ```
 
-### 删除策略
+### 删除策略（audit B1 修复 = C2=A commit 后异步 enqueue）
+
+> **B1 修复说明**：原稿"业务模块 Service 内显式调 + 共享 session（R-X3）"与 baseline-patch 决策 5"失败不阻塞业务删除"事务模型矛盾。按 audit C2=A 决策——**删除清理走 commit 后异步 enqueue 模式**，与"派生数据失败容忍"哲学一致；放弃"共享外部 session"的 R-X3 严格性，但用 zombie/cleanup cron 兜底保证最终一致性。
 
 | 触发 | 行为 |
 |------|------|
-| `projects` 删除 | embeddings / embedding_tasks / embedding_failures CASCADE（FK ondelete='CASCADE'）|
-| `nodes` / `dimension_records` / `competitors` / `issues` 删除 | **业务模块 Service 内显式调** `EmbeddingService.delete_by_target(db, type, id, project_id)` —— 共享外部 db session（R-X3）|
-| 不依赖 DB CASCADE 跨表 | 因为 embeddings 不直接 FK 业务表（target_id 是 polymorphic），DB 无法 CASCADE，必须 Service 层兜底（R-X2）|
+| `projects` 删除 | embeddings / embedding_tasks / embedding_failures CASCADE（FK ondelete='CASCADE'）—— 这条不变 |
+| `nodes` / `dimension_records` / `competitors` / `issues` 删除 | **业务模块 Service `with db.begin()` commit 后**调 `EmbeddingService.enqueue_delete(target_type, target_id, project_id)` 入 Queue 异步清理。enqueue 失败仅 logger.warning + 写 embedding_failures `EMBEDDING_DELETE_FAILED`，**不影响业务删除主路径** |
+| 不依赖 DB CASCADE 跨表 | embeddings 不直接 FK 业务表（target_id 是 polymorphic），DB 无法 CASCADE，必须异步清理 + cleanup cron 兜底 |
+| 兜底机制 | M18 cleanup cron（每周一次）扫"target_id 不在业务表的 embeddings 行" → 物理删除（90 天宽限）—— 防 enqueue 失败导致的孤儿 embedding |
 
-**新加 Service 接口（baseline-patch 一并）**：M03/M04/M06/M07 在自己的 `delete_by_id` Service 内尾调 `embedding_service.delete_by_target(db, ..., project_id)`，共享外部 session。
+**新加 Service 接口**（baseline-patch 一并 - **修订**）：
+- M03/M04/M06/M07 `delete_by_id` Service 在 `with db.begin()` **commit 后**（非 `with` block 内）调 `embedding_service.enqueue_delete(...)`
+- enqueue_delete 内部走 arq Queue（与 embed_single 同 Queue 不同 task type）
+- worker 跑 `delete_embedding` task：DELETE FROM embeddings WHERE (target_type, target_id, project_id) = (...)
+
+**事务模型对比**（明示放弃 R-X3 严格性的代价）：
+
+| 选项 | 优 | 缺 | 是否选 |
+|------|---|---|-------|
+| 共享 session 严格 R-X3 | 强一致 | delete embeddings 失败 = 业务删除回滚（违反决策 5）| ❌ |
+| **commit 后异步 enqueue（C2=A）** | **业务删除独立成功，符合决策 5；失败容忍 + cron 兜底** | enqueue 与 cron 间窗口存在孤儿 embedding（无害——search 走 INNER JOIN 自然 filter）| ✅ |
+
+**search 路径相容性**：search 路由的关键词路径走上游 Service.search_by_keyword（拿不到已删 target），向量路径 SQL 不 JOIN 业务表（仅按 project_id + model 过滤后返回 (target_type, target_id)，前端再 fetch 详情时拿 404 跳过）—— 孤儿 embedding 不会污染搜索结果。
+
+### current_model sanity check（audit M6 修复）
+
+启动时 `EmbeddingService` 检查：
+```python
+def _validate_current_model_on_startup(self, db: Session):
+    """audit M6 修复：current_model 不在 embeddings 已有 (provider, model_version) 集合中时
+    启动 warn + 自动 fallback 最近 model_version，防"启动成功但搜索全 miss"。"""
+    current = (settings.EMBEDDING_PROVIDER, settings.EMBEDDING_MODEL_VERSION)
+    existing = db.query(distinct(Embedding.provider, Embedding.model_version)).all()
+    if existing and current not in existing:
+        logger.warning(f"current_model {current} not in embeddings table; falling back to latest")
+        # search 路由临时按 latest model_version filter 直到 backfill 完成
+        self._effective_model_for_search = self._latest_model_in_db(db, existing)
+    else:
+        self._effective_model_for_search = current
+```
+
+启动时 logger.warning 给 CY 看到；search 自动降级到现存 model（避免无脑全 miss）。
 
 ---
 
@@ -551,8 +702,10 @@ class EmbeddingService:
 | 用户搜索 | — | — | — | ❌ **不写**——高频低价值（search 操作每用户每天可能 50+ 次，进 M15 时间线噪音过大）|
 | embedding 计算成功 | — | — | — | ❌ **不写**——派生数据系统行为，用户无感 |
 | embedding 计算失败 | — | — | — | ❌ **不写 M15 activity_log**——写自有 `embedding_failures` 表（R10-2 例外，三条件全满足）|
-| 模型升级触发回填 | `embedding_model_upgrade_triggered` | `project` | `{old_model, new_model, affected_count}` | ✅ **写一条**（CY 主动运维操作，admin 端点触发，少量低噪）|
-| 手动 backfill 触发 | `embedding_backfill_triggered` | `project` | `{trigger_reason, affected_count}` | ✅ **写一条**（admin 主动操作） |
+| 模型升级触发回填 | `ActionType.EMBEDDING_MODEL_UPGRADE_TRIGGERED` | `TargetType.PROJECT` | `{old_model, new_model, affected_count}` | ✅ **写一条**（CY 主动运维操作，admin 端点触发，少量低噪）|
+| 手动 backfill 触发 | `ActionType.EMBEDDING_BACKFILL_TRIGGERED` | `TargetType.PROJECT` | `{trigger_reason, affected_count}` | ✅ **写一条**（admin 主动操作） |
+
+**audit M1 修复说明**：表格中 action_type / target_type 用枚举成员名而非裸字符串，避免与下方"M15 schema 扩枚举"段不一致。Phase 2 实施时引用 `ActionType.EMBEDDING_MODEL_UPGRADE_TRIGGERED` 而非裸 `"embedding_model_upgrade_triggered"`。
 
 ### M15 schema 扩枚举（baseline-patch 一并）
 
@@ -574,9 +727,13 @@ M18 引用 [`README R10-2 例外`](../README.md#§10-activity_log-事件)（M01 
 |------|---------|
 | 1. 表仅服务单一模块的审计职责 | ✅ embedding_failures 仅服务 M18 失败监控 |
 | 2. 事件高频（100+/用户/天）进 M15 会淹没业务时间线 | ✅ 单 project 千条业务记录 + 模型升级时回填，潜在 1000+/h 失败可能 |
-| 3. 事件为系统级（无用户主动操作语义） | ✅ embedding 失败由 worker 后台触发，用户完全无感知；project_id 为冗余索引字段非"用户操作归属"。**对 R10-2 文字的修订建议**（baseline-patch 一并）：条件 3 原文"无 project_id 归属（系统级 / 跨项目事件）"调整为"事件为系统级（用户无主动操作语义）—— 是否带 project_id 仅为索引/分析需要，不影响判定"。M01 auth_audit_log 仍满足新表述（auth 事件确实是系统级）|
+| 3. 事件主体是**系统行为**而非**业务行为** | ✅ embedding 失败是 worker 后台计算行为（系统行为）；M01 auth 校验也是系统行为（auth 子系统判 token/session 有效性，非用户业务 CRUD）。**audit M7 修复**：原修订草案"用户无主动操作语义"被 reviewer 反例驳回（M01 login_attempt 显然有用户主动操作语义），最终采用"系统行为 vs 业务行为"区分——业务行为 = 创建/编辑/删除业务实体（CRUD），系统行为 = auth 校验/embedding 计算/cron 维护等。|
 
-**R10-2 文字修订**列入 baseline-patch-m18.md 第一项（README 改 1 行）。
+**R10-2 文字修订**（audit M7 最终版）：README §10 R10-2 例外条件 3 改为：
+
+> 3. 事件主体是**系统行为**（auth 校验 / embedding 计算 / cron 维护等），而非**业务行为**（CRUD 业务实体）。是否带 project_id 仅为索引/分析需要，不影响判定。
+
+baseline-patch-m18.md README 修订段一并改。
 
 ### 跨表查询预案
 
@@ -591,14 +748,14 @@ M18 引用 [`README R10-2 例外`](../README.md#§10-activity_log-事件)（M01 
 | 层 | 机制 | key 计算 | 防什么 |
 |----|------|---------|--------|
 | **enqueue 时（debounce）** | Redis SET TTL 60s | `embedding:debounce:{project_id}:{target_type}:{target_id}` | 用户连续编辑同一条 5 次 → 60s 窗口内只 enqueue 1 个 task |
-| **worker 入口（advisory lock）** | `pg_advisory_xact_lock(hashtext(target_id))` | target_id 为 lock key | 同 (project_id, target_type, target_id) 两个 task 并发跑（debounce 过期边界） |
+| **worker 入口（advisory lock）** | `pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(target_id::text))` —— **audit M4 修复**：双 key namespace 防御（图片/音频未来用 `m18_image_embedding` / `m18_audio_embedding`，避免跨域互锁）| (namespace, target_id) 双 key | 同 (project_id, target_type, target_id) 两个 task 并发跑（debounce 过期边界） |
 | **worker 内（content_hash 兜底）** | SELECT 已有 embedding，比对 content_hash | `(project_id, target_type, target_id, model_version, content_hash)` | 同内容重算（用户改格式不改内容 / backfill 重跑） |
 
 ### project_id 是否参与 key 计算（R11-2 必答）
 
 **全部三层都参与**——理由：
 - enqueue debounce key 必含 project_id（防跨 project 串 task）
-- worker advisory lock key 用 hashtext(target_id) 不含 project_id —— **审计风险点**：理论上不同 project 同 UUID（极小概率冲突）会被串。**缓解**：UUID 全局唯一性保证冲突概率 ≈ 0，但若 reviewer challenge 可改 `hashtext(project_id::text || target_id::text)` 防御性强化
+- worker advisory lock key 用**双 key 形式** `(hashtext('m18_text_embedding'), hashtext(target_id::text))`（audit M4 修复，防未来 modality 跨域互锁）—— project_id 不入 key 因为 UUID 全局唯一概率论上无冲突
 - content_hash key 必含 project_id
 
 ### task 表 unique 约束
@@ -723,18 +880,23 @@ class Embedding:
 - enqueue 内部接口仅信任业务模块 Service 层（不暴露 HTTP）
 - Queue 消费者必反查（防 enqueue 调用方串 project_id bug）
 
-#### 字段 ⑤：超时策略
+#### 字段 ⑤：超时策略（audit M5 修复）
 
-- **embedding 单 task 超时**：`asyncio.timeout(60)` 包住 OpenAI/bge 调用 —— 单 embedding 60s 足够（OpenAI 通常 < 1s）
-- **batch backfill 整批超时**：每批 100 条，整批 `asyncio.timeout(900)`（15min，对齐 ADR-001 §4.2 `ai_embedding`）
-- **query embedding 超时**：search 路由内 `asyncio.timeout(2)`（PRD AC ≤3s 留 1s 给后续 RRF + DB 查询）—— 超时 fallback 到 keyword_only
+- **embedding 单 task 超时**：`asyncio.timeout(EMBEDDING_TASK_TIMEOUT_S=60)` 包住 OpenAI/bge 调用
+- **batch backfill 整批超时**：每批 100 条，整批 `asyncio.timeout(BACKFILL_BATCH_TIMEOUT_S=900)`（15min，对齐 ADR-001 §4.2 `ai_embedding`）
+- **query embedding 超时**（**audit M5 修复**：从 2s 改 1s）：search 路由内 `asyncio.timeout(QUERY_EMBEDDING_TIMEOUT_MS/1000=1)`—— OpenAI P99 ≈ 1.5-2s，2s 阈值 50% 概率破 PRD ≤3s SLA；改 1s 后超时 fallback keyword_only，留 2s 给 RRF + 上游 search_by_keyword + DB
+- **超时即降级声明**（M5 + M12）：query embedding 超时**不计入** SLA（fallback 路径 keyword_only 仍 < 3s），但单独埋点指标 `query_embedding_timeout_total`（Prometheus counter），M12 演进可观测性基础
 
 **未来 embedding 模块照抄要点**：
 - 单 task 超时按"单次模型调用 P99 × 5"算
 - 批量超时对齐 ADR-001 任务类型表
-- query 路径超时必须 < 用户感知阈值 / 2（留缓冲）
+- query 路径超时必须 < 用户感知阈值 / 2（M18 = 1s ≤ 3s/2，留缓冲）
 
-#### 字段 ⑥：失败容忍 + monitor（核心区别于 §12C）
+#### 字段 ⑥：失败容忍 + monitor（核心区别于 §12C，audit m4 + M10 修复）
+
+**用户边界明示**（audit m4 修复）：
+- 用户 = 终端用户（viewer / editor / admin），打开 Prism 用搜索的人
+- CY = 单人运维 = 系统侧 owner，不算"用户"——CY 收到的告警属系统监控不属用户通知
 
 **失败容忍**（CY ack: Q7=C）：
 - 单 task 重试 3 次（指数退避 1s/4s/16s）—— 复用 §12C 重试范式
@@ -742,40 +904,54 @@ class Embedding:
 - 30s 后 cron 转 `dead_letter` —— **不通知用户**（embedding 是派生数据，用户搜不到刚写的会自然 fallback 到关键词路径）
 - 90 天后 dead_letter 物理清理
 
-**monitor cron**（每小时跑）：
-- `SELECT COUNT(*) FROM embedding_failures WHERE failed_at > NOW() - INTERVAL '1 hour'`
-- 阈值：> 5% 该窗口 enqueue 量 → 告警 CY（webhook / email TBD）
-- 全局阈值：单 project > 100 条/小时失败也告警（个别 project provider 问题）
+**monitor cron 三维告警**（audit M10 修复 - 替代原 5%/h 单维）：
+- 每小时跑：`SELECT project_id, error_code, COUNT(*) FROM embedding_failures WHERE failed_at > NOW() - INTERVAL '1 hour' GROUP BY project_id, error_code`
+- 三维独立阈值，**任一超过即告警 CY**（不是用户）：
+  - **绝对值阈值** `EMBEDDING_FAILURE_THRESHOLD_ABS=100`：单小时全局失败 ≥ 100 条
+  - **百分比阈值** `EMBEDDING_FAILURE_THRESHOLD_PCT=5`：单小时失败率 ≥ 5%
+  - **单 project 阈值** `EMBEDDING_FAILURE_THRESHOLD_PER_PROJECT=100`：任一 project 单小时失败 ≥ 100 条
+- 三维设计避免"5%/h 单维死参数"在规模化时失效（CY 单人 5% = 1 条 vs 50 用户 5% = 100+ 条/h 告警风暴的 R3 E2 风险）
+- 告警通道：本期 logger.error + bulletin（CY 已有 OpenClaw 机制）；未来扩 webhook / email（TBD）
 
 **未来 embedding 模块照抄要点**：
 - 重试策略复用 §12C（1s/4s/16s 指数退避）
 - 失败处置 = 静默 + 写自有 failures 表（**不**走 §12C 死信通知用户路径）
-- monitor 阈值按业务量动态调（M18 起步 5%/h）
+- monitor 必须三维（绝对+百分比+单 project），单维阈值在规模化时必然炸
 
-#### 字段 ⑦：模型升级回填路径 + zombie + 90 天清理
+#### 字段 ⑦：模型升级回填路径 + zombie + partition 演进（audit M11 + C1=B 修复）
+
+**字段⑦适用性条件**（audit C1=B 决策——给后续 modality 模块明文 escape hatch）：
+- 适用：**文本类高频迭代 model**（OpenAI text-embedding 半年级换代是常态）
+- 不适用：图片类低频迭代 model（CLIP-v1 升 v2 多年频率，可不实现 model_upgrade 端点）
+- 音频类介于两者之间，按届时模块自决
+- §12D 字段⑦ 是 **opt-in 字段**——未来 modality 模块若 model 迭代频率低，可在自身 §12 节声明"字段⑦ N/A，不实现 model_upgrade 路径"
 
 **模型升级回填路径**（CY ack: Q3=A）：
-- CY 改 env `DEFAULT_EMBEDDING_MODEL=text-embedding-4` + 调 `POST /api/admin/embedding/model-upgrade`
-- 端点逻辑：扫所有 `embeddings WHERE model_version != current_model` → 按 project 分批 enqueue（enqueued_by="model_upgrade"）
-- worker 写新 embedding 时**保留旧**——embeddings 表 PK 含 model_version（§3 已定稿），同 (project_id, target_type, target_id) 不同 model_version 物理共存
-- 查询时 `WHERE model_version = current_model` 过滤，回填期间旧 model 不参与召回但保留以防回滚
-- 回填完成后 cron 每周扫一次，清理"非 current_model 且 created_at < NOW - 30d"的旧行（30 天宽限期保留回滚能力）
-- 空间代价：每 model_version 占 ~300MB（5 万条 × 1536 维 × float32），回填期双倍 600MB，30 天后回收，CY ack 接受
+- CY 改 env `EMBEDDING_PROVIDER` + `EMBEDDING_MODEL_VERSION` + 调 `POST /api/admin/embedding/model-upgrade`
+- 端点逻辑：扫所有 `embeddings WHERE (provider, model_version) != current` → 按 project 分批 enqueue（enqueued_by="model_upgrade"）
+- worker 写新 embedding 时**保留旧**——embeddings 表 PK 含 (provider, model_version)（§3 audit B4 后），同 (target_type, target_id) 不同 (provider, model_version) 物理共存
+- 查询时 `WHERE provider=current AND model_version=current` 过滤，回填期间旧 model 不参与召回但保留以防回滚（含 audit M6 sanity check fallback 路径）
+- 回填完成后 cleanup cron 每周扫一次，清理"非 current 且 created_at < NOW - 30d"的旧行（30 天宽限期保留回滚能力）
+- 空间代价：每 (provider, model_version) 占 ~300MB（5 万条 × 1536 维 × float32），回填期双倍 600MB，30 天后回收
 
-**zombie 兜底**：
+**zombie 兜底**（M11 演进锚点）：
 - 每 5min cron 扫 `status='running' AND created_at < NOW - 2min`（embedding 单 task 60s 超时 + commit buffer 60s = 2min）
 - 转 `failed` + error_code=`EMBEDDING_ZOMBIE`
 - 同 M16 §12B 字段⑦ CAS UPDATE 模式
+- **演进锚点 R3 E3**：50 万行规模时 5min cron 扫表压力大——**触发条件**：embedding_tasks 行数 > 50万 时评估按时间 partition（如按月分表 `embedding_tasks_2026_05` / `embedding_tasks_2026_06`）或终态行立即归档表 `embedding_tasks_archive`。本期不实施（§15 加锚点条目）
 
 **清理策略**：
 - succeeded task 30 天后清理 embedding_tasks（embedding 本体保留）
 - failed/dead_letter task 90 天清理（同 embedding_failures 保留期）
+- 删除 embedding 异步清理（audit B1 修复）：业务 commit 后 enqueue `delete_embedding` task；orphan 兜底 cleanup cron 每周扫"target 不在业务表"
 
 **未来 embedding 模块照抄要点**：
-- model_version 升级路径必有（否则模型换代时数据脏）
-- PK 含 model_version 多行共存（回滚需要）
+- 字段⑦ 是 opt-in（C1=B 决策），低频迭代 model 类可声明 N/A
+- model_version 升级路径必有（如果适用）
+- PK 含 (provider, model_version) 多行共存（回滚需要）
 - zombie 阈值 = 单 task 超时 + commit buffer
 - monitor + zombie 是 fire-and-forget 的代价，必须有
+- 50 万行规模时评估 partition / 归档表演进路径
 
 ### 与 §12A/B/C 的对比
 
@@ -866,15 +1042,34 @@ class EmbeddingModelUpgradeInvalidError(AppError):
     code = ErrorCode.EMBEDDING_MODEL_UPGRADE_INVALID
     http_status = 400
 
-class EmbeddingDeleteFailedError(AppError):
-    """业务删除尾调 delete_by_target 失败时使用——logger.error + 写 embedding_failures，不抛 HTTP（不阻塞业务删除）"""
-    code = ErrorCode.EMBEDDING_DELETE_FAILED
+class SilentFailure(BaseException):
+    """audit m6 修复：非 AppError 内部失败基类——不应被 try/except AppError 捕获/误判
+    使用场景：业务删除尾调 enqueue_delete 失败、cleanup cron 局部失败等"内部不阻塞"路径"""
+    def __init__(self, code: ErrorCode, message: str, **metadata):
+        self.code = code
+        self.message = message
+        self.metadata = metadata
+
+
+class EmbeddingDeleteFailedError(SilentFailure):
+    """audit m6 修复：从 AppError 移到 SilentFailure 基类，避免被通用 AppError 捕获误判
+    使用场景：业务删除 commit 后 enqueue_delete 失败 → logger.warning + 写 embedding_failures + 不抛 HTTP"""
+    def __init__(self, target_type: str, target_id: UUID, project_id: UUID, **kw):
+        super().__init__(
+            code=ErrorCode.EMBEDDING_DELETE_FAILED,
+            message=f"failed to enqueue delete for {target_type}:{target_id}",
+            target_type=target_type, target_id=target_id, project_id=project_id, **kw,
+        )
 ```
 
 ### 跨模块错误 wrap（R13-2）
 
 - worker 调上游 `Service.get_for_embedding` 抛 `NodeNotFoundError` 等 → wrap 为 `EmbeddingTargetNotFoundError`（noop 不算失败）
-- search 路由调上游 `search_by_keyword` 抛 → wrap 为 `SearchUpstreamError`（按上游模块名加前缀，如 `SearchM03Error`） —— **本期暂不实现**，由各上游模块自己抛 ErrorCode，search 直接透传（待 audit 决定是否要 wrap）
+- search 路由调上游 `search_by_keyword` 抛 → **明示豁免 R13-2 wrap，采用透传模式**（audit M2 修复）。理由：
+  - search 是聚合操作，上游 ErrorCode（如 M03 的 `NodeAccessDeniedError`）对用户感知更直接，wrap 成 `SearchUpstreamError` 反而丢失上下文
+  - 上游模块本身已遵守 ErrorCode 规范（每个 ErrorCode 有 AppError 子类），透传不破坏分层契约
+  - 替代防御：search 路由顶层 `try/except AppError` 捕获后**保留 ErrorCode 但加 source 标记** `error.metadata['from_module'] = 'M03'`，便于 CY 调试时定位上游
+  - 与 M07 IssueService 的 wrap 模式区别：M07 是写操作 orchestrator 必须 wrap；M18 search 是只读聚合可透传
 
 ---
 
@@ -913,24 +1108,37 @@ class EmbeddingDeleteFailedError(AppError):
 - [ ] §15 本 checklist
 
 ### 三轮 reviewer audit
-- [ ] 完整性 audit（节 0-13 + 15 字段无 TBD）
-- [ ] 边界 audit（重点：§3 PK 含不含 model_version 矛盾 / §10 R10-2 例外条件 3 challenge / §9 规则 4 提案是否需先扩 ADR-003 / §11 advisory lock 不含 project_id 是否风险）
-- [ ] 演进 audit（重点：模型升级回填实际跑 5 万条要多久 / pgvector ivfflat lists=100 是否合本项目数据量 / query embedding 缓存 5min TTL 是否合理）
-- [ ] CY 复审
+- [x] **Round 1 完整性 audit (Sonnet)** —— 0 Blocker / 2 Major / 3 Minor（2026-04-25）
+- [x] **Round 2 边界 audit (Opus)** —— 3 Blocker / 6 Major / 4 Minor / 3 CY 决策（2026-04-25）
+- [x] **Round 3 演进 audit (Opus)** —— 12 风险 / 7 退路 / 半衰期 9-12 月（2026-04-25）
+- [x] **CY 决策 C1=B / C2=A / C3=C ack**（2026-04-25）
+- [x] **audit fix v1**：5 Blocker + 13 Major 主对话修复（2026-04-25）
+- [ ] verify Agent 独立审 fix（防自报告撒谎）
+- [ ] 主对话精修剩余 → status=accepted
 
 ### Baseline-patch 配套
-- [ ] M02 加 rrf_k + similarity_threshold 字段（baseline-patch-m18.md）
-- [ ] M03/M04/M06/M07 各加 `get_for_embedding(target_id, project_id) -> str` Service 接口
-- [ ] M03/M04/M06/M07 各在 `delete_by_id` Service 内尾调 `embedding_service.delete_by_target`（共享外部 session）
-- [ ] M09 status 改 superseded_by=M18 + 文档归档说明
-- [ ] M15 ActionType 加 2 个枚举（EMBEDDING_MODEL_UPGRADE_TRIGGERED / EMBEDDING_BACKFILL_TRIGGERED）+ Alembic 迁移
-- [ ] ADR-003 扩规则 4（embedding/索引专用豁免）
+- [x] M02 加 rrf_k + similarity_threshold 字段（baseline-patch-m18.md）
+- [x] M03/M04/M06/M07 各加 `get_for_embedding(target_id, project_id) -> str` Service 接口
+- [x] M03/M04/M06/M07 删除路径**改为 commit 后 enqueue_delete 异步**（audit B1 + C2=A）
+- [x] M09 status 改 superseded_by=M18 + 文档归档说明
+- [x] M15 ActionType 加 2 个枚举（EMBEDDING_MODEL_UPGRADE_TRIGGERED / EMBEDDING_BACKFILL_TRIGGERED）+ Alembic 迁移
+- [x] ADR-003 扩规则 4（**audit B3 修复**：M18 §9 全文嵌入，accepted 时与 ADR-003 同步生效）
+- [x] README §10 R10-2 例外条件 3 文字精修（**audit M7**："系统行为 vs 业务行为"取代"用户主动操作"）
+- [ ] M11 batch_create_in_transaction 路径走 backfill 模式（audit M3，新增 enqueued_by="batch_import"）
 
 ### 配套文档更新
-- [ ] design/02-modules/README.md §12 表加 §12D 行
+- [x] design/02-modules/README.md §12 表加 §12D 行
 - [ ] design/02-modules/README.md M18 行 status draft→accepted
-- [ ] design/02-modules/README.md 加 2026-10-25 §12D 合并评估触发器
+- [x] design/02-modules/README.md 加 2026-10-25 §12D 合并评估触发器
 - [ ] design/00-architecture/07-capability-matrix.md M18 状态更新
+
+### 演进锚点（audit Round 3 落地，§15 不闭合，CY 周期性核查）
+- [ ] **embedding_tasks 行数 > 50万** 时评估 partition / 归档表演进（audit M11 / R3 E3）
+- [ ] **embeddings 行数 > 50万** 时评估 ivfflat lists 调到 sqrt(N)~700（audit M9 / R3 E1）
+- [ ] **2026-10-25** §12D 复用度复盘（半年回看触发器，挂 OpenClaw bulletin cron——audit R5）
+- [ ] **search_evaluation_log 1 年后** 离线分析 RRF 参数 / cache hit ratio / matched_by 路径占比（audit M13）
+- [ ] **多 modality 模块（图片/音频）引入时** 评估 §12D 字段⑦ N/A 声明（audit C1=B）
+- [ ] **双 provider 并行需求出现时** §6 EmbeddingProvider 抽象升级 ProviderRegistry（audit R3 E6）
 
 ---
 

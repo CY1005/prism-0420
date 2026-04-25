@@ -26,7 +26,7 @@
 | **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
 | **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
-| **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **draft（2026-04-25 brainstorming Q0-Q11 完成）** | [`M18-semantic-search/`](./M18-semantic-search/) |
+| **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **draft（2026-04-25 brainstorming + 三轮 audit + fix v1 完成，待 verify）** | [`M18-semantic-search/`](./M18-semantic-search/) |
 | 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：

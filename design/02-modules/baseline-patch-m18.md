@@ -36,7 +36,7 @@ CY 2026-04-25 brainstorming 12 决策：
 - Q11=A M18 升级 superseded M09 → M09 status 改 + 文档归档说明
 - Q10=D 增量走规则 1 + backfill 走规则 4 → M03/M04/M06/M07 加 `get_for_embedding` 接口 + ADR-003 扩规则 4
 - Q1=D 增量触发链 → M03/M04/M06/M07 在 create/update Service 内尾调 `embedding_service.enqueue`
-- 删除一致性（R-X2/R-X3）→ M03/M04/M06/M07 在 delete_by_id 内尾调 `embedding_service.delete_by_target`，共享外部 session
+- 删除一致性（**audit B1 + C2=A 修订**）→ M03/M04/M06/M07 `delete_by_id` 在 `with db.begin()` **commit 后**调 `embedding_service.enqueue_delete`（异步 Queue 清理），**不**共享 session（放弃 R-X3 严格性 + cleanup cron 兜底）
 - Q7=C R10-2 例外条件 3 文字修订 → README §10 R10-2 改 1 行
 - §10 写 backfill/model_upgrade 触发事件 → M15 ActionType 扩 2 枚举
 
@@ -127,23 +127,29 @@ class NodeService:
         return "\n".join(parts)
 ```
 
-**改动 2：delete_node 内尾调 embedding 清理**
+**改动 2：delete_node commit 后异步 enqueue 删除**（audit B1 + C2=A 修订）
 
 ```python
 # api/services/nodes.py
 class NodeService:
     def delete_node(self, db: Session, node_id: UUID, project_id: UUID) -> None:
         with db.begin():
-            # ... 原有：删 M04/M06/M07/M08 关联（已 R-X3 共享 session）
+            # ... 原有：删 M04/M06/M07/M08 关联（仍 R-X3 共享 session）
             self.dao.delete_by_id(db, node_id, project_id)
-
-            # M18 baseline-patch：删 embeddings
-            self.embedding_service.delete_by_target(
-                db, target_type="node", target_id=node_id, project_id=project_id
-            )
-
             # ... 原有：写 activity_log
+
+        # commit 后（不在 with 内）：异步 enqueue embedding 清理
+        # 失败仅 logger.warning + 写 embedding_failures，不影响业务删除主路径
+        try:
+            self.embedding_service.enqueue_delete(
+                target_type="node", target_id=node_id, project_id=project_id
+            )
+        except SilentFailure as e:
+            logger.warning(f"enqueue_delete failed (non-blocking): {e}")
+            # SilentFailure 已自带写 embedding_failures 副作用
 ```
+
+**事务模型说明**：放弃 R-X3 严格性（embedding 不共享业务事务），换取 audit 决策 5 的"业务删除独立成功"语义。孤儿 embedding 由 cleanup cron 每周扫"target 不在业务表"兜底（M18 §9 + §12D 字段⑦）。
 
 **改动 3：create_node / update_node 触发增量 enqueue**
 
@@ -176,7 +182,7 @@ class NodeService:
 
 **M03 文档更新**：§6 Service 表加 `get_for_embedding` 行 / §3 schema 不变 / §10 不变（embedding 不写 activity_log）
 
-**回归风险**：中——delete_node 多调一个 Service，要测"embedding_service 失败时是否拖累节点删除"（建议：embedding_service.delete_by_target 失败仅日志不抛，不阻塞主事务）
+**回归风险**：低（audit B1 修订后）——commit 后异步 enqueue 不在事务内，业务删除已 commit 成功；enqueue 失败由 SilentFailure 静默 + cleanup cron 兜底，不影响业务路径
 
 ---
 
@@ -330,13 +336,16 @@ class ActionType(str, Enum):
 
 ---
 
-### README §10 R10-2 例外条件 3 文字修订
+### README §10 R10-2 例外条件 3 文字修订（audit M7 最终版）
 
 **改动类型**：Low（1 行文字调整）
 
 **现状**：README §10 R10-2 例外条件 3 写"事件无 `project_id` 归属（系统级 / 跨项目事件）"
 
-**M18 challenge**：embedding_failures 有 project_id（用于按 project 监控）但事件本身是系统级（worker 后台触发，用户无感）
+**修订历史**：
+- 草案 v1（M18 §10 初稿）："事件为系统级（用户无主动操作语义）"
+- **audit M7 反例驳回**：reviewer 指出 M01 `login_attempt` 显然有用户主动操作语义 → 草案 v1 反让 M01 失去例外资格
+- **audit M7 最终版**：换为"系统行为 vs 业务行为"二分法
 
 **改动**：
 
@@ -344,13 +353,15 @@ class ActionType(str, Enum):
 # 修改前
 3. 事件无 `project_id` 归属（系统级 / 跨项目事件）
 
-# 修改后
-3. 事件为系统级（用户无主动操作语义）—— 是否带 project_id 仅为索引/分析需要，不影响判定
+# 修改后（audit M7 最终）
+3. 事件主体是**系统行为**（auth 校验 / embedding 计算 / cron 维护等），而非**业务行为**（CRUD 业务实体）。是否带 project_id 仅为索引/分析需要，不影响判定。
 ```
 
-**M01 兼容性验证**：M01 auth_audit_log 仍满足新表述（auth 事件确实是系统级，无论是否带 project_id）
+**M01 兼容性验证**：M01 auth 校验是 auth 子系统行为（判 token/session 有效性），非用户业务 CRUD（用户没有"创建 auth_audit_log"这种业务操作）→ M01 仍合规。
 
-**回归风险**：无（M01 是唯一已采用此例外的模块，新表述向下兼容）
+**M18 兼容性**：embedding 计算是 worker 后台行为，非业务 CRUD → M18 合规。
+
+**回归风险**：无（M01 仍合规，向下兼容）
 
 ---
 
@@ -369,13 +380,59 @@ class ActionType(str, Enum):
 
 **Phase 2 阶段（写代码）**：3+4+5 必须先于 M18 实施代码
 
+## 3.5. audit M3 新增：batch_import 路径处理
+
+**问题来源**：audit Round 2 M3——M11 冷启动 1000 节点 / M17 import 5000 行的 `batch_create_in_transaction` 路径若循环调 `create_node` → 1000 次 enqueue + 1000 次 Redis SET 操作连发，Redis 反成瓶颈。
+
+**修订**：
+
+1. **EmbeddingService 加第 4 enqueued_by 枚举值** `batch_import`：
+
+```python
+# api/schemas/embedding.py
+class EmbedSinglePayload(TaskPayload):
+    target_type: EmbeddingTargetType
+    target_id: UUID
+    provider: str             # B4 拆分
+    model_version: str
+    enqueued_by: Literal["incremental", "backfill", "model_upgrade", "batch_import"]    # ★ M3 新增
+```
+
+2. **M11 / M17 batch 写入路径**改走 backfill 模式：
+
+```python
+# api/services/cold_start.py (M11) 或 services/import.py (M17) batch_create_in_transaction
+class M11ColdStartService:
+    def batch_create_in_transaction(self, db, items, project_id):
+        with db.begin():
+            # ... 循环创建 1000 节点 + activity_log
+            created_ids = self.node_service.dao.batch_create(...)
+
+        # commit 后：一次性扫差异 enqueue（不是逐条）
+        self.embedding_service.enqueue_batch_import(
+            target_type="node",
+            target_ids=created_ids,
+            project_id=project_id,
+            enqueued_by="batch_import",
+        )
+```
+
+3. **enqueue_batch_import 内部走 backfill cron 框架**（避免 Redis SET 连发）：
+   - 直接生成 N 个 EmbedSinglePayload 入 arq Queue
+   - **跳过 Redis debounce**（batch 场景已知不会重复，不需要去重）
+   - 走单独的 batch worker pool（避免压垮增量 worker）
+
+**M11 / M17 baseline-patch 配套**：M11 / M17 设计文档需明示"批量导入路径不走单条 create_node 的增量 enqueue"，避免重复触发。
+
+---
+
 ## 4. CY 决策项（2026-04-25 全部 ack 按建议）
 
 - [x] **决策 1**：ADR-003 规则 4 收紧——明确"仅 backfill 路径走规则 4，其他所有场景（含增量单条 / search 关键词路径）仍走规则 1"；规则 4 文字加"使用边界"段落
 - [x] **决策 2**：M02 ProjectSettings RRF 参数 UI 仅 admin 可改（viewer 无入口，复用 M02 现有 `assertProjectRole(project_id, "admin")` 权限模型）
 - [x] **决策 3**：M04 JSONB content 拼接策略 = 所有 string 类型字段（不引入白名单 schema 改动），实现见 §M04 改动 1 草案
 - [x] **决策 4**：M06 competitors 的 url 字段**不参与 embedding**（仅 name + description）；M07 不受影响（无 url 字段）
-- [x] **决策 5**：embedding_service.delete_by_target 失败**不阻塞**业务删除（try/except 包住，仅 logger.error + 写一条 embedding_failures error_code=`EMBEDDING_DELETE_FAILED`，留 M18 zombie/cleanup cron 兜底）
+- [x] **决策 5**（audit B1 + C2=A 修订实施方式）：放弃"共享 session 但失败不阻塞"的事务矛盾。改为 **commit 后异步 enqueue_delete** 模式——失败 SilentFailure（非 AppError 子类，不被通用 try/except 捕获）+ 写一条 embedding_failures `EMBEDDING_DELETE_FAILED`，由 cleanup cron 每周扫 orphan embedding 兜底
 
 ## 5. 关联文档
 

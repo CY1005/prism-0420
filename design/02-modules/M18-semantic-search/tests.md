@@ -569,6 +569,84 @@ related_design: ./00-design.md
 
 ---
 
+## 6.5 audit M8 补漏 case（4 项）
+
+### tc_M18_recovery_01_backfill 中断恢复（audit M8 #1）
+
+**前提**：admin 触发 backfill 入队 5000 task，跑到 2500 时服务重启（OOM / 主动 kill）
+
+**步骤**：
+1. backfill 跑前在 `embedding_tasks` 写一行 `enqueued_by="backfill"` 标识批次（或专用 backfill_run 表）
+2. 服务重启 → 启动时 backfill cron 检测"上次 backfill 未完成"（有 status=pending 且 enqueued_by="backfill" 的 task）
+3. cron 不重新扫差异 enqueue（避免重复），仅触发 worker 继续消费 Queue 中残留 task
+4. arq Queue 持久化（Redis AOF）保证 task 不丢
+
+**期望**：
+- 重启后剩余 2500 task 自然继续跑
+- 不重复 enqueue 已 succeeded 的 2500 task
+- 总 OpenAI 调用 = 5000 次（不是 7500）
+- 启动 logger.info "resumed backfill, 2500 pending"
+
+---
+
+### tc_M18_concurrent_06_RRF 参数 update 时正在 search 的 race（audit M8 #2）
+
+**前提**：admin 此刻发起改 project_X rrf_k 60→80
+
+**步骤**：
+1. admin 调 PATCH /api/projects/{pid}/settings rrf_k=80
+2. 同时 user 在 project_X 搜索（已经在 SearchService 内读了 rrf_k=60 准备融合）
+3. admin 的 update commit
+4. user 的 search 用 rrf_k=60 完成融合返回
+
+**期望**：
+- 不报错（read-after-write 一致性允许临时 stale read）
+- user 此次结果用旧 rrf_k=60（acceptable）
+- 下次 search 用新 rrf_k=80
+- **明示契约**：M18 不保证 RRF 参数 update 后立即生效，**最长 stale 窗口 = 单次 search 路径耗时 ≤ 3s**
+
+---
+
+### tc_M18_consistency_01_RAW 一致性契约明示（audit M8 #3）
+
+**前提**：CY 写一条新 dimension_record（增量 enqueue）
+
+**步骤**：
+1. write commit + enqueue
+2. CY 立即（< 100ms）搜该内容关键词
+3. 关键词路径命中（同步），返回结果
+
+**期望（明示契约）**：
+- ✅ 关键词路径**保证**立即可搜（同步路径）
+- ❌ 语义路径**不保证** N 秒内可搜——embedding 异步计算，最长延迟 = enqueue debounce 60s + Queue 等待 + worker 处理（OpenAI 1-2s）+ commit = **典型 3-30s，最坏 15min（task 超时）**
+- 用户体验：刚写的内容关键词搜得到，语义召回需等待几秒到分钟级
+- **不写入文档/前端 UI 提示用户"等待"**——用户感知 fallback 到关键词路径已足够（Q7=C 容忍哲学）
+
+**测试断言**：
+- assert keyword_search_returns_new_record_within(100ms) == True
+- assert semantic_search_returns_new_record_within(60s) **NOT** required（may or may not）
+
+---
+
+### tc_M18_provider_switch_01_mock 切换后已有 OpenAI embedding 处理（audit M8 #4）
+
+**前提**：embeddings 表已有 5000 行 `provider='openai', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock`
+
+**步骤**：
+1. 服务重启（部署期一次性切 provider，audit C3=C 决策）
+2. M6 启动 sanity check：`EmbeddingService._validate_current_model_on_startup`
+3. 检测 current=`('mock', 'v1')` 不在 `embeddings` 已有 distinct (provider, model_version) 集合中
+4. logger.warning + 自动 fallback `_effective_model_for_search = ('openai', 'v1')`（latest）
+5. CY 收到 warning 决定：(a) 触发 `model-upgrade` 端点回填 mock embedding / (b) 接受语义路径暂时用 OpenAI 已有 embedding
+
+**期望**：
+- 不出现"全 miss"（M6 fallback 抓住）
+- search 仍可用（用 OpenAI 旧 embedding）
+- CY 收到 warning 启动回填决策
+- 回填完成后所有 embedding 都是 mock provider，OpenAI 旧行 30 天后 cron 清理
+
+---
+
 ## 7. 测试覆盖矩阵
 
 | §0-15 章节 | 覆盖 case |
@@ -593,6 +671,7 @@ related_design: ./00-design.md
 - **arq Queue 集成测试需 Redis** —— 用 docker-compose 起测试环境
 - **并发测试用 pytest-asyncio + asyncio.gather** 模拟多 worker
 - **performance baseline**：5 万条 backfill 时长 ≤ 15min（验证规则 4 豁免性能收益）
+- **audit m7 监控阈值**：tc_concurrent_05 cache 击穿率 > 30% 时引入 singleflight（Phase 2 实施观察）
 
 ---
 
