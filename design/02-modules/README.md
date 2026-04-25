@@ -37,7 +37,7 @@
 - **后台 fire-and-forget 模块** → `M16-ai-snapshot/00-design.md`（§12B 子模板定稿）
 - **embedding/索引持久化模块** → `M18-semantic-search/00-design.md`（§12D 子模板 draft；双触发链 + 失败容忍 + 模型版本回填 + 跨模读双路豁免）
 
-**§12D 半年回看触发器**（2026-10-25）：M18 accept 后半年评估——若 §12D 仅 M18 一个实例使用、且字段⑥/⑦与 §12C 高度重合，**降级为 §12C 扩展段落 + 删 §12D 行**（防模板膨胀）。挂 `/schedule` 在 M18 accepted 时设置。
+**§12D 半年回看触发器**（2026-10-25）：M18 accept 后半年评估——若 §12D 仅 M18 一个实例使用、且字段⑥/⑦与 §12C 高度重合，**降级为 §12C 扩展段落 + 删 §12D 行**（防模板膨胀）。**记录方式**：见本 README 末尾「设计回看触发器」清单（手动审查，不挂自动 cron）。
 
 **Audit 报告归档**：
 - 第一批：[`audit-report-batch1.md`](./audit-report-batch1.md) + [`audit-report-batch1-verify.md`](./audit-report-batch1-verify.md)
@@ -325,7 +325,18 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 - [x] **第三批 A2 M01 auth pilot accepted（2026-04-24）**：ADR-004 auth 横切范式 + "实现最简+schema 都支持" 模式 + R10-2 例外（独立审计表）
 - [x] **Pilot 4 M13 需求分析（流式 SSE）accepted（2026-04-25）**：§12A 流式子模板定稿 + ADR-001 §4.1 补 aclose 协议 + ADR-002 L116 替换 M13 结论 + M04 baseline-patch（`create_dimension_record` + `get_latest`）+ M07 §6 对外契约登记 `list_by_project(node_id=...)`；驳回 reviewer M15 部分（合理 🔵）
 - [x] **Pilot 5 M16 AI 快照（后台 🪷 fire-and-forget）accepted（2026-04-25）**：§12B 后台子模板定稿（7 字段+位次不通用警告）+ ADR-002 §横切影响 M16 脚注（不走 Queue + 反悔触发器）+ M05 baseline-patch（`count_by_node`）+ M15 Alembic 迁移 3+1 枚举（Phase 2）+ M04 契约锁定（复用 M13 补丁的 `create_dimension_record`）；19 项 audit（4 Blocker / 9 Major / 6 Minor）全部 🟢/🔵 关闭
-- [ ] 第四批剩余 AI 异步类（M18 语义搜索 🗂️ 可复用 §12C 范式）—— 待 CY 出业务
+- [ ] **Pilot 6 M18 语义搜索（🗂️ §12D embedding 持久化）draft（2026-04-25）**：brainstorming Q0-Q11 完成 + 00-design.md draft + §12D 子模板首次实战；待 tests.md + baseline-patch + 三轮 audit
 - [ ] 扩展 M20 团队 / 空间 —— 待开
 - [ ] 20 模块全部 status=accepted（剩 2 个：M18 / M20）
 - [ ] 99-comparison/ 对照报告：每模块一份
+
+---
+
+## 设计回看触发器（手动审查清单）
+
+> 集中记录"未来某时点要回头评估的设计决策"。**不挂自动 cron**——CY 在每月/每季度复盘时手动扫这里。
+
+| 触发日期 | 触发对象 | 评估什么 | 决策路径 |
+|---------|---------|---------|---------|
+| **2026-10-25** | §12D embedding 持久化子模板 | 半年内是否仅 M18 一个实例使用？字段⑥/⑦ 是否与 §12C 高度重合？ | 是 → 降级为 §12C 扩展段落 + 删 §12D 行（防模板膨胀）<br>否 → 保留 §12D，记录新增使用模块 |
+| _（未来 trigger 加在这里）_ | | | |
