@@ -137,14 +137,66 @@ class ActivityStreamDAO:
 
 ---
 
-### 对 M09 / M10 / M15 的具体应用
+#### 规则 4：embedding/索引派生模块的批量 backfill 豁免（M18 baseline-patch 引入，2026-04-26）
+
+适用条件（**必须全部满足**）：
+- 模块定位是"为业务表生成派生索引数据"（embedding / 全文索引 / 物化统计），而非"展示业务内容"
+- 单条增量必须走规则 1（保持分层），但批量回填的性能要求使规则 1 不可行（示例：5 万条调 5 万次上游 Service 接口，本项目场景下 ≥ 1 小时不可接受）
+- 仅做 **只读 SELECT**（含 LEFT JOIN），禁止 UPDATE / DELETE
+
+豁免内容：
+- backfill DAO 可以 `from api.models.xxx import Xxx` 只读 import 上游 SQLAlchemy model
+- 跑 LEFT JOIN 自有表（embeddings 等）+ WHERE project_id 等批量 SELECT
+- **严禁** 在豁免 DAO 中执行 INSERT / UPDATE / DELETE 上游表
+
+使用边界（CY 决策 1，2026-04-25）：
+- **仅 backfill 路径走规则 4**，其他所有场景（含增量单条 / search 关键词路径）仍走规则 1
+- 不允许"backfill 顺手做点修复 UPDATE"——若需修复必须独立 cron + 调上游 Service.update
+
+与规则 2 的边界：
+- 规则 2 = "DB 层聚合计算"（M10 完善度统计，使用 GROUP BY / aggregate 函数）
+- 规则 4 = "派生索引批量构建"（M18 backfill，使用 LEFT JOIN 找差异）
+- 两者不重叠，避免规则 2 边界稀释
+
+**示例**（M18 backfill）：
+
+```python
+# ✅ 规则 4 豁免：embedding backfill DAO 只读 import + LEFT JOIN
+from api.models.nodes import Node            # 只读 import 上游 model
+class EmbeddingBackfillDAO:
+    def list_pending_node_ids(self, db, project_id, provider, model_name, model_version, limit):
+        return (
+            db.query(Node.id, Node.name)
+            .outerjoin(
+                Embedding,
+                (Embedding.target_type == "node")
+                & (Embedding.target_id == Node.id)
+                & (Embedding.provider == provider)
+                & (Embedding.model_name == model_name)
+                & (Embedding.model_version == model_version),
+            )
+            .filter(Node.project_id == project_id)
+            .filter(Embedding.target_id.is_(None))
+            .limit(limit)
+            .all()
+        )
+```
+
+**文档要求**：
+- 采用规则 4 的模块 §3 必须显式声明"适用 ADR-003 规则 4：embedding/索引专用豁免"
+- 列出所有只读 import 的上游 model 清单
+- §6 分层职责表必须把"增量 DAO（规则 1）"和"backfill DAO（规则 4）"分文件
+
+---
+
+### 对 M09 / M10 / M15 / M18 的具体应用
 
 | 模块 | 适用规则 | 实施要求 |
 |------|---------|---------|
-| M09 全局搜索 | **规则 1**（主规则）| Service 层调上游 Service.search_by_keyword；M14 例外见下 |
+| M09 全局搜索 | **规则 1**（主规则）| Service 层调上游 Service.search_by_keyword；M14 例外见下。**注**：M09 已 superseded by M18（2026-04-26），保留接口体系供 M18 增量路径复用 |
 | M10 全景图 | **规则 2**（只读 import 豁免）| DAO 只读 import M02/M03/M04 model 做 JOIN 聚合，禁止写入 |
 | M15 数据流转 | **规则 3**（横切表豁免）| DAO 直查 activity_log，无需调各模块"日志接口" |
-| M18 语义搜索（待设计）| **规则 1**（主规则，embedding 特殊处理）| 预留：Service 调各模块 `list_by_project`，在聚合读中跑 embedding |
+| M18 语义搜索 | **双路：规则 1 增量 + 规则 4 backfill**（M18 baseline-patch 2026-04-26）| 增量 worker 调上游 `Service.get_for_embedding(target_id, project_id)` 走规则 1；backfill DAO 只读 import M03/M04/M06/M07 跑 LEFT JOIN 走规则 4 |
 
 ### M09 + M14 的接口签名例外（规则 1 的唯一例外）
 
@@ -185,14 +237,16 @@ results += self.competitor_service.search_by_keyword(db, query, project_id, limi
 
 - **上游模块追加接口开发量**：5 个模块各自需实现 `search_by_keyword`（已 accepted 模块列入基线补丁 TODO）
 - **聚合读延迟略高**：调 Service 比直 JOIN 多一层抽象，但本项目数据量下差异 < 10ms 可忽略
-- **豁免规则理解成本**：新人读 R-X1 + ADR-003 要消化"写禁跨模块 / 读分三类（主规则+2豁免）"的规则层次
+- **豁免规则理解成本**：新人读 R-X1 + ADR-003 要消化"写禁跨模块 / 读分四类（主规则+3豁免）"的规则层次（M18 baseline-patch 加规则 4 后从 3 类升 4 类）
+- **M18 规则 4 引入双 DAO 维护成本**：embedding 模块需维护两套 DAO（增量走规则 1 / backfill 走规则 4），照抄子模板的 future embedding 模块同样负担
 
 ### 演进退路
 
-若未来数据量增长到规则 1 的 "6 次 Service 调用"性能不足（当前单 project 数据量下无此问题），可扩展**规则 4：物化视图**——
-- 建 `search_index` 物化视图聚合所有可搜索字段
-- 上游写入时 trigger 刷新，或定时 REFRESH CONCURRENTLY
-- **现阶段不引入**，避免维护成本 vs 收益失衡
+- **派生索引模块超过 3 个时**抽公共 backfill 框架（M18 baseline-patch 引入规则 4 时 ack）：当前仅 M18 单实例，半年回看（2026-10-25）若新增 ≥ 2 个 embedding/索引模块，评估抽 `BaseBackfillDAO` 公共框架收敛 LEFT JOIN 模式
+- 若未来数据量增长到规则 1 的 "6 次 Service 调用"性能不足（当前单 project 数据量下无此问题），可扩展 **规则 5：物化视图**（注：原稿这里的"规则 4"被 M18 baseline-patch 抢占，物化视图退路升 5）——
+  - 建 `search_index` 物化视图聚合所有可搜索字段
+  - 上游写入时 trigger 刷新，或定时 REFRESH CONCURRENTLY
+  - **现阶段不引入**，避免维护成本 vs 收益失衡
 
 ---
 
@@ -229,7 +283,7 @@ results += self.competitor_service.search_by_keyword(db, query, project_id, limi
 - `design/02-modules/M09-search/00-design.md`（本 ADR 核心受众，规则 1）
 - `design/02-modules/M10-overview/00-design.md`（规则 2 豁免）
 - `design/02-modules/M15-activity-stream/00-design.md`（规则 3 豁免）
-- `design/02-modules/M18-semantic-search/00-design.md`（待开，适用规则 1）
+- `design/02-modules/M18-semantic-search/00-design.md`（accepted 2026-04-26，适用 **规则 1（增量）+ 规则 4（backfill）双路**——M18 baseline-patch 引入规则 4）
 - **基线补丁 TODO**：M03/M04/M06/M07/M14 已 accepted 模块需追加 `search_by_keyword` Service 接口设计——见 `design/02-modules/README.md` 末尾 TODO
 
 ## 关联

@@ -196,6 +196,12 @@ class Project(Base, TimestampMixin):
             unique=True,
             postgresql_where=text("status = 'active'"),
         ),
+        # M18 baseline-patch（2026-04-26）：search 路由按 project 取 RRF 调优参数
+        CheckConstraint("rrf_k > 0 AND rrf_k <= 200", name="ck_project_rrf_k_range"),
+        CheckConstraint(
+            "similarity_threshold >= 0.0 AND similarity_threshold <= 1.0",
+            name="ck_project_similarity_threshold_range",
+        ),
     )
 
     id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -219,6 +225,13 @@ class Project(Base, TimestampMixin):
     space_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True  # M20 预留扩展口
     )
+
+    # M18 baseline-patch（2026-04-26）：M18 SearchService.hybrid_search 入口调 ProjectService.get_search_config 取
+    # rrf_k：RRF 融合 k 值（默认 60，业界推荐起点；范围 1-200）
+    # similarity_threshold：语义召回最低 cosine 相似度阈值（默认 0.3；< 阈值不参与 RRF 融合）
+    # 权限模型（CY 决策 2，2026-04-25）：仅 admin 可改（viewer 无入口），复用现有 assertProjectRole(project_id, "admin")
+    rrf_k: Mapped[int] = mapped_column(nullable=False, default=60)
+    similarity_threshold: Mapped[float] = mapped_column(nullable=False, default=0.3)
 
     members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
     dimension_configs = relationship("ProjectDimensionConfig", back_populates="project", cascade="all, delete-orphan")
@@ -290,6 +303,7 @@ class DimensionType(Base):
 - `project_members.role` CHECK：`role IN ('owner', 'editor', 'viewer')`（G1 三重防护合规：String(20) + CheckConstraint + Mapped[MemberRole]）
 - **G3 同名项目禁止**：PG 部分唯一索引——`CREATE UNIQUE INDEX uq_project_owner_name_active ON projects(owner_id, name) WHERE status='active'`（仅对 active 项目唯一，归档后释放名字）
 - `projects.ai_api_key_enc` 长度留 1000 bytes（AES-GCM 加密后 base64）
+- **M18 baseline-patch（2026-04-26）**：projects 表加 2 列 `rrf_k INT NOT NULL DEFAULT 60` + `similarity_threshold REAL NOT NULL DEFAULT 0.3` + 2 个 CHECK 约束（rrf_k 范围 1-200 / similarity_threshold 范围 0.0-1.0）；纯加字段带默认值，已有数据不受影响
 
 ---
 
@@ -355,7 +369,7 @@ stateDiagram-v2
 | **Component** | `web/src/components/business/project-card.tsx`<br>`web/src/components/business/member-list.tsx`<br>`web/src/components/business/dimension-config.tsx` | 项目卡片 / 成员列表 / 维度配置 UI |
 | **Server Action** | `web/src/actions/project.ts`<br>`web/src/actions/member.ts` | session 校验 / zod 入参校验 / fetch FastAPI |
 | **Router** | `api/routers/project_router.py`<br>`api/routers/member_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic schema |
-| **Service** | `api/services/project_service.py`<br>`api/services/member_service.py` | 业务规则 / 事务 / AI Key 加解密 / 写 activity_log |
+| **Service** | `api/services/project_service.py`<br>`api/services/member_service.py` | 业务规则 / 事务 / AI Key 加解密 / 写 activity_log。**M18 baseline-patch（2026-04-26）新增**：`get_search_config(db, project_id) -> SearchConfig` 返回 (rrf_k, similarity_threshold) 元组，供 M18 SearchService.hybrid_search 入口调用 |
 | **DAO** | `api/dao/project_dao.py`<br>`api/dao/member_dao.py`<br>`api/dao/dimension_config_dao.py` | SQL 构建 + tenant 过滤 |
 | **Model** | `api/models/project.py` | SQLAlchemy 模型（schema 真相源）—— Project / ProjectMember / ProjectDimensionConfig / DimensionType |
 | **Schema** | `api/schemas/project_schema.py`<br>`api/schemas/member_schema.py` | Pydantic 请求 / 响应 |

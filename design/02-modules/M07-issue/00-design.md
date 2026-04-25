@@ -260,7 +260,7 @@ stateDiagram-v2
 | **Component** | `web/src/components/business/issue-list.tsx`<br>`web/src/components/business/issue-card.tsx`<br>`web/src/components/business/issue-form.tsx`<br>`web/src/components/business/issue-status-badge.tsx` | issue 列表 / 卡片 / 表单 / 状态标签 |
 | **Server Action** | `web/src/actions/issue.ts` | session 校验 / 参数校验 / fetch FastAPI |
 | **Router** | `api/routers/issue_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic 校验 |
-| **Service** | `api/services/issue_service.py` | 业务规则（状态机转换校验）/ tenant 校验 / 写 activity_log |
+| **Service** | `api/services/issue_service.py` | 业务规则（状态机转换校验）/ tenant 校验 / 写 activity_log<br>**M18 baseline-patch（2026-04-26）新增**：① `get_for_embedding(db, issue_id, project_id) -> str \| None` 走 ADR-003 规则 1，拼接 `title + description`（M07 无 url，CY 决策 4 不影响）；② create/update commit 后尾调 `embedding_service.enqueue(target_type="issue", ..., enqueued_by="incremental")`；③ delete commit 后异步 enqueue_delete + SilentFailure + cleanup cron 兜底（CY 决策 5） |
 | **DAO** | `api/dao/issue_dao.py` | SQL 构建 + 强制 tenant 过滤 |
 | **Model** | `api/models/issue.py` | SQLAlchemy 模型 + Enum 定义 |
 | **Schema** | `api/schemas/issue_schema.py` | Pydantic 请求/响应 |

@@ -400,7 +400,11 @@ class ActionType(str, Enum):
     import_cancel            = "import.cancel"
     import_failed            = "import.failed"
     import_partial_failed    = "import.partial_failed"
+    # M18 语义搜索（baseline-patch 2026-04-26）
+    embedding_model_upgrade_triggered = "embedding_model_upgrade_triggered"
+    embedding_backfill_triggered      = "embedding_backfill_triggered"
     # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
+    # 注：M18 写 activity_log 仅用上述 2 个 admin 触发事件；embedding 计算/失败本身按 R10-2 例外（M18 §10）写入自有 embedding_failures，不污染业务时间线
 
 
 class TargetType(str, Enum):

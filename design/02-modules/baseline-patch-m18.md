@@ -1,12 +1,12 @@
 ---
 title: M18 基线补丁：M02 RRF 参数 / M09 superseded / M03/M04/M06/M07 embedding 接口 / M15 ActionType / ADR-003 规则 4 / R10-2 文字修订
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-25
-accepted: null
+accepted: 2026-04-26
 supersedes: []
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-04-26
 batch: baseline-patch-m18
 modules_affected: [M02, M03, M04, M06, M07, M09, M15]
 adrs_affected: [ADR-003]

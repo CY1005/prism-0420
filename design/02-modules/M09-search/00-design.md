@@ -1,12 +1,12 @@
 ---
 title: M09 全局搜索 - 详细设计
-status: accepted
+status: superseded
 owner: CY
 created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
-superseded_by: null
-last_reviewed_at: 2026-04-21
+superseded_by: M18
+last_reviewed_at: 2026-04-26
 module_id: M09
 prism_ref: F9
 pilot: false
@@ -14,6 +14,14 @@ complexity: medium
 ---
 
 # M09 全局搜索 - 详细设计
+
+> **M09 已被 M18 升级取代（2026-04-26 M18 baseline-patch）**
+>
+> - PRD F18 明确"升级 F9 不并存"
+> - M18 接管 `/api/projects/{pid}/search` 路由（关键词 + 语义混合 + RRF 融合）
+> - M09 batch3 沉淀的 `search_by_keyword(query, project_id, limit)` 接口体系**保留**——M18 增量路径继续复用（走 ADR-003 规则 1 调上游 Service）
+> - 本文档归档作历史；新功能见 [`M18-semantic-search/00-design.md`](../M18-semantic-search/00-design.md)
+> - Phase 2 实施时 `api/routers/search.py` 由 M18 own，M09 不再单独存在路由文件
 
 > 对标 M04 同步 pilot 范本，纯读聚合模块。Tenant ✅ / 事务 ❌ / 异步 ❌ / 并发 ❌。
 > **CY 2026-04-21 决策记录见 §15，业务决策已 accepted**

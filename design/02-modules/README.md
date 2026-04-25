@@ -20,7 +20,7 @@
 | 第二批 | M11 冷启动支持 | **accepted（2026-04-21）** | [`M11-cold-start/`](./M11-cold-start/) |
 | 第二批 | M12 对比矩阵 | **accepted（2026-04-21）** | [`M12-comparison/`](./M12-comparison/) |
 | 第三批 A1 | M08 模块关系图 | **accepted（2026-04-21）** | [`M08-module-relation/`](./M08-module-relation/) |
-| 第三批 A1 | M09 全局搜索 | **accepted（2026-04-21）** | [`M09-search/`](./M09-search/) |
+| 第三批 A1 | M09 全局搜索 | **superseded by M18（2026-04-26 M18 baseline-patch）** | [`M09-search/`](./M09-search/) |
 | 第三批 A1 | M10 项目全景图 | **accepted（2026-04-21）** | [`M10-overview/`](./M10-overview/) |
 | 第三批 A1 | M15 数据流转可视化 | **accepted（2026-04-21）** | [`M15-activity-stream/`](./M15-activity-stream/) |
 | **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
@@ -188,7 +188,7 @@ complexity: low                         # 必填：low / medium / high（来自 
   - **适用条件**（全部满足）：
     1. 该表仅服务单一模块的审计职责（M01 auth 事件）
     2. 事件高频（100+/用户/天级别）进 M15 activity_log 会淹没业务时间线
-    3. 事件无 `project_id` 归属（系统级 / 跨项目事件）
+    3. 事件主体是 **系统行为**（auth 校验 / embedding 计算 / cron 维护等），而非 **业务行为**（CRUD 业务实体）。是否带 project_id 仅为索引/分析需要，不影响判定。（M18 baseline-patch 修订 2026-04-26：原文"事件无 project_id 归属"被 M18 audit M7 反例驳回——M01 login_attempt 显然有用户主动操作语义但应保留例外资格——改为"系统 vs 业务"二分法）
   - 采用此例外的模块 §10 必须**显式引用本例外条目**并说明三个适用条件各自满足情况
   - 不适用例外的模块仍走 R10-2 主规则（回写 M15 schema）
   - 跨表查询预案（若出现"查某用户全系统操作"场景）：模块 §10 给 PG view 或 UNION ALL 候选，参 [`M01-user-account/00-design.md`](./M01-user-account/00-design.md) §10 末段

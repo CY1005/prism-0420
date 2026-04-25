@@ -226,7 +226,7 @@ erDiagram
 | **Component** | `web/src/components/business/competitor-list.tsx`<br>`web/src/components/business/competitor-ref-card.tsx`<br>`web/src/components/business/competitor-ref-form.tsx` | 竞品列表 / 对标卡片 / 新建表单 |
 | **Server Action** | `web/src/actions/competitor.ts` | session 校验 / 参数校验 / fetch FastAPI |
 | **Router** | `api/routers/competitor_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic 校验 |
-| **Service** | `api/services/competitor_service.py` | 业务规则（竞品属于本项目校验）/ tenant 校验 / 写 activity_log / 多表事务（新建竞品+对标） |
+| **Service** | `api/services/competitor_service.py` | 业务规则（竞品属于本项目校验）/ tenant 校验 / 写 activity_log / 多表事务（新建竞品+对标）<br>**M18 baseline-patch（2026-04-26）新增**：① `get_for_embedding(db, competitor_id, project_id) -> str \| None` 走 ADR-003 规则 1，拼接 `name + description`（CY 决策 4：**url 字段不参与 embedding**，仅 name + description）；② create/update commit 后尾调 `embedding_service.enqueue(target_type="competitor", ..., enqueued_by="incremental")`；③ delete commit 后异步 enqueue_delete + SilentFailure + cleanup cron 兜底（CY 决策 5） |
 | **DAO** | `api/dao/competitor_dao.py` | SQL 构建 + 强制 tenant 过滤 |
 | **Model** | `api/models/competitor.py` | SQLAlchemy 模型 |
 | **Schema** | `api/schemas/competitor_schema.py` | Pydantic 请求/响应 |

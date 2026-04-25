@@ -253,7 +253,7 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 | **Component** | `web/src/components/business/dimension-card.tsx`<br>`web/src/components/business/completion-bar.tsx` | 卡片渲染 / 编辑模式切换 / 折叠 / 完善度计算 |
 | **Server Action** | `web/src/actions/dimension.ts` | session 校验 / zod 入参校验 / fetch FastAPI |
 | **Router** | `api/routers/dimension_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic schema 入参出参 |
-| **Service** | `api/services/dimension_service.py` | 业务规则 / 事务 / tenant 校验 / 写 activity_log |
+| **Service** | `api/services/dimension_service.py` | 业务规则 / 事务 / tenant 校验 / 写 activity_log<br>**M18 baseline-patch（2026-04-26）新增**：① `get_for_embedding(db, dimension_record_id, project_id) -> str \| None` 走 ADR-003 规则 1，拼接 JSONB content 的所有 string 类型字段（CY 决策 3：不引入白名单 schema 改动，运行期 isinstance 过滤）；② create/update commit 后尾调 `embedding_service.enqueue(target_type="dimension_record", ..., enqueued_by="incremental")`；③ delete commit 后异步 enqueue_delete + SilentFailure + cleanup cron 兜底（CY 决策 5） |
 | **DAO** | `api/dao/dimension_dao.py`<br>（依赖 `node_dao.py` / `activity_dao.py`） | SQL 构建 + 强制 tenant 过滤 + 乐观锁 SQL |
 | **Model** | `api/models/dimension_record.py` | SQLAlchemy 模型（schema 真相源） |
 | **Schema** | `api/schemas/dimension_schema.py` | Pydantic 请求 / 响应 |
