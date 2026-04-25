@@ -457,10 +457,10 @@ stateDiagram-v2
 
 ### embedding 行级状态（隐式）
 
-`embeddings` 表自身**无 status 字段**——存在性 + (model_name, model_version) 即为状态（fix v4.1 R5'=B：从单 model_version 扩为 (model_name, model_version) 二元组判定）：
+`embeddings` 表自身**无 status 字段**——存在性 + (provider, model_name, model_version) 三元组即为状态（fix v4.3 verify F1：升三元组与 §3/§5/§14/§15 对齐；provider 是底层切换维度，不能漏）：
 - 不存在 → 未算 / 失败 / 删除
-- 存在 + (model_name, model_version)=current → 可参与召回
-- 存在 + (model_name, model_version)!=current → 旧版本（回填中），不参与召回但保留以防回滚
+- 存在 + (provider, model_name, model_version)=current_triple → 可参与召回
+- 存在 + (provider, model_name, model_version)!=current_triple → 旧版本（回填中），不参与召回但保留以防回滚
 
 **回滚场景**：模型升级后发现新 model 召回质量下降 → CY 改 env `EMBEDDING_MODEL_NAME` 回旧 model（如需要也可同步改 `EMBEDDING_MODEL_VERSION`）+ 重启 → 旧 embedding 立即恢复参与召回（无需重算）
 
@@ -805,7 +805,7 @@ baseline-patch-m18.md README 修订段一并改。
 |----|------|---------|--------|
 | **enqueue 时（debounce）** | Redis SET TTL 60s | `embedding:debounce:{project_id}:{target_type}:{target_id}` | 用户连续编辑同一条 5 次 → 60s 窗口内只 enqueue 1 个 task |
 | **worker 入口（advisory lock）** | `pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(project_id::text \|\| '/' \|\| target_id::text))` —— **audit M4 + verify L3 修复**：双 key namespace + project_id 入 lock key（防 hashtext 32-bit 鸽笼效应下 5 万行 ~0.06% 跨 project 碰撞）| (namespace, project_id+target_id) 双 key | 同 (project_id, target_type, target_id) 两个 task 并发跑（debounce 过期边界） |
-| **worker 内（content_hash 兜底）** | SELECT 已有 embedding，比对 content_hash | `(project_id, target_type, target_id, model_version, content_hash)` | 同内容重算（用户改格式不改内容 / backfill 重跑） |
+| **worker 内（content_hash 兜底）** | SELECT 已有 embedding，比对 content_hash | `(project_id, modality, target_type, target_id, provider, model_name, model_version, content_hash)` —— fix v4.3 verify F2：升 7 字段 PK 对齐 §3 真 schema + §5 R3-3 幂等表 | 同内容重算（用户改格式不改内容 / backfill 重跑） |
 
 ### project_id 是否参与 key 计算（R11-2 必答）
 
@@ -825,7 +825,7 @@ baseline-patch-m18.md README 修订段一并改。
 > **§12D 子模板适用范围（CY ack: Q0=C，2026-04-25）**：本 7 字段子模板**仅服务 🗂️ embedding/索引持久化场景**。与 §12C Queue 持久化的 7 字段位次**不语义对等**——核心区别：
 > - §12C 单触发链（用户主动→Queue），§12D **双触发链**（增量+backfill）
 > - §12C 失败死信通知用户，§12D **失败容忍不通知**（派生数据语义）
-> - §12C 无模型版本概念，§12D **必须 model_version 回填路径**
+> - §12C 无模型版本概念，§12D **必须 (provider, model_name, model_version) 三段回填路径**（fix v4.3 verify F3：升三段与 §14 末尾照抄要点对齐）
 > - §12C 单条业务数据 1:1 任务，§12D **跨模读双路豁免**（规则 1 + 规则 4）
 >
 > **未来后果触发器**（README §12 表加）：2026-10-25 回看本子模板——若半年内 §12D 仅 M18 一个实例使用，且 §12C 与 §12D 字段⑥/⑦ 高度重合，**评估降级为 §12C 扩展段落 + 删 §12D 行**（防止模板膨胀）
@@ -1007,7 +1007,7 @@ class Embedding:
 | Cron | 频率 | 扫描对象 | 职责 | 物理删除条件 |
 |------|------|---------|------|------------|
 | **zombie cron** | 每 5min | embedding_tasks | `status='running' AND created_at < NOW - 2min` → CAS UPDATE 转 failed/EMBEDDING_ZOMBIE | 不删，转状态 |
-| **monitor cron** | 每 1h | embedding_failures | 三维阈值告警（ABS / PCT / PER_PROJECT） | 不删，仅 logger.error + bulletin |
+| **monitor cron** | 每 1h | embedding_failures | 三维阈值告警（ABS / PCT / PER_PROJECT）| 不删，仅 logger.error + bulletin。**fix v4.3 verify V1 备注**：`embedding_failures` 表 fix v4.2 加的 provider/model_name 字段本期 monitor cron 暂不分桶（单维阈值即足够告警）；留作 Phase 2 监控扩展用——按 (provider, model_name) 切片可定位具体哪个模型失败率飙升，避免被 simplify checklist 当死字段砍 |
 | **task cleanup cron** | 每日 0 点 | embedding_tasks | 终态行清理 | succeeded > 30 天 / failed+dead_letter > 90 天 → DELETE |
 | **failure cleanup cron** | 每日 0 点 | embedding_failures | 失败记录清理 | failed_at > 90 天 → DELETE |
 | **orphan cleanup cron**（B1 兜底，fix v3 verify L2 文字修订）| **每周一次（周日 0 点）** | embeddings | 按 `target_type` 分组左外联到对应业务表（node→nodes / dimension_record→dimension_records / competitor→competitors / issue→issues），筛 `business.id IS NULL` 即孤儿 | 孤儿且 `embeddings.created_at < NOW - 30d`（避免误删刚 enqueue 但业务事务未 commit 的窗口）→ DELETE |
@@ -1032,7 +1032,7 @@ class EmbeddingBackfillService:
         语义：检测 status=pending 且 enqueued_by=backfill 且 enqueued > 1h 的残留 task → 真 enqueue 回 arq
         防重复（fix v4 verify R6 修：澄清两层去重分工）：
           - **入队层**：arq `_job_id=f"backfill_recovery:{task.id}"` 1 小时内同 id 拒绝重复入队（cron 与 startup 并发触发的天然去重）
-          - **处理层**：worker 消费时按 `EmbeddingTask.idempotency_key`（§3）做 ON CONFLICT DO NOTHING 兜底（防 _job_id 过期窗口外的并发）
+          - **处理层**：worker 消费时按 §11 三层幂等表"worker 内 content_hash 兜底"行的 7 字段复合 key (project_id, modality, target_type, target_id, provider, model_name, model_version, content_hash) 做 SELECT 比对兜底，已存在同 key + 同 hash → 直接 return 不重算（fix v4.3 verify V3：删 fix v4 误引用的 `EmbeddingTask.idempotency_key` 字段——该字段在 §3 schema 中并不存在，幂等真实落在 worker SELECT 比对）
           两层是串联保险，不冗余；优先看入队层挡住的常态，处理层只在跨小时窗口生效
         """
         stale = db.query(EmbeddingTask).filter(
@@ -1047,7 +1047,7 @@ class EmbeddingBackfillService:
         for task in stale:
             try:
                 await arq_pool.enqueue_job(
-                    "embed_text",
+                    "embed_single",   # fix v4.3 verify V2：与 §6 worker entry / §12D scan_pending payload 命名对齐（fix v3 残留 embed_text 拼写错误）
                     task_id=str(task.id),
                     project_id=str(task.project_id),
                     target_type=task.target_type,

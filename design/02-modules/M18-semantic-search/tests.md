@@ -545,7 +545,7 @@ related_design: ./00-design.md
 
 ### tc_M18_error_07_切到不存在的 model（model_upgrade 验证）
 
-**前提**：env 改 `EMBEDDING_MODEL_VERSION=text-embedding-foo`（不存在）（fix v4 verify R5：env 名同步 §11 表）
+**前提**：env 改 `EMBEDDING_MODEL_NAME=text-embedding-foo`（不存在）（fix v4.3 verify F4：拆分后模型名走 NAME env，VERSION 仅存业务版本号；与 audit-report B8 修订脚注对齐）
 
 **步骤**：
 1. 服务启动时 EmbeddingProvider 抽象层尝试初始化失败 → 启动报错
@@ -629,19 +629,6 @@ related_design: ./00-design.md
 
 ---
 
-### tc_M18_provider_switch_02_mock_prefix mock provider 校验（fix v4.2 R2=A 新增）
-
-**前提**：env 改 `EMBEDDING_PROVIDER=mock` 但 `EMBEDDING_MODEL_NAME=text-embedding-3-small`（漏改成 mock-* 前缀）
-
-**步骤**：服务启动 → `_validate_current_model_on_startup` 被调用
-
-**期望**：
-- 启动失败 ConfigError："mock provider 要求 EMBEDDING_MODEL_NAME 以 'mock-' 前缀..."
-- 服务不进入 ready 状态（FastAPI lifespan startup 抛错 = 进程退出）
-- 防止 OpenAI 模型名挂 mock provider 上的语义自相矛盾持续到 runtime
-
----
-
 ### tc_M18_provider_switch_01_mock 切换后已有 OpenAI embedding 处理（audit M8 #4）
 
 **前提**：embeddings 表已有 5000 行 `provider='openai', model_name='text-embedding-3-small', model_version='v1'`，env 改 `EMBEDDING_PROVIDER=mock` + `EMBEDDING_MODEL_NAME=mock-default`（fix v4.2 R2=A 强制：mock provider 必须 `mock-*` 前缀，否则 startup ConfigError）
@@ -658,6 +645,19 @@ related_design: ./00-design.md
 - search 仍可用（用 OpenAI 旧 embedding）
 - CY 收到 warning 启动回填决策
 - 回填完成后所有 embedding 都是 mock provider，OpenAI 旧行 30 天后 cron 清理
+
+---
+
+### tc_M18_provider_switch_02_mock_prefix mock provider 校验（fix v4.2 R2=A 新增）
+
+**前提**：env 改 `EMBEDDING_PROVIDER=mock` 但 `EMBEDDING_MODEL_NAME=text-embedding-3-small`（漏改成 mock-* 前缀）
+
+**步骤**：服务启动 → `_validate_current_model_on_startup` 被调用
+
+**期望**：
+- 启动失败 ConfigError："mock provider 要求 EMBEDDING_MODEL_NAME 以 'mock-' 前缀..."
+- 服务不进入 ready 状态（FastAPI lifespan startup 抛错 = 进程退出）
+- 防止 OpenAI 模型名挂 mock provider 上的语义自相矛盾持续到 runtime
 
 ---
 
