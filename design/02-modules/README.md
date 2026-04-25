@@ -26,7 +26,7 @@
 | **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
 | **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
-| 第四批剩余（AI 异步）| M18 语义搜索（🗂️ Queue 嵌入，可复用 §12C） | 待 CY 出业务 | — |
+| **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **draft（2026-04-25 brainstorming Q0-Q11 完成）** | [`M18-semantic-search/`](./M18-semantic-search/) |
 | 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：
@@ -34,6 +34,10 @@
 - 异步 Queue 模块 → `M17-ai-import/00-design.md`
 - **流式 SSE 模块** → `M13-requirement-analysis/00-design.md`（§12A 流式子模板定稿；**仅服务 🌊 场景**，不跨形态复用）
 - **Auth 横切源头模块** → `M01-user-account/00-design.md` + [`ADR-004`](../adr/ADR-004-auth-cross-cutting.md)（"实现最简 + schema 都支持"模式 / 独立审计表 R10-2 例外）
+- **后台 fire-and-forget 模块** → `M16-ai-snapshot/00-design.md`（§12B 子模板定稿）
+- **embedding/索引持久化模块** → `M18-semantic-search/00-design.md`（§12D 子模板 draft；双触发链 + 失败容忍 + 模型版本回填 + 跨模读双路豁免）
+
+**§12D 半年回看触发器**（2026-10-25）：M18 accept 后半年评估——若 §12D 仅 M18 一个实例使用、且字段⑥/⑦与 §12C 高度重合，**降级为 §12C 扩展段落 + 删 §12D 行**（防模板膨胀）。挂 `/schedule` 在 M18 accepted 时设置。
 
 **Audit 报告归档**：
 - 第一批：[`audit-report-batch1.md`](./audit-report-batch1.md) + [`audit-report-batch1-verify.md`](./audit-report-batch1-verify.md)
@@ -102,6 +106,7 @@ complexity: low                         # 必填：low / medium / high（来自 
 | **流式（SSE）** | 🌊 | §12A 流式 schema | **定稿（M13 accepted 2026-04-25）** | 7 字段：①端点路径 ②SSE event 类型 ③data payload schema ④鉴权路径（ADR-004 P1）⑤超时策略 ⑥取消机制（AbortController + is_disconnected + aclose）⑦断线重连（不支持续传）**仅服务 🌊 场景，字段语义不跨 3 形态通用** |
 | **后台异步**（fire-and-forget）| 🪷 | §12B 后台任务 schema | **定稿（M16 accepted 2026-04-25）** | 7 字段：①任务表 schema（核心字段）②任务状态机 ③创建+查询 endpoint 风格（创建嵌套+查询独立）④鉴权路径（ADR-004 P1+P2 + 独立 GET 反查）⑤超时策略（asyncio.timeout 600s）⑥失败/重试策略（不重试+手动重发）⑦清理+zombie 兜底（CAS UPDATE，cron 频率 ≤ 阈值/2）**字段位次与 §12A/§12C 不语义对等，照抄须按 emoji 选模板**。详见 [M16-ai-snapshot/00-design.md §12](./M16-ai-snapshot/00-design.md) |
 | **Queue 异步**（持久化 + 重试）| 🗂️ | §12C **Queue payload schema**（M17 范式）| **M17** | TaskPayload 基类（强制 user_id + project_id）+ 任务清单 + 重试策略 + 死信处理 |
+| **embedding/索引持久化**（派生数据 + 双触发链）| 🗂️ (embedding 子类) | §12D **embedding 持久化 schema**（M18 范式）| **draft（M18 brainstorming 2026-04-25）** | 7 字段：①双触发链（增量+backfill）+ Payload schema ②embeddings 表 + model_version + content_hash ③跨模读双路豁免（规则 1 + 规则 4）④鉴权路径（无用户端 endpoint，admin only）⑤超时（单 task 60s + batch 15min + query 2s）⑥失败容忍 + monitor cron（**不通知用户**——核心区别于 §12C 死信通知）⑦模型升级回填路径 + zombie + 90 天清理。**字段位次与 §12C 不语义对等**——核心区别：双触发链 / 失败容忍 / 必有 model_version 回填 / 跨模读双路。详见 [M18-semantic-search/00-design.md §12](./M18-semantic-search/00-design.md) |
 
 **M17 §12C 范式核心**（所有 Queue 模块照抄）：
 1. 定义模块 `TaskPayload` 基类继承 `api/queue/base.py:TaskPayload`（强制 user_id + project_id）
