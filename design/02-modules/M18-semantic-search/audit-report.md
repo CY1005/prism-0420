@@ -1,0 +1,359 @@
+---
+title: M18 三轮 Audit 合并报告
+status: draft
+owner: CY (待裁决)
+created: 2026-04-25
+module_id: M18
+related_design: ./00-design.md
+related_tests: ./tests.md
+related_baseline_patch: ../baseline-patch-m18.md
+audit_rounds:
+  - round: 1
+    focus: 完整性
+    reviewer: Sonnet (independent)
+    findings: 0B / 2M / 3m
+  - round: 2
+    focus: 边界 / 矛盾 / corner case
+    reviewer: Opus (independent)
+    findings: 3B / 6M / 4m / 3 CY 决策
+  - round: 3
+    focus: 演进（半年-3年）
+    reviewer: Opus (independent)
+    findings: 12 演进风险 / 7 退路建议 / 半衰期 9-12 月
+---
+
+# M18 三轮 Audit 合并报告
+
+> 3 个独立 reviewer 并行 audit，本报告主对话合并去重 + 跨轮交叉验证。**Reviewer 不附和原则**：3 轮独立读文件判断，3 处发现互证（如删除一致性 B1、模型升级回填、failure 阈值）有更高 confidence。
+
+## 0. 执行摘要
+
+| 严重度 | 数量 | 来源 |
+|--------|------|------|
+| **Blocker（accepted 前必修）** | **5** | R2: 3 / R3: 2（升级） |
+| **Major（accepted 前应修）** | **13** | R1: 2 / R2: 6 / R3: 5 |
+| **Minor（可推迟到 Phase 2）** | **7** | R1: 3 / R2: 4 |
+| **CY 关键决策** | **3** | R2: C1-C3 |
+| **演进退路（Phase 2 之前/之中实施）** | **7** | R3: R1-R7 |
+
+**最大风险一句话**：embeddings 表缺 `modality / dim / provider` 三个字段是**结构性死局**——Phase 2 写代码前不加，未来引入图片/音频/双 provider 时要回填全表 + 重建向量索引（R3-E9）。
+
+**审计走法建议**：先关 5 个 Blocker → CY 拍 3 个决策 → 修 13 Major → 进入 status=accepted；7 个 Minor + 7 演进退路在 Phase 2 同步实施。
+
+---
+
+## 1. Blocker（5 项 - 必修）
+
+### B1 [§9 + baseline-patch 决策 5] 删除一致性事务模型自相矛盾 ★ R2
+
+**问题**：决策 5 说 `delete_by_target` 失败"不阻塞"业务删除；§9 删除策略说"业务模块 Service 内显式调，共享外部 db session（R-X3）"——同一事务内的清理失败按 R-X3 应该 rollback 整个 begin() 块。
+
+**矛盾**：try/except 包住 + commit 业务删除 = 破坏 R-X3 原子性；走外部 enqueue 异步清理 = 不能共享 session。
+
+**期望（二选一明示）**：
+- 选项 A：`commit 后再调 enqueue 异步清理` —— 与决策 5 一致，不再共享 session（baseline-patch M03 改动 2 的 `with db.begin()` 内调用要改）
+- 选项 B：严守 R-X3 共享事务 —— delete 失败必须 rollback（推翻决策 5）
+
+**reviewer 倾向**：A（异步清理 + zombie cron 兜底，与"派生数据失败容忍"哲学一致）
+
+**关联文件**：00-design.md L536-543 / baseline-patch-m18.md M03 改动 2 + 决策 5
+
+---
+
+### B2 [§3 + Q2=B] 维度切换路径完全缺位 ★ R2
+
+**问题**：`Vector(1536)` 写死 SQLAlchemy class。Alembic 不能在线 ALTER pgvector 列维度（需 drop+rebuild ivfflat 索引 + 全量重写）。决策 2=B "3 provider 抽象（OpenAI 1536 / bge 512 / mock）"在物理层做不到无缝切换。
+
+**期望**：§3 显式补一段「provider 切换迁移路径」，三选一明文：
+- A：停服迁移（admin 触发，全表 drop 重建）
+- B：双表并行（embeddings_provider_a + embeddings_provider_b，过渡期双写）
+- C：不支持运行时切换（部署期固定，承认 Q2=B 抽象仅是接口预留非运维能力）
+
+**reviewer 倾向**：C（最 KISS，明确切 provider = 重大运维事件）
+
+**关联文件**：00-design.md §3 L177 + §6 EmbeddingProvider 抽象段
+
+---
+
+### B3 [§9 + ADR-003] 规则 4 时序矛盾 ★ R2
+
+**问题**：M18 §9 大量引用"规则 4"，但 ADR-003 尚未扩条（baseline-patch 实施顺序第 1 步才扩）。M18 status=draft 时 reviewer 无法 audit "规则 4 是否被正确应用"——规则 4 权威定义在 baseline-patch 草稿里。
+
+**期望（二选一）**：
+- 选项 A：先把 ADR-003 规则 4 扩条 accepted，再 audit M18（顺序倒过来）
+- 选项 B：M18 §9 把规则 4 全文嵌入（不引用），accepted 时与 ADR-003 修订**同步**
+
+**reviewer 倾向**：B（ADR 修订流程比 M18 audit 慢，避免阻塞）
+
+**关联文件**：00-design.md §9 + baseline-patch-m18.md ADR-003 段
+
+---
+
+### B4 [§3] 缺 modality / dim / provider 字段 = 结构性死局 ★ R3
+
+**问题**：embeddings 表 `target_type` 是业务实体类型（node/dimension_record/...），不是 modality。未来引入 image/audio embedding 时，要么扩 `target_type='node_image'` 字符串膨胀（CHECK 约束失控），要么按 modality 分表（search 路由跨表 UNION，RRF 融合层重写）。
+
+**严重性升级理由**：
+- 现在加成本 = 改 1 个 SQLAlchemy class（5 分钟）
+- 半年后加成本 = 回填 50 万行 + 重建 ivfflat 索引（数小时停服）
+- 这是 schema PK 锁定的**不可逆债务**，不是配置参数
+
+**期望**：Phase 2 写代码**之前**强制 §3 加：
+```python
+modality: Mapped[str] = mapped_column(VARCHAR(16), default='text', nullable=False)  # 'text' | 'image' | 'audio'
+dim: Mapped[int] = mapped_column(nullable=False)        # 1536 / 512 / 384 / ...
+provider: Mapped[str] = mapped_column(VARCHAR(32), nullable=False)   # 拆 model_version
+# model_version 改为业务版本号（如 v1 / v2）
+
+# 字符串约定：provider/model/version → openai/text-embedding-3-small/v1
+__table_args__ = (
+    CheckConstraint("modality IN ('text', 'image', 'audio')", ...),
+    ...
+)
+```
+
+**关联文件**：00-design.md §3 + R3 演进退路 R1+R7
+
+---
+
+### B5 [§6] 无 M18 整体回退路径（kill switch 缺失） ★ R3
+
+**问题**：M09 已 superseded 路由迁 M18。运行半年后若发现混合搜索质量不如纯关键词（PRD F18 没"质量评估"机制——见 M11/E11），**没有 env flag 一键回退**。一旦 M09 代码物理删除（Phase 2 实施），回退要重写。
+
+**期望**：Phase 2 实施前 §6 SearchService 加 env kill switch：
+```python
+SEARCH_MODE = os.getenv("SEARCH_MODE", "hybrid")  # 'hybrid' | 'keyword_only' | 'semantic_only'
+# 入口判断 → keyword_only 模式跳过向量路径，与 PgvectorUnavailableError 同链
+```
+
+**关联文件**：00-design.md §6 SearchService + R3 演进退路 R2
+
+---
+
+## 2. Major（13 项 - 应修）
+
+### M1 [§10 表格 vs 末段枚举] action_type 大小写不一致 - R1
+
+§10 主表格写 `embedding_model_upgrade_triggered`（小写），末段 ActionType 枚举写 `EMBEDDING_MODEL_UPGRADE_TRIGGERED`（大写）。Phase 2 实现易混淆。
+
+**修法**：主表格改为枚举成员名 `ActionType.EMBEDDING_MODEL_UPGRADE_TRIGGERED`。
+
+---
+
+### M2 [§13 R13-2] search 上游错误 wrap 是未决 TBD - R1
+
+R13-2 要求"跨模块错误 wrap 为自己的 ErrorCode"。设计文档写"search 直接透传（待 audit 决定）"——属未决而非显式豁免。
+
+**修法**：明确 ack「search 上游 ErrorCode 透传」+ 写明理由（搜索是聚合操作，上游模块 ErrorCode 用户感知更直接），或加 `SearchUpstreamError` 子类。
+
+---
+
+### M3 [§9 + baseline-patch] 增量路径未覆盖 batch 写入场景 - R2
+
+M11 冷启动 1000 节点 / M17 import 5000 行，若 `batch_create_in_transaction` 内循环调 `create_node` → 1000 次 enqueue + 1000 次 Redis SET 操作连发，Redis 反成瓶颈，且 enqueued_by 边界混乱。
+
+**修法**：baseline-patch 加第 4 enqueued_by 枚举值 `batch_import`，batch 写入路径走"事务后一次性扫差异 enqueue"模式（与 backfill 同框架），不走单条 enqueue。
+
+---
+
+### M4 [§11] advisory_xact_lock 缺 namespace 防御 - R2
+
+当前 `pg_advisory_xact_lock(hashtext(target_id::text))` 单 key。未来图片/音频 embedding 加入若复用同模式 → 跨 namespace 互锁。
+
+**修法**：现在改双 key（成本零）：`pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(target_id::text))`。
+
+---
+
+### M5 [§12D 字段⑤] 2s query embedding 超时 = P99 边界 - R2
+
+OpenAI P99 ≈ 1.5-2s + RRF + DB ≈ 1s = 接近 3s SLA 边界。约 50% 概率破 SLA。
+
+**修法**：query embedding 超时降到 1s + 显式声明"超时即 fallback keyword_only 不计入 SLA"。
+
+---
+
+### M6 [§3 + tc_error_07] current_model 启动后全 miss 场景 - R2
+
+env 改成"未来计划但暂未上线的 model"（合法字符串）→ embeddings 表 `WHERE model_version=current` 全空 → search 仅命中关键词。tc_error_07 的"启动失败"逻辑无法捕获此场景。
+
+**修法**：§7 search 路由加保护：`current_model` 不在 embeddings 表 model_version distinct 集合中 → 启动 warn + 自动 fallback 最近 model_version；§3 加该约束说明。
+
+---
+
+### M7 [§10 R10-2 文字修订连锁伤 M01] - R2
+
+修订后条件 3 = "事件为系统级（用户无主动操作语义）"。但 M01 auth `login_attempt` 显然有用户主动操作 → M01 反而**失去**例外资格。
+
+**修法**：文字再精修——"事件主体是**系统行为**（auth 校验 / embedding 计算）而非**业务行为**（创建编辑删除）"。把"主动操作"换成"业务行为"，能容纳 auth 与 embedding 两个 case。baseline-patch §README 修订段一并改。
+
+---
+
+### M8 [tests.md] 4 缺漏 case - R2
+
+补充：
+- backfill 中断恢复（admin 触发跑到 50% 服务重启 → 续跑能力）
+- RRF 参数 update 时正在 search 的 race（read-after-write 一致性）
+- embedding 写入 commit 后 worker 未跑的 read-after-write 显式契约（明示"5s 内能语义召回刚写内容"是**不保证**的）
+- mock provider 切换后已有 OpenAI embedding 全 filter 掉的退化测试
+
+---
+
+### M9 [§3 SQLAlchemy] ivfflat lists=100 演进锚点缺失 - R3
+
+50 万行规模需 lists≈500，否则召回 latency 退化 3-10×。lists 写死在 ORM `Index` 里，半年后改要 Alembic + REINDEX 锁表。
+
+**修法**：lists 移到 env 配置；§15 加"embeddings 行数 > 50万 时触发 lists reindex 评估"演进锚点。
+
+---
+
+### M10 [§12D 字段⑥] failure 阈值 5%/h 与规模耦合 - R3
+
+CY 单人时 5% = 1 条；50 用户时 5% = 100+ 条/h，告警风暴。阈值是"百分比+小时"二维死参数。
+
+**修法**：cron 同时算"绝对值 / 百分比 / 单 project 占比"三维度，任一超过阈值告警。env 三个独立阈值。
+
+---
+
+### M11 [§12D 字段⑦] zombie cron 5min 全表扫演进瓶颈 - R3
+
+50 万行规模 + 终态行 30 天才清 → 5min cron 每跑都扫几万行。
+
+**修法**：§12D 字段⑦ 加"按时间 partition 或终态行立即归档表"演进路径；§15 加"行数 > 50万 触发分区评估"锚点。
+
+---
+
+### M12 [§7] search 路由 2s 超时无分级 - R3
+
+大 project（向量索引大）天然慢，2s 阈值让大项目**经常拿不到语义结果而不自知**。
+
+**修法**：超时事件单独计数指标埋点（即使本期不分级超时，至少有数据未来调）。
+
+---
+
+### M13 [§14] 搜索质量无离线评估积累 - R3
+
+PRD F18 无质量评估机制。M18 输出 matched_by 但不记录"keyword-only / semantic-only / hybrid 三种模式同 query 对比结果"。半年后想答"RRF k=60 是不是真的比 k=80 好"——没数据。
+
+**修法**：search 路由按 1% 采样写 `search_evaluation_log` 表（query / 三模式 top5 / user_clicked_id），半年后离线分析。这是 PRD 明显的盲点。
+
+---
+
+## 3. Minor（7 项 - 可推迟）
+
+### m1 [§3] embedding_tasks.status 裸 str 注解 - R1
+
+R3-2 第 1 重防护要求 `Mapped[StatusEnum]`。修：补 `EmbeddingTaskStatus` 枚举改注解。
+
+### m2 [README] M18 行描述未更新 - R1
+
+README 模块清单 M18 行仍写"brainstorming Q0-Q11 完成"，未体现 00-design.md 已完成。修：改"00-design.md draft 完成，待 audit"。
+
+### m3 [tests.md §7] 12 ErrorCode 测试矩阵未逐一核实 - R1
+
+`PGVECTOR_UNAVAILABLE`/`EMBEDDING_TASK_TERMINAL_VIOLATION`/`EMBEDDING_TASK_INVALID_TRANSITION` 在 tests.md 无对应明确触发 case。修：补 case 或矩阵注明"框架级不测"。
+
+### m4 [§12D] "用户"边界未明示 - R2
+
+字段⑥说"用户无感"+"告警 CY"，但"用户"边界没明示。修：加 1 行"用户=终端用户(viewer/editor/admin)；CY=单人运维=系统侧"。
+
+### m5 [§3 R3-4] 候选 B 改回成本块只列了 1 个 - R2
+
+只列了"移除 project_id 列"成本，没列"PK 含 model_version"改回成本（如果 reviewer 后续推翻 Q3=A）。修：加第二个改回成本块。
+
+### m6 [§13] EmbeddingDeleteFailedError 反模式 - R2
+
+声明"不抛 HTTP"但仍是 AppError 子类，其他模块 try/except AppError 可能误判。修：改为非 AppError 内部 enum 或专门 SilentFailure 基类。
+
+### m7 [tests.md tc_concurrent_05] cache 击穿监控阈值 - R2
+
+接受 race 但应加监控阈值"cache 击穿率 > 30% 引入 singleflight"。修：补到 tests §8 实施约束。
+
+---
+
+## 4. CY 关键决策（3 项）
+
+### C1 [§12D 字段⑦ 适用边界] - R2
+
+字段⑦"模型升级回填"是否 M18-only？图片 embedding 不一定有"模型升级"概念（CLIP-v1 升 v2 频率远低于文本 model）。
+
+**reviewer 倾向**：现在不拆，但 §12D 字段⑦ 加"适用性条件 = 文本类高频迭代 model"。给后续图片模块明文 escape hatch；不要等 2026-10-25 半年回看才发现已经有图片模块抄歪。
+
+**CY 选**：A 现在拆为 M18 自有节 / **B 保留 §12D 字段⑦ + 加适用性条件（reviewer 倾向）** / C 维持原样
+
+---
+
+### C2 [B1 删除一致性二选一] - R2
+
+实质同 B1。**CY 选**：A commit 后异步 enqueue（reviewer 倾向）/ B 严守 R-X3 共享事务（推翻决策 5）
+
+---
+
+### C3 [B2 维度切换路径明文化] - R2
+
+实质同 B2。**CY 选**：A 停服迁移 / B 双表并行 / **C 部署期固定不支持运行时切换（reviewer 倾向）**
+
+---
+
+## 5. 演进退路建议（7 项 - Phase 2 实施时落地）
+
+> 已升级为 Blocker B4/B5 的 R1/R2 不重复列出。
+
+### R3 ivfflat lists 配置化 + reindex 演进锚点 → 升 M9
+
+### R4 failure 阈值 3 维化 → 升 M10
+
+### R5 §12D 复用度复盘自动化（OpenClaw cron）
+
+CY 已有 OpenClaw cron 推 bulletin 机制。建议挂 2026-10-25 自动提醒，不依赖 README 触发器手动扫。
+
+### R6 搜索质量评估机制最小可行版 → 升 M13
+
+### R7 model_version → provider/model/version 三段式 → 已并入 B4
+
+---
+
+## 6. 跨轮交叉验证（reviewer 互证 = 高 confidence）
+
+| 议题 | Round 来源 | 互证结论 |
+|------|-----------|---------|
+| **删除一致性事务矛盾** | R2 B1 + R3 隐含（kill switch） | 独立发现，确实是架构问题 |
+| **embeddings 表 schema 演进** | R2 B2（维度）+ R3 B4（modality/dim/provider）| 同一根源不同视角，必修 |
+| **R10-2 文字修订伤 M01** | R2 M6 单点发现 | 反例必须验证（CY 自检不严） |
+| **failure 阈值演进** | R2（未提）+ R3 M10 | 仅 R3 发现，是规模演进盲点 |
+| **§12D 子模板复用度** | R2 C1 + R3 E8 + R3 R5 | 三处呼应，强建议自动化 |
+
+**reviewer 不附和验证**：3 轮独立 reviewer 都未对 M18 整体设计给"全 OK"评价——证明 audit 流程有效，没有附和倾向。
+
+---
+
+## 7. 推进路径
+
+### Phase 1.5（accepted 前 = 本轮 audit 闭环）
+
+1. **CY 拍 C1 / C2 / C3** 三决策
+2. 主对话改 5 Blocker（B1-B5）+ 13 Major（M1-M13）
+3. 改完 verify Agent 独立审 fix 是否撒谎（参 M16 流程）
+4. 主对话精修剩余 → status=draft → accepted
+5. 同步落 baseline-patch（M02/M09/M03/M04/M06/M07/M15/ADR-003/README）
+6. **同步把 R5 OpenClaw cron 挂上**（2026-10-25 §12D 复用度复盘提醒）
+
+### Phase 2（实施代码时）
+
+7. 7 Minor（m1-m7）一次性扫
+8. 演进退路 R3/R4/R6 实施落地
+9. simplify 体检（按 prism-0420 CLAUDE.md「Phase 2 合并前体检」）
+
+### 半衰期评估
+
+reviewer 给 M18 设计**半衰期 9-12 个月**（比 M16/M17 短，因 AI 增强模块受外部 model/provider 生态推着跑）。建议 2026-10-25 半年回看时同步评估"是否需要重构 §3 schema"。
+
+---
+
+## 8. 关联
+
+- 主设计：[`./00-design.md`](./00-design.md)
+- 测试：[`./tests.md`](./tests.md)
+- 基线补丁：[`../baseline-patch-m18.md`](../baseline-patch-m18.md)
+- ADR-003 待扩规则 4：[`../../adr/ADR-003-cross-module-read-strategy.md`](../../adr/ADR-003-cross-module-read-strategy.md)
+- §12D 子模板：[`../README.md`](../README.md) §12 表
+- 半年回看触发器：[`../README.md`](../README.md) 末尾「设计回看触发器」
