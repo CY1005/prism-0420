@@ -114,7 +114,7 @@ async def handle_client_command(self, command: ClientCommand):
 ### 横切影响
 
 - M13（流式 SSE）：M13 pilot 已结论（2026-04-25 accepted）——流式鉴权走 ADR-004 P1（浏览器 fetch + Authorization Bearer JWT 直连 FastAPI），本 ADR 不覆盖；流式无客户端→服务器命令通道，连接级 auth 已覆盖，无 chunk 级鉴权需求。参见 [M13-requirement-analysis/00-design.md §8](../02-modules/M13-requirement-analysis/00-design.md)
-- M16（后台 fire-and-forget）：使用本 ADR 的 TaskPayload 基类即可（即使没有 arq Queue）
+- M16（后台 fire-and-forget）：M16 pilot 已结论（2026-04-25 accepted）—— **不**走 arq Queue，用 FastAPI BackgroundTasks 同进程异步；本 ADR 不覆盖。决策依据：失败代价低（Q5 ack A 用户手动重发）+ 引入成本零；**反悔触发器**：zombie 率 ≥1% / 单次 AI 成本 ≥$0.5 → 迁移到 arq（迁移成本 ~50 行 + Redis worker）。详见 [M16-ai-snapshot/00-design.md §6 BackgroundTasks vs arq 边界](../02-modules/M16-ai-snapshot/00-design.md)
 - M18（Queue 嵌入）：完全适用本 ADR
 
 ---

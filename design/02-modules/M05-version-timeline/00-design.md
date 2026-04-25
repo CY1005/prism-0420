@@ -242,6 +242,15 @@ is_current 不是状态机（只是布尔标记），但存在一个业务约束
 - ❌ Service 绕过 DAO
 - ❌ DAO 做业务判断（is_current 互斥逻辑放 Service）
 
+### 对外契约（R-X3，M16 pilot 基线补丁补充）
+
+- `VersionService.list_by_node(db: Session, node_id: UUID, project_id: UUID, limit: int = 50) -> list[VersionRecord]`（已有）—— 按 created_at ASC 排序，跨模块只读消费
+- `VersionService.count_by_node(db: Session, node_id: UUID, project_id: UUID) -> int`（**M16 pilot 基线补丁追加**）—— 用于 M16 AC1 兜底（≥3 校验）+ M16 幂等 key 一部分
+  - 双 tenant 过滤（WHERE project_id = ? AND node_id = ?）
+  - 接受外部 db session（R-X3）；不开事务；不写 activity_log
+  - 复用现有 `ix_version_records_node_created` 索引（§3）；count(*) 性能验收 < 5ms p95（typical node ≤100 versions）
+  - Phase 2 实装位置：`api/services/version_service.py`
+
 ---
 
 ## 7. API 契约

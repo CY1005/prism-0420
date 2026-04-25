@@ -25,7 +25,8 @@
 | 第三批 A1 | M15 数据流转可视化 | **accepted（2026-04-21）** | [`M15-activity-stream/`](./M15-activity-stream/) |
 | **Pilot 3** | M01 用户账号（**auth pilot**）| **accepted（2026-04-24）** | [`M01-user-account/`](./M01-user-account/) |
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
-| 第四批（AI 异步）| M16 AI 快照 / M18 语义搜索 | 待 CY 出业务 | — |
+| **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
+| 第四批剩余（AI 异步）| M18 语义搜索（🗂️ Queue 嵌入，可复用 §12C） | 待 CY 出业务 | — |
 | 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
 
 **Pilot 范本**（新模块设计前必读）：
@@ -99,7 +100,7 @@ complexity: low                         # 必填：low / medium / high（来自 
 |---------|--------------|-----------|------|----------|
 | **同步** | — | §12 显式 N/A | M04 | 写"本模块不投递 Queue 任务" |
 | **流式（SSE）** | 🌊 | §12A 流式 schema | **定稿（M13 accepted 2026-04-25）** | 7 字段：①端点路径 ②SSE event 类型 ③data payload schema ④鉴权路径（ADR-004 P1）⑤超时策略 ⑥取消机制（AbortController + is_disconnected + aclose）⑦断线重连（不支持续传）**仅服务 🌊 场景，字段语义不跨 3 形态通用** |
-| **后台异步**（fire-and-forget）| 🪷 | §12B 后台任务 schema | 待 M16 实战补完 | 任务状态轮询 endpoint + 状态字段定义（无持久化 Queue） |
+| **后台异步**（fire-and-forget）| 🪷 | §12B 后台任务 schema | **定稿（M16 accepted 2026-04-25）** | 7 字段：①任务表 schema（核心字段）②任务状态机 ③创建+查询 endpoint 风格（创建嵌套+查询独立）④鉴权路径（ADR-004 P1+P2 + 独立 GET 反查）⑤超时策略（asyncio.timeout 600s）⑥失败/重试策略（不重试+手动重发）⑦清理+zombie 兜底（CAS UPDATE，cron 频率 ≤ 阈值/2）**字段位次与 §12A/§12C 不语义对等，照抄须按 emoji 选模板**。详见 [M16-ai-snapshot/00-design.md §12](./M16-ai-snapshot/00-design.md) |
 | **Queue 异步**（持久化 + 重试）| 🗂️ | §12C **Queue payload schema**（M17 范式）| **M17** | TaskPayload 基类（强制 user_id + project_id）+ 任务清单 + 重试策略 + 死信处理 |
 
 **M17 §12C 范式核心**（所有 Queue 模块照抄）：
@@ -318,7 +319,8 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 - [x] **第三批 A1 4 模块（M08/M09/M10/M15）accepted（2026-04-21）**+ ADR-003 跨模块读策略 + R3-5/R-X3/R-X4
 - [x] **第三批 A2 M01 auth pilot accepted（2026-04-24）**：ADR-004 auth 横切范式 + "实现最简+schema 都支持" 模式 + R10-2 例外（独立审计表）
 - [x] **Pilot 4 M13 需求分析（流式 SSE）accepted（2026-04-25）**：§12A 流式子模板定稿 + ADR-001 §4.1 补 aclose 协议 + ADR-002 L116 替换 M13 结论 + M04 baseline-patch（`create_dimension_record` + `get_latest`）+ M07 §6 对外契约登记 `list_by_project(node_id=...)`；驳回 reviewer M15 部分（合理 🔵）
-- [ ] 第四批剩余 AI 异步类（M16 后台 🪷 / M18 语义搜索 🗂️）—— 待 CY 出业务；§12B（M16 🪷）/ §12C（M18 🗂️ 可复用 M17 §12C 范式）待补完
+- [x] **Pilot 5 M16 AI 快照（后台 🪷 fire-and-forget）accepted（2026-04-25）**：§12B 后台子模板定稿（7 字段+位次不通用警告）+ ADR-002 §横切影响 M16 脚注（不走 Queue + 反悔触发器）+ M05 baseline-patch（`count_by_node`）+ M15 Alembic 迁移 3+1 枚举（Phase 2）+ M04 契约锁定（复用 M13 补丁的 `create_dimension_record`）；19 项 audit（4 Blocker / 9 Major / 6 Minor）全部 🟢/🔵 关闭
+- [ ] 第四批剩余 AI 异步类（M18 语义搜索 🗂️ 可复用 §12C 范式）—— 待 CY 出业务
 - [ ] 扩展 M20 团队 / 空间 —— 待开
-- [ ] 20 模块全部 status=accepted（剩 3 个：M16 / M18 / M20）
+- [ ] 20 模块全部 status=accepted（剩 2 个：M18 / M20）
 - [ ] 99-comparison/ 对照报告：每模块一份
