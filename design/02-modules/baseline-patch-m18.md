@@ -369,13 +369,13 @@ class ActionType(str, Enum):
 
 **Phase 2 阶段（写代码）**：3+4+5 必须先于 M18 实施代码
 
-## 4. CY 决策项
+## 4. CY 决策项（2026-04-25 全部 ack 按建议）
 
-- [ ] **决策 1**：ADR-003 规则 4 文字是否需要进一步收紧？（如规定"仅 backfill 路径，所有其他场景仍走规则 1"——已写入草案，确认即可）
-- [ ] **决策 2**：M02 ProjectSettings 加 RRF 参数后，UI 是否暴露给非管理员？（建议：仅 admin 改，viewer 看不到——与 M02 现有权限模型一致）
-- [ ] **决策 3**：M04 dimension_records.content JSONB 拼接策略——是否扩展为"所有 string 字段"还是"仅显式标注 embeddable 的字段"？（草案选前者，简单；后者需 M04 schema 加白名单字段）
-- [ ] **决策 4**：M06 competitors 的 url 字段是否参与 embedding？（建议否——url 文本对语义召回价值低，可能产生噪音）
-- [ ] **决策 5**：embedding_service.delete_by_target 失败时是否阻塞业务删除？（建议否——仅日志，留给 M18 zombie cron 兜底清理孤儿 embedding）
+- [x] **决策 1**：ADR-003 规则 4 收紧——明确"仅 backfill 路径走规则 4，其他所有场景（含增量单条 / search 关键词路径）仍走规则 1"；规则 4 文字加"使用边界"段落
+- [x] **决策 2**：M02 ProjectSettings RRF 参数 UI 仅 admin 可改（viewer 无入口，复用 M02 现有 `assertProjectRole(project_id, "admin")` 权限模型）
+- [x] **决策 3**：M04 JSONB content 拼接策略 = 所有 string 类型字段（不引入白名单 schema 改动），实现见 §M04 改动 1 草案
+- [x] **决策 4**：M06 competitors 的 url 字段**不参与 embedding**（仅 name + description）；M07 不受影响（无 url 字段）
+- [x] **决策 5**：embedding_service.delete_by_target 失败**不阻塞**业务删除（try/except 包住，仅 logger.error + 写一条 embedding_failures error_code=`EMBEDDING_DELETE_FAILED`，留 M18 zombie/cleanup cron 兜底）
 
 ## 5. 关联文档
 

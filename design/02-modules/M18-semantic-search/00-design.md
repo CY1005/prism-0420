@@ -815,6 +815,9 @@ class ErrorCode(str, Enum):
     # M18 admin
     EMBEDDING_BACKFILL_ALREADY_RUNNING = "EMBEDDING_BACKFILL_ALREADY_RUNNING"   # 防并发触发
     EMBEDDING_MODEL_UPGRADE_INVALID = "EMBEDDING_MODEL_UPGRADE_INVALID"          # 切到不存在的 model
+
+    # M18 删除一致性（baseline-patch 决策 5）
+    EMBEDDING_DELETE_FAILED = "EMBEDDING_DELETE_FAILED"                          # delete_by_target 失败不阻塞，写 failures
 ```
 
 ### AppError 子类（R13-1 每 ErrorCode 必有子类）
@@ -862,6 +865,10 @@ class EmbeddingBackfillAlreadyRunningError(AppError):
 class EmbeddingModelUpgradeInvalidError(AppError):
     code = ErrorCode.EMBEDDING_MODEL_UPGRADE_INVALID
     http_status = 400
+
+class EmbeddingDeleteFailedError(AppError):
+    """业务删除尾调 delete_by_target 失败时使用——logger.error + 写 embedding_failures，不抛 HTTP（不阻塞业务删除）"""
+    code = ErrorCode.EMBEDDING_DELETE_FAILED
 ```
 
 ### 跨模块错误 wrap（R13-2）
