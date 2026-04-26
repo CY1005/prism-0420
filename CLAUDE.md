@@ -42,6 +42,15 @@ GitHub：https://github.com/CY1005/prism-0420
    - Reviewer 不附和，独立读文件判断
    - 三轮递进：完整性 → 边界 → 演进
 
+## 阶段闸门（防跳过工程地基写业务代码）
+
+🔴 **AI 准备生成「实现提示词」/「Phase N 启动包」/ 业务模块代码 / PR 计划 前必须**：
+1. 读 [`design/00-roadmap.md`](./design/00-roadmap.md) 看真实进度（不凭印象）
+2. 读 [`design/00-phase-gate.md`](./design/00-phase-gate.md) 看下一闸门 checkbox
+3. 任一 checkbox 未 ✅ → 不出业务提示词，告诉 CY「你在阶段 X，下一步是 Y」
+
+每次进度变化（决策落定 / PR merge / 闸门项打钩）→ AI 必须更新 `00-roadmap.md` 的进度仪表盘 + 对应行 + last_updated 字段。
+
 ## 一次一件事节奏
 
 - 一次对话聚焦一个可交付小任务
