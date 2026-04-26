@@ -183,13 +183,22 @@ class ActivityLog(Base, ImmutableMixin):
             "'cold_start.create','cold_start.completed','cold_start.failed',"
             "'snapshot.create','snapshot.rename','snapshot.delete',"
             "'import.create','import.status_change','import.ai_step_complete','import.review_confirmed',"
-            "'import.batch_insert','import.cancel','import.failed','import.partial_failed')",
+            "'import.batch_insert','import.cancel','import.failed','import.partial_failed',"
+            # M18 baseline-patch（2026-04-26）
+            "'embedding_model_upgrade_triggered','embedding_backfill_triggered',"
+            # M20 baseline-patch（2026-04-26）
+            "'team_created','team_renamed','team_description_changed','team_deleted',"
+            "'team_member_added','team_member_removed',"
+            "'team_member_promoted_admin','team_member_demoted_member',"
+            "'project_joined_team','project_left_team')",
             name="ck_activity_log_action_type",
         ),
         CheckConstraint(
             "target_type IN ('node', 'dimension_record', 'version_record', 'competitor', 'competitor_ref', "
             "'issue', 'project', 'project_member', 'project_dimension_config', "
-            "'module_relation', 'cold_start_task', 'comparison_snapshot', 'import_task')",
+            "'module_relation', 'cold_start_task', 'comparison_snapshot', 'import_task', "
+            # M20 baseline-patch（2026-04-26）
+            "'team')",
             name="ck_activity_log_target_type",
         ),
     )
@@ -274,6 +283,39 @@ class ActivityStreamDAO:
             total = q.count()  # 首页精确 total
         else:
             total = None  # 后续分页不计算精确 total（前端用 has_more 判断）
+        records = (
+            q.order_by(desc(ActivityLog.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return records, total
+
+    def list_for_team(
+        self,
+        db: Session,
+        team_id: PyUUID,
+        user_id: PyUUID,                    # L1 require_team_access(member) 已 Router 层校验
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[tuple[ActivityLog, str]], int]:
+        """
+        M20 baseline-patch（2026-04-26，F2.5 修复）：
+        team_* 事件 8/10 类（team_created / team_renamed / team_description_changed /
+        team_deleted / team_member_added / team_member_removed / team_member_promoted_admin /
+        team_member_demoted_member）target_type='team' 且无 project_id；list_for_project 召不回。
+        新增此入口走 target_type+target_id 路径。
+        """
+        q = (
+            db.query(ActivityLog, User.name.label("user_name"))
+            .join(User, User.id == ActivityLog.user_id)
+            .filter(
+                ActivityLog.target_type == "team",
+                ActivityLog.target_id == team_id,
+            )
+        )
+        total = q.count() if (page - 1) == 0 else None
         records = (
             q.order_by(desc(ActivityLog.created_at))
             .offset((page - 1) * page_size)
@@ -403,8 +445,20 @@ class ActionType(str, Enum):
     # M18 语义搜索（baseline-patch 2026-04-26）
     embedding_model_upgrade_triggered = "embedding_model_upgrade_triggered"
     embedding_backfill_triggered      = "embedding_backfill_triggered"
+    # M20 团队（baseline-patch 2026-04-26，Q10.1 全 B 细粒度 10 类）
+    team_created                      = "team_created"
+    team_renamed                      = "team_renamed"
+    team_description_changed          = "team_description_changed"
+    team_deleted                      = "team_deleted"
+    team_member_added                 = "team_member_added"
+    team_member_removed               = "team_member_removed"            # detail.reason: manual / team_deleted；detail.residual_project_count + residual_project_ids[:10]（F2.4）；detail.correlation_id（F2.9）
+    team_member_promoted_admin        = "team_member_promoted_admin"     # detail.to_role: admin / owner（含 transfer 升 owner）；detail.correlation_id
+    team_member_demoted_member        = "team_member_demoted_member"     # detail.to_role: member / admin（含 transfer 降 admin）；detail.correlation_id
+    project_joined_team               = "project_joined_team"
+    project_left_team                 = "project_left_team"              # detail.reason: manual / team_deleted_archived_auto_unbind（F2.3 历史兜底）
     # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
     # 注：M18 写 activity_log 仅用上述 2 个 admin 触发事件；embedding 计算/失败本身按 R10-2 例外（M18 §10）写入自有 embedding_failures，不污染业务时间线
+    # 注：M20 promoted_admin / demoted_member 命名偏字面（实际承载升 owner / 降 admin），半年回看（README 2026-10-26）评估合并为 role_changed
 
 
 class TargetType(str, Enum):
@@ -421,6 +475,7 @@ class TargetType(str, Enum):
     cold_start_task           = "cold_start_task"            # M11 冷启动任务
     comparison_snapshot       = "comparison_snapshot"         # M12 对比快照
     import_task               = "import_task"                # M17 导入任务
+    team                      = "team"                        # M20 baseline-patch 2026-04-26
     # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
     # 注：原 "relation" 枚举值已移除——无模块使用；M08 使用 "module_relation"
 
@@ -551,6 +606,16 @@ class ErrorCode(str, Enum):
     ACTIVITY_STREAM_PROJECT_NOT_FOUND = "ACTIVITY_STREAM_PROJECT_NOT_FOUND"  # project 不存在或无权限
     ACTIVITY_STREAM_FORBIDDEN         = "ACTIVITY_STREAM_FORBIDDEN"          # 非 owner/editor 角色访问（viewer / 无成员身份）
     ACTIVITY_STREAM_INVALID_FILTER    = "ACTIVITY_STREAM_INVALID_FILTER"     # 过滤参数不合法（如 from_dt > to_dt）
+
+    # M20 baseline-patch（2026-04-26，Q12=A 粗粒度 8 个 ErrorCode 全局注册到 M15 ErrorCode 表）
+    TEAM_NOT_FOUND                    = "TEAM_NOT_FOUND"                    # 404
+    TEAM_NAME_DUPLICATE               = "TEAM_NAME_DUPLICATE"               # 409  detail: name, creator_id
+    TEAM_HAS_PROJECTS                 = "TEAM_HAS_PROJECTS"                 # 422  detail: project_count, project_ids[:10]
+    TEAM_OWNER_REQUIRED               = "TEAM_OWNER_REQUIRED"               # 422  detail: reason ∈ {last_owner_demote, last_owner_remove, transfer_target_not_member, target_is_self}
+    TEAM_MEMBER_NOT_FOUND             = "TEAM_MEMBER_NOT_FOUND"             # 404
+    TEAM_MEMBER_DUPLICATE             = "TEAM_MEMBER_DUPLICATE"             # 409
+    TEAM_PERMISSION_DENIED            = "TEAM_PERMISSION_DENIED"            # 403  detail: required_role, current_role
+    CROSS_TEAM_MOVE_FORBIDDEN         = "CROSS_TEAM_MOVE_FORBIDDEN"         # 422  detail: current_team_id, target_team_id
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

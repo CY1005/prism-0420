@@ -1,8 +1,9 @@
 # ADR-001：建立 Prism Shadow 项目用于设计训练
 
-- **状态**：accepted
+- **状态**：accepted（§预设 3 部分 superseded by ADR-005，2026-04-26）
 - **日期**：2026-04-20
 - **决策者**：CY
+- **partial_superseded_by**：[ADR-005-team-extension.md] —— §预设 3 整段（命名 + 类型 + FK 三件）
 
 ---
 
@@ -133,7 +134,14 @@ for i in range(WORKER_COUNT):
     Worker(queue_name="ai_tasks").start()
 ```
 
-### 预设 3：space_id 形态 — 预留列无 FK
+### 预设 3：space_id 形态 — 预留列无 FK ⚠️ **整段 superseded by ADR-005（2026-04-26）**
+
+> ⚠️ 本节于 2026-04-26 被 [ADR-005-team-extension.md](./ADR-005-team-extension.md) **整段 superseded**，三件实质变更：
+> 1. **命名**：`space_id` → `team_id`（对齐 PRD F20「团队」+ Prism 实跑命名）
+> 2. **类型**：`INT NULL` → `UUID NULL`（对齐项目 UUID 范式）
+> 3. **FK**：原"无 FK 预留口"放弃，正式启用 `ondelete=RESTRICT`（M20 Q8「强制前置迁出」依赖）
+>
+> 本节内容仅作历史记录保留，新设计请直接参 ADR-005 §3 baseline-patch + M20-team/00-design.md §3。「最小预留口 + 未来扩展」精神保留，但字面上的「INT / 无 FK / 预留」全部废弃。
 
 - 所有 project 相关表预留 `space_id INT NULL` 字段
 - 本期不建 spaces 表，不加 FK 约束
