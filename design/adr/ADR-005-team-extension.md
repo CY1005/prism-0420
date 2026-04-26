@@ -3,7 +3,7 @@
 - **状态**：accepted
 - **日期**：2026-04-26
 - **决策者**：CY
-- **supersedes**：[ADR-001 §预设 3 命名部分（space_id → team_id）]
+- **supersedes**：[ADR-001 §预设 3 整段] —— 涵盖三件实质变更：① 命名 `space_id → team_id`；② 类型 `INT NULL → UUID NULL`（对齐 PRD F20 + Prism 实跑）；③ 启用 FK（原"无 FK 预留口"放弃，正式 `ondelete=RESTRICT`）。supersede 范围**不仅"命名"**，决策对照表与 Consequences §中性段同步精确化。
 - **superseded_by**：null
 
 ---
@@ -45,12 +45,13 @@
 | **Q10.1①** | 转让 owner 事件数 | **B 2 条（demoted + promoted）** | 同事务原子写入，审计需关联 actor + timestamp |
 | **Q10.1②** | team 改字段事件 | **B 拆分（team_renamed / team_description_changed）** | 未来加字段需加新事件类型 |
 | **Q10.1③** | 删 team 是否级联写 N 条 member_removed | **B 写 1 条 team_deleted + N 条 team_member_removed(reason="team_deleted")** | 同事务 N+1 条事件原子写 |
-| **Q11** | Auth 横切路径 | **A 全部 P1 用户态（require_user）** | 不涉及 P2/P3/P4，token_invalidated_at 不扩展 |
+| **Q11** | Auth 横切路径 | **A 全部 P1+P2（require_user 合并入口，对齐 ADR-004 §79）** | 不涉及 P3/P4，token_invalidated_at 不扩展 |
 | **Q12** | ErrorCode 粒度 | **A 粗粒度 8 个**（细粒度场景靠 detail 补） | 与 M02 范式 1:1 对齐 |
 | **Q13** | teams 表 owner_id 设计 | **C creator_id（创建者只读，不随 transfer 变）** | 当前 owner 由 team_members.role='owner' 单独查询 |
 | **Q13.1①** | team name 唯一约束 | **A 同 creator 下唯一** | UI 显示 team name 附 creator 名缓解 transfer 后语义偏 |
 | **Q13.1②** | team_members FK CASCADE/RESTRICT | **B RESTRICT** | Service 层显式 5 步删 team 流程，DB 层 RESTRICT 兜底 |
 | **Q13.1③** | teams 通用字段 | **A 完全照搬 M02 范式** | id UUID / creator_id / name String(100) / description Text / version / created_at / updated_at |
+| **Q13.2** | Service 跨事务签名（删 team / transfer owner） | **A 接受外部 `db: Session`（R-X3）** | M20 §8.7 给 `delete_team(self, db, ...)` / `transfer_ownership(self, db, ...)` 签名草案；Router 持 commit/rollback 权；写 activity_log 复用同一 db |
 | **Q14** | 模块依赖声明 | **C 标准依赖 + ADR-005 承担横切影响清单** | requires=[M01,M02,M15] / extends=[M02,M15]，横切影响入本 ADR §3 |
 | **Q15** | Out of scope 清单 | **A 完整 15 项** | 按 6 组分类显式列出，防 AI 自由发挥 |
 
@@ -129,7 +130,7 @@ class TargetType(str, Enum):
 TEAM_NOT_FOUND                    # 404
 TEAM_NAME_DUPLICATE               # 409
 TEAM_HAS_PROJECTS                 # 422  detail: project_count, project_ids[:10]
-TEAM_OWNER_REQUIRED               # 422  detail: reason ∈ {last_owner_demote, last_owner_remove, transfer_target_not_member}
+TEAM_OWNER_REQUIRED               # 422  detail: reason ∈ {last_owner_demote, last_owner_remove, transfer_target_not_member, target_is_self}
 TEAM_MEMBER_NOT_FOUND             # 404
 TEAM_MEMBER_DUPLICATE             # 409
 TEAM_PERMISSION_DENIED            # 403  detail: required_role, current_role
@@ -231,12 +232,13 @@ def list_for_project(self, db, project_id: UUID, user_id: UUID):
 
 | # | trade-off | 决策 | 缓解 / 演进退路 |
 |---|-----------|------|----------------|
-| T1 | Q4 单 tenant + Q5 三层注入 → 跨 team 子查询性能 | 接受性能开销，安全优先 | 上线后视监控引入 Redis 缓存 user_accessible_project_ids |
+| T1 | Q4 单 tenant + Q5 三层注入 → 跨 team 子查询性能 | 接受性能开销，安全优先 | 上线后 P95 > 100ms 引入 Redis 缓存 `user:{uid}:accessible_projects` TTL 60s。**失效路径预演（Batch 3 / F3.5）**：① U 加入 team → DEL key；② U 移出 team → DEL key；③ 删 team → DEL key for all members；④ project 加入 team → DEL key for all team members；⑤ project 移出 team → DEL key for all team members（含目标 team）。任一路径漏失效都会导致权限残留 ≤ 60s，必须在 Service 层 5 处显式 DEL（不靠 TTL 过期兜底） |
 | T2 | Q8 强制前置迁出 → 删 team UX 重（N+1 步操作） | 接受 UX 代价，强一致优先 | 未来视痛点决定加批量「迁出 + 删 team」组合 API |
 | T3 | Q10 细粒度事件 + Q12 粗粒度错误 → 非对称结构 | 接受非对称（事件审计需细 / 错误客户端处理不需细） | 文档显式标注此 trade-off |
 | T4 | Q13.1 ① team name 同 creator 唯一 → transfer 后语义偏 | 接受语义偏，PRD「私域分组」优先 | UI 显示 team name 附 creator 名缓解 |
 | T5 | M03-M19 横切 L3 SQL 注入升级 → 17 模块改造工作量 | Phase 2 实施时统一改造 + 公共 helper | 实施前先写 1 套测试模板供复用 |
-| T6 | 转让 owner 拆 2 条事件（demote + promote） → 审计需关联推断 | 与 Q10 细粒度风格一致 | 同事务 + 同 actor + timestamp 邻近三条件可推断 |
+| T6 | 转让 owner 拆 2 条事件（demote + promote） → 审计需关联推断 | 与 Q10 细粒度风格一致 | 同事务 + 同 actor + timestamp 邻近三条件可推断（Batch 2 后已加 metadata.correlation_id 硬关联） |
+| T7（F2.11+F3.6） | Q3 软切断（删 team_member 不级联清 ProjectMember）vs Q8 强制前置迁出（删 team 拒留 project）非对称防误哲学 | 接受非对称，原则：**「越靠近资源越严格」** —— project 是「资源」、team_member 是「关系」；删一个「关系」不应殃及「资源」（软），删一个「容器」不应让「资源」漂移成孤儿（严）| 演进延伸原则（未来 organization 层）：org_member 删除走软切断（与 Q3 一致），org 删除走强制前置迁出 team（与 Q8 一致）；任何引入新「关系层」时按此原则取默认 |
 
 ---
 
@@ -259,8 +261,8 @@ def list_for_project(self, db, project_id: UUID, user_id: UUID):
 
 ### 中性
 
-- ADR-001 §预设 3 命名部分被 supersede（space_id → team_id），但「预留口」「无 FK 升级路径」精神保留
-- M20 后续若引入 organization 层，再走一次类似的 baseline-patch（team_id → org_id 链路扩展）
+- ADR-001 §预设 3 **整段**被 supersede —— 三件实质变更：① 命名 space_id → team_id；② 类型 INT NULL → UUID NULL；③ 启用 FK ondelete=RESTRICT（原"无 FK"放弃）。「预留口」精神（先 nullable 再补 FK）保留，「无 FK 升级路径"字面"」改写。
+- M20 后续若引入 organization 层，再走一次类似的 baseline-patch（team_id → org_id 链路扩展），对照本 ADR §3 模板
 
 ---
 
@@ -297,7 +299,33 @@ def list_for_project(self, db, project_id: UUID, user_id: UUID):
 
 ---
 
-## §7 完成度判定
+## §7 未来 organization 层演进路径（占位 / Batch 3 F3.3）
+
+> 本节非本期 accepted 决策，仅记录"若未来引入 org 层"时必须回头决策的 4 个锚点。M20 accept 不依赖此节定稿；本节仅防止"零锚点跳跃式扩展"。
+
+### 8.1 触发器
+
+- 触发条件：单实例 ≥ 2 个独立组织 / 跨组织数据严格隔离 / 计费按组织独立结算 任一发生
+- 触发后阅读：本节 4 决策点 + ADR-005 §3 baseline-patch 范本 + ADR-001 §预设 3 supersede 范本
+
+### 8.2 4 决策点（必答）
+
+| # | 决策点 | 候选选项 | 与 M20 现状的对偶 |
+|---|--------|---------|---------------------|
+| **O1** | 唯一约束：team name 同 creator 唯一（Q13.1①）→ org 层引入后是否改"同 org 唯一" | A 维持 creator 唯一 / B 改 org 唯一（带迁移）/ C 双层（org+creator 都唯一） | M20 当前 creator 唯一（uq_teams_creator_name），引入 org 后语义偏；建议 B（同 org 唯一），但需迁移 + 改 ErrorCode detail |
+| **O2** | 二维空白态：org_id IS NULL = 个人 / team_id IS NULL = 个人，组合后是否有 (org_id IS NULL, team_id NOT NULL) 这种 hybrid 态 | A 禁止（org_id NOT NULL 是 team 加入 org 的前提）/ B 允许（团队可不属于任何 org） | 建议 A（避免 hybrid 态权限歧义），强制 team 加 org 前先创建 org |
+| **O3** | helper 形态：`user_accessible_project_ids_subquery` 升级为 `user_accessible_org_ids` × team × project 三层并集 | A 一次性扩 helper（17 模块 DAO 不动）/ B 各模块 DAO 显式三层 join | A（与 M20 引入 helper 一致原则）；性能下降时再引 Redis 缓存 |
+| **O4** | 对称延伸（T7 哲学）：org_member 删除走软切断 / org 删除走强制前置迁出 team | 沿用 ADR-005 §4 T7「越靠近资源越严格」原则 | 不重复决策，直接延伸 |
+
+### 8.3 baseline-patch 模板
+
+参照本 ADR §3 模板：① ER 加 organizations + organization_members 表（参 teams + team_members 范式）；② teams 加 org_id FK ondelete=RESTRICT；③ M03-M19 横切 helper 升级；④ M15 ActionType 扩 org_* 系列；⑤ M01 删 user 校验链加 org_owned 校验（与 F3.10 同模式）。
+
+预估工作量：约 M20 baseline-patch 的 1.2x（多一层 + 横切 helper 升级范围已锚定）。
+
+---
+
+## §8 完成度判定
 
 - [x] Context 4 点（M20 定位 / ADR-001 §预设 3 / PRD F20 / Prism 实跑对照）
 - [x] Decision 16 决策点 + Q10.1 / Q13.1 子点全收敛

@@ -27,7 +27,7 @@
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
 | **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
 | **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **accepted（2026-04-26，三轮 audit + fix v1/v2/v3/v4/v4.1/v4.2/v4.3 + verify v1-v4.2 共 6 轮独立审）** | [`M18-semantic-search/`](./M18-semantic-search/) |
-| 扩展 | M20 团队/空间（多 space 扩展）| 待开 | — |
+| 扩展 | M20 团队/空间（多 space 扩展）| **draft（2026-04-26 三轮 audit + Batch 1-4 修复 + verify v1-v3 通过；待 CY 最终 accept）** | [`M20-team/`](./M20-team/) |
 
 **Pilot 范本**（新模块设计前必读）：
 - 同步模块 → `M04-feature-archive/00-design.md`
@@ -341,4 +341,7 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 | **2026-10-25** | §12D embedding 持久化子模板 | 半年内是否仅 M18 一个实例使用？字段⑥/⑦ 是否与 §12C 高度重合？ | 是 → 降级为 §12C 扩展段落 + 删 §12D 行（防模板膨胀）<br>否 → 保留 §12D，记录新增使用模块 |
 | **2026-10-25** | M18 §3 schema 7 字段 PK + 异维列拆分 | embeddings 行数是否 > 50万？ivfflat lists=100 在 dim_3072 列召回质量是否退化？mock provider mock-* 前缀约束在 Phase 2 是否引发开发阻力？ | 行数超 → §15 演进锚点 R3 E3 触发（按月 partition / lists 调 sqrt(N)~700）<br>mock 阻力 → 评估改 sanity check warning 而非 ConfigError |
 | **2027-04-26** | M18 search_evaluation_log | 1 年累计采样数据是否够做离线分析？RRF k=60 是否需要按真实数据调？query embedding cache 命中率是否符合预期？ | 数据够 → 触发离线 metric 分析 + RRF 参数调优<br>数据不足 → 评估提高采样率或废弃 search_eval 表 |
+| **2026-10-26** | M20 跨 team 子查询性能（ADR-005 §4 T1）| `user_accessible_project_ids_subquery` 在真实负载下 P95 是否 > 100ms？用户 team 数 P95 是否 > 20？单次 AC2 一键迁移是否 > 100 个 project？ | P95 > 100ms → 引入 Redis 缓存 + 5 处失效路径（参 ADR-005 §4 T1 预演）<br>team 数 > 20 → 同上<br>单次迁移 > 100 → 触发 Phase 2 批量后端 API 决策 |
+| **2026-10-26** | M20 ActionType / ErrorCode 枚举膨胀 | M20 新增 10 个 team_* ActionType + 8 个 ErrorCode，半年使用率是否 < 30%（即 ≥ 70% 枚举值零事件）？ | 是 → 评估合并冗余 ActionType（如 promoted_admin / demoted_member 是否合并为 role_changed + detail）<br>否 → 保留 |
+| **2027-04-26** | M20 organization 层引入触发器 | 单实例是否 ≥ 2 个独立组织 / 跨组织隔离 / 计费按组织独立结算 任一发生？ | 是 → 走 ADR-005 §8 org 层 4 决策点 + 启动 baseline-patch-org<br>否 → 不引入，下一年再回看 |
 | _（未来 trigger 加在这里）_ | | | |

@@ -41,6 +41,12 @@ PRD 设计决策原文：「团队化做最小实现——分组+权限复用 F1
 - **权限并集解析**：`max(team_role_mapped, project_member_role)` 落 Service 层
 - **L3 SQL tenant 注入升级**：M03-M19 DAO 引用 `user_accessible_project_ids_subquery` 公共 helper（baseline-patch 范围）
 
+**规模假设（F2.2 锚定）**：
+- AC2「一键迁移」假设单 team 单次迁移 **≤ 100 个 project**（前端循环 N 次同步调用 `POST /api/projects/{pid}/move-team`，平均 200ms/次 → 总耗时 ≤ 20s 用户可接受）
+- 单 team 成员数假设 ≤ 200（删 team 时 N+1 条 activity_log 同事务原子写入）
+- 用户所在 team 数假设 ≤ 20（L3 SQL 子查询 `team_members WHERE user_id=X` 性能基线）
+- **超阈值触发器（Phase 2 监控）**：单次迁移 > 100 → 触发 Phase 2 批量后端 API 决策；单 team 成员数 > 200 → 触发删 team 异步化决策；用户 team 数 > 20 → 触发 ADR-005 §4 T1 Redis 缓存决策
+
 ### Out of scope（M20 不做）
 
 > 完整 15 项 out-of-scope 显式清单（Q15=A 决策）。按场景分组：
@@ -78,6 +84,9 @@ PRD 设计决策原文：「团队化做最小实现——分组+权限复用 F1
 - **transfer 后 creator 语义**：`teams.creator_id` 是创建者只读（永不变），当前 owner 由 `team_members WHERE role='owner'` 单独查询；UI 显示 team 列表附 creator 名缓解 transfer 后语义偏（T4 trade-off）
 - **删 team 时 team_members 处置**：`ondelete=RESTRICT`，必须 Service 层显式 5 步删除（先迁出 project + 写 N+1 条 activity_log + 单事务删 team_members + teams）
 - **移 team_member 不级联清 ProjectMember**：U 仍以 ProjectMember 身份保留对相关 project 的访问权，前端做提醒（Q3 软切断）
+- **F2.3 archived×team 互锁**：M02 archived project 状态不可逆 vs M20 删 team RESTRICT FK 互锁。决策（A+C 组合）：
+  - **C 源头**：禁止 archived project 加入 team —— `POST /api/projects/{pid}/move-team` 入口若 project.status='archived' 拒 422 `PROJECT_ARCHIVED`（M02 复用 ErrorCode）
+  - **A 历史兜底**：删 team 时若 team 下存在 archived project，**自动解绑**（archived project 走豁免路径，不走 Q8 强制前置迁出）—— team_id 自动置 NULL + 写 1 条 project_left_team (detail.reason="team_deleted_archived_auto_unbind")
 
 ---
 
@@ -297,6 +306,12 @@ class Project(Base):
 | Q4=A 单 tenant → B 双 tenant | 17 模块衍生表全加 team_id 列 + 索引 | 50+ | M03-M19 全部 | 高（数据补填 + 三层防御重写） |
 | Q8=B 强制前置迁出 → A 孤儿化 | API 校验逻辑 + Service 层删 team 流程改 | 0（仅代码） | M20 | 低 |
 | Q13=C creator_id → A owner_id | RENAME 字段 + 语义重定义 | 1 | M20 + 文档 | 低（语义可重新约定） |
+| Q1=B 嵌套式 → A 覆盖式 | 权限 Service 重写 + ProjectMember 数据迁移决策 | 0（仅代码） | M20 + M02 + 所有引用 resolve_project_role 处 | 高（已落 ProjectMember 数据语义被吞，per-project 微调能力丢失） |
+| Q2=B 三角色映射 → A 直接复用 ProjectRole | team_members.role 改 String / 文档级语义改 | 1（CHECK 改） | M20 + M15（事件命名 promoted_admin 失语义） | 中（事件枚举命名要重定义） |
+| Q3=A 软切断 → B 级联清 ProjectMember | 删 team_member 时同事务清 ProjectMember + 事件多写 N 条 | 0（仅代码） | M20 + M15 事件 + M02 ProjectMember 写路径 | 中（已发出软切断 audit 字段语义遗弃） |
+| Q5=A 三层全做 → B 仅 L1+L2（不做 L3 SQL 兜底） | M03-M19 helper 引用全删 + 17 模块 DAO query 回退 | 0（仅代码） | M20 横切清单 + M03-M19 全 DAO | 高（已统一改造的 17 模块要逐个回退，且 SQL 防御纵深降一档） |
+| Q13.1②a creator_id RESTRICT → CASCADE（F3.13）| 删 user 自动级联清 teams（含其他成员的 team） | 1（CHECK 改） | M20 + M01 删 user 校验链全删 | 高（数据风险：U 是 creator 的所有 team 含其他成员一并清空，破坏其他用户视角的 team 完整性。RESTRICT 守护是「creator 不可随便删」的强不变量） |
+| Q13.1②b user_id CASCADE → RESTRICT（F3.13 对偶）| 删 user 时 team_members 行不自动清，必须 Service 显式 | 1（CHECK 改） | M01 + M20 全部删 user 路径 | 中（更严但更繁琐：每删 user 必须先逐 team 退出，与 M01 用户范式不一致） |
 
 ---
 
@@ -310,9 +325,11 @@ stateDiagram-v2
     active --> [*]: team_deleted（前提：projects WHERE team_id 为空 + RESTRICT 守护）
 ```
 
-**禁止转换**（R4-2 终态数 0 + 1 = 1，最少 1 条）：
-- `active → [*]：team_deleted` 必须先满足 `COUNT(projects WHERE team_id=X)=0`，否则 422 `TEAM_HAS_PROJECTS`（不算状态转换失败，是前置校验失败）
-- 注：teams 表无 status 字段，删除 = 物理删除（与 M02 项目归档软删除不同 —— team 是分组标签，无独立业务价值需保留）
+**禁止转换**（R4-2 真状态机层次，至少 1 条）：
+- `[*] → active：team_recreated` —— team 物理删除后**不可复活**（拒 404 TEAM_NOT_FOUND）。即使同 creator 用同 name 再创建，也是新 team（id 不同）。已发出的 activity_log target_id 永久指向旧 team_id，前端不可基于 name 反查到旧事件。
+- `active → [*]：team_deleted` —— 不是禁止转换，是**前置校验**：必须先满足 `COUNT(projects WHERE team_id=X)=0`，否则 422 `TEAM_HAS_PROJECTS`。前置校验失败逻辑挪 §10（活动日志） / §13（ErrorCode），非状态机职责。
+
+**注**：teams 表无 status 字段，删除 = 物理删除（与 M02 项目归档软删除不同 —— team 是分组标签，无独立业务价值需保留）。
 
 ### 4.2 team_members.role 状态机
 
@@ -328,9 +345,11 @@ stateDiagram-v2
     owner --> [*]: 禁止（必须先 transfer 或团队仅 1 owner 时拒 422 TEAM_OWNER_REQUIRED）
 ```
 
-**禁止转换**（R4-2 终态数 1 + 1 = 2，至少 2 条）：
+**禁止转换**（R4-2 终态数 1 + 1 = 2，至少 2 条；M20 实际登记 4 条）：
 - `owner → [*]：team_member_removed` —— 拒 422 `TEAM_OWNER_REQUIRED`（detail: reason="last_owner_remove"）；除非有其他 owner 存在
 - `member → owner` —— 禁止跨级直升，必须 member → admin → owner 两步（或走 transfer 流程）；拒 422 `TEAM_PERMISSION_DENIED`（detail: required_role="admin"）
+- `owner → admin（非 transfer 场景）` —— 直接 PATCH /members/{uid} { role: "admin" } 把当前 owner 降级 → 拒 422 `TEAM_OWNER_REQUIRED`（detail: reason="last_owner_demote"，前提 team 仅 1 owner）。owner→admin 仅允许在 transfer-ownership 流程内同事务发生（与 promote 新 owner 配对）。
+- `owner → member（直降）` —— 任何路径直接把 owner 降至 member 都拒 422 `TEAM_PERMISSION_DENIED`（schema 已限 Literal["admin", "member"]，但 owner 当前角色也不允许走 demote 路径直降到 member，必须先 transfer 再 demote）。
 
 ---
 
@@ -351,7 +370,7 @@ stateDiagram-v2
 | 维度 | AI 默认值 | 候选说明 | CY 决策 |
 |------|----------|---------|---------|
 | **Tenant 隔离** | project_id 单 tenant，team 仅分组标签；M03-M19 衍生表 schema 不动 | A 单 tenant ✅ / B 双 tenant (team_id, project_id) | Q4=A |
-| **事务边界** | Service 层；删 team 5 步事务（前置校验 + 查 members + 写 N+1 log + 删 members + 删 team） | A Service 层（默认） / B DAO 层 | A（默认） |
+| **事务边界** | Service 层；删 team 5 步事务 + transfer 6 步事务，**Service 方法接受外部 `db: Session`**（R-X3 共享） | A Service 层（默认）/ B DAO 层 | **Q13.2=A**（决策来源：Q13.2 brainstorming 2026-04-26 子点登记）|
 | **异步形态** | 同步 CRUD，无 Queue / SSE / 后台 | A 同步 ✅ / B Queue（批量 AC2） / C 批量同步事务 | Q6=A |
 | **并发控制** | teams 乐观锁 version；team_members 最后写入获胜（与 M02 范式一致） | A teams 加 / team_members 不加 ✅ / B 全加 | Q9=A |
 
@@ -364,6 +383,7 @@ stateDiagram-v2
 | 删 team 与加 member 并发 | A 删 team，B 同时加 member | RESTRICT FK + Service 5 步流程在单事务内串行（B 加 member 在 A 事务持锁期间被阻塞） |
 | 同时 promote 同一 user | A promote U → admin，B promote U → admin | UniqueConstraint(team_id, user_id) 守护，最后写入获胜（最终一致） |
 | 跨 team 移动 project 与删 team A 并发 | A 把 project 移出 team T，B 同时删 team T | RESTRICT FK 守护：删 team T 时 SELECT projects WHERE team_id=T 必须为空，A 已解绑则 B 删成功；A 未解绑则 B 拒 422 |
+| 删 user vs team owner（F3.10）| A 删 user U（U 是 team T 唯一 owner），B 同时操作 team T（如 transfer / 加成员）| `team_members.user_id ondelete=CASCADE` + `teams.creator_id ondelete=RESTRICT` 内部冲突：CASCADE 直接清 U 的 team_members 行（含 owner 行）→ 触发"无 owner team"风险 → **M01 baseline 提议**：M01 删 user 入口加 `assert_user_has_no_owned_teams(uid)` 校验链，若 U 是任何 team 的最后 owner → 拒 422 `USER_IS_LAST_TEAM_OWNER`；若 U 是任何 team 的 creator（teams.creator_id RESTRICT）→ 拒 422 `USER_HAS_OWNED_TEAMS`（要求先 transfer ownership 或删 team） |
 
 ---
 
@@ -373,7 +393,7 @@ stateDiagram-v2
 |----|---------|------|
 | Server Action | `app/actions/teams.ts` | session 校验（Next.js 层）→ 转 require_user |
 | Router | `api/routers/teams.py` | `Depends(require_user)` + L1 require_team_access(min_role) 粗校验 |
-| Service | `api/services/teams.py` | L2 `assert_team_role(user, team, required)` 精校验 + 事务边界 + 写 activity_log |
+| Service | `api/services/teams.py` | L2 `assert_team_role(user, team, required)` 精校验 + 事务边界 + 写 activity_log；**跨事务方法（delete_team / transfer_ownership）接受外部 `db: Session`（R-X3 共享事务），由调用方持有 commit/rollback 权** |
 | DAO | `api/dao/teams.py` | tenant 过滤（team_members.user_id 校验）+ 乐观锁 version 检查 |
 | Auth helper | `api/auth/tenant_filter.py` | M20 新增 `user_accessible_project_ids_subquery` 公共 helper（M03-M19 横切引用） |
 | Schema | `api/schemas/teams.py` | Pydantic 强类型（R7-1 + R7-2） |
@@ -396,7 +416,9 @@ stateDiagram-v2
 | PATCH | `/api/teams/{tid}/members/{uid}` | 改成员 role（promote / demote） | L2 assert_team_role(admin) | TEAM_MEMBER_NOT_FOUND / TEAM_OWNER_REQUIRED / TEAM_PERMISSION_DENIED |
 | DELETE | `/api/teams/{tid}/members/{uid}` | 软切断移除（响应附残留 ProjectMember 列表） | L2 assert_team_role(admin) | TEAM_MEMBER_NOT_FOUND / TEAM_OWNER_REQUIRED |
 | POST | `/api/teams/{tid}/transfer-ownership` | 转让 owner（原 owner→admin + 新 owner↑owner 单事务原子） | L2 assert_team_role(owner) | TEAM_OWNER_REQUIRED / TEAM_MEMBER_NOT_FOUND |
-| PATCH | `/api/projects/{pid}` (M02 own，M20 扩) | 改 team_id（null ↔ team_id，禁 team A → team B） | L2 assert_project_role(owner) + assert_team_role(target, admin) | CROSS_TEAM_MOVE_FORBIDDEN |
+| POST | `/api/projects/{pid}/move-team` (M20 own 独立端点) | project 归属变更（target_team_id=null ↔ tid，禁 team A → team B 直跳） | L2 assert_project_role(owner) + assert_team_role(target, admin) | CROSS_TEAM_MOVE_FORBIDDEN / TEAM_NOT_FOUND |
+
+**端点拆分说明（F2.7 决策）**：project 归属变更 **不复用 M02 `PATCH /api/projects/{pid}`** —— move-team 单独动词独立端点（与 transfer-ownership 风格一致），M02 PATCH 不再承担 team_id 字段。理由：① 校验链与其他 PATCH 字段差异大（涉及 cross-team 拒绝 + 双 role 校验）；② partial update 语义清晰（PATCH 多字段时 team_id 与其他字段同时改的事务边界 / 校验顺序难定义）；③ activity_log 事件是 project_joined_team / project_left_team 而非 project_updated。
 
 ### 7.2 Pydantic Schema 草案
 
@@ -433,8 +455,8 @@ class TeamTransferOwnership(BaseModel):
 
 
 class ProjectMoveTeam(BaseModel):
-    """M02 PATCH /api/projects/{pid} 的 team_id 字段"""
-    team_id: UUID | None  # null = 移回个人；非 null = 加入 team（前提当前 team_id IS NULL）
+    """POST /api/projects/{pid}/move-team 入参（M20 own 独立端点）"""
+    target_team_id: UUID | None  # null = 移回个人；非 null = 加入 team（前提当前 team_id IS NULL）
 
 
 # Response schemas
@@ -484,11 +506,15 @@ M20 不投递 Queue 任务。
 
 M20 无 WebSocket。
 
-### 8.5 Q11=A 决策注解
+### 8.5 Q11=A 决策注解（修订：P1+P2 合并入口，对齐 ADR-004 §79）
 
-所有 M20 endpoint 走 ADR-004 P1 用户态（Bearer JWT + require_user 合并入口）。token_invalidated_at 失效触发事件不扩展 —— 移出 team / 删 team 不触发 token 失效，权限实时算（每请求重算 `max(team_role, project_member_role)`）。
+所有 M20 endpoint 走 ADR-004 **P1 用户态（Bearer JWT）+ P2 内部凭据**双路径**合并入口** —— Next.js Server Action 经 P2 internal token 转发到 FastAPI（路径 `app/actions/teams.ts → api/routers/teams.py`），FastAPI 端点统一走 `Depends(require_user)` 解析。这与 ADR-004 §79「绝大多数业务端点 P1+P2 合并入口」对齐，不是「全 P1 不涉及 P2」。
 
-危险操作（删 team / 转让 owner）防误依赖 UI 二次确认 + Q8 强制前置迁出 —— 不引入 P4 一次性确认 token。
+不涉及 **P3（refresh token 刷新）** 与 **P4（一次性确认 token）**：
+- P3：M20 不主动刷 token，依赖 M01 既有 refresh 流程
+- P4：危险操作（删 team / 转让 owner）防误依赖 UI 二次确认 + Q8 强制前置迁出，不引入 P4
+
+token_invalidated_at 失效触发事件不扩展 —— 移出 team / 删 team 不触发 token 失效，权限实时算（每请求重算 `max(team_role, project_member_role)`）。
 
 ### 8.6 权限并集解析伪代码（Q1=B 嵌套式 + Q2=B 三角色映射）
 
@@ -528,6 +554,57 @@ def resolve_project_role(user_id: UUID, project_id: UUID, db: Session) -> Projec
     return max(candidates, key=lambda r: role_priority[r])
 ```
 
+### 8.7 跨事务 Service 签名草案（R-X3 显式声明 / Q13.2 决策）
+
+删 team 与 transfer owner 是 M20 仅有的两个跨步骤事务（涉及 teams + team_members + activity_log 多表写），Service 层方法签名**显式接受外部 `db: Session`**，由 Router 层的 transaction context（`with db.begin():`）持有 commit/rollback 权 —— 这是 R-X3「跨模块共享外部 session」合规路径，不在 Service 内部独立 commit。
+
+```python
+# api/services/teams.py（Q13.2 决策签名草案）
+from sqlalchemy.orm import Session
+
+class TeamService:
+    def delete_team(
+        self,
+        db: Session,            # R-X3 外部 session
+        team_id: PyUUID,
+        actor_id: PyUUID,
+    ) -> None:
+        """
+        删 team 5 步流程（同事务原子，N+1 条 activity_log）：
+          1. SELECT FOR UPDATE projects WHERE team_id=tid → 非空则 raise TeamHasProjectsError(detail=...)
+          2. SELECT team_members WHERE team_id=tid → 得 N 个 user_id
+          3. INSERT activity_log: 1 条 team_deleted (target_id=tid) + N 条 team_member_removed
+             (target_id=tid, metadata.user_id=member.user_id, metadata.reason="team_deleted")
+             —— 写入顺序：先 team_deleted 后 N 条 member_removed（按 team_members.joined_at 升序）
+          4. DELETE team_members WHERE team_id=tid（N 行）
+          5. DELETE teams WHERE id=tid AND version=:expected_version（乐观锁）
+        失败任一步整体回滚（不在本方法内 commit）。
+        """
+        ...
+
+    def transfer_ownership(
+        self,
+        db: Session,            # R-X3 外部 session
+        team_id: PyUUID,
+        actor_id: PyUUID,       # 当前 owner
+        new_owner_id: PyUUID,
+    ) -> None:
+        """
+        转让 owner 流程（同事务原子，2 条 activity_log）：
+          1. assert_team_role(actor_id, owner) + assert new_owner ∈ team_members
+          2. assert new_owner_id != actor_id（否则 422 reason="target_is_self"）
+          3. UPDATE team_members SET role='admin' WHERE team_id AND user_id=actor_id
+          4. UPDATE team_members SET role='owner' WHERE team_id AND user_id=new_owner_id
+          5. INSERT activity_log: 1 条 team_member_demoted_member (actor + target_id=tid + metadata.user_id=actor)
+                              + 1 条 team_member_promoted_admin (actor + target_id=tid + metadata.user_id=new_owner)
+          6. UPDATE teams.version += 1（防并发 transfer，C1 测试场景）
+        失败任一步整体回滚（不在本方法内 commit）。
+        """
+        ...
+```
+
+写 activity_log 时复用 R10-2 主规则（M15 own），调用 `M15 ActivityLogService.write_event(db, action_type, actor_id, target_type, target_id, metadata)`，**共享同一 `db` session**（R-X3）。
+
 ---
 
 ## 9. DAO tenant 过滤策略
@@ -539,6 +616,7 @@ def resolve_project_role(user_id: UUID, project_id: UUID, db: Session) -> Projec
 | TeamDAO.get_by_id(tid, user_id) | `WHERE id=tid AND id IN (SELECT team_id FROM team_members WHERE user_id=:uid)` |
 | TeamDAO.list_for_user(user_id) | `JOIN team_members ON teams.id = team_members.team_id WHERE team_members.user_id=:uid` |
 | TeamMemberDAO.list_for_team(tid, user_id) | L1 已校验 user 是 team 成员后才进 DAO；DAO 仅 `WHERE team_id=:tid` |
+| ActivityLogDAO.list_for_team(team_id, user_id) ※ M15 baseline 新增 | F2.5 修复：team_* 事件 8/10 类无 project_id，原 list_for_project 召不回；新增 `WHERE target_type='team' AND target_id=:tid` 入口 + L1 require_team_access(member) |
 
 ### 9.2 M20 引入的横切 helper（M03-M19 引用）
 
@@ -588,7 +666,7 @@ def user_accessible_project_ids_subquery(db: Session, user_id: UUID):
 | team_description_changed | team | actor | team_id | `{from_description, to_description}` |
 | team_deleted | team | actor | team_id | `{name, member_count}` |
 | team_member_added | team | actor | team_id | `{user_id, role}` |
-| team_member_removed | team | actor | team_id | `{user_id, reason: "manual" \| "team_deleted"}` |
+| team_member_removed | team | actor | team_id | `{user_id, reason: "manual" \| "team_deleted", residual_project_count: int, residual_project_ids: list[UUID][:10], correlation_id: UUID}` |
 | team_member_promoted_admin | team | actor | team_id | `{user_id, from_role, to_role}` ※ to_role 含 "admin" 或 "owner"（含 transfer 中升 owner） |
 | team_member_demoted_member | team | actor | team_id | `{user_id, from_role, to_role}` ※ to_role 含 "member" 或 "admin"（含 transfer 中降 admin） |
 | project_joined_team | project | actor | project_id | `{team_id}` |
@@ -599,10 +677,32 @@ def user_accessible_project_ids_subquery(db: Session, user_id: UUID):
 - 转让 owner 触发 2 条事件（demoted + promoted），同事务原子写（Q10.1 ① B）
 - 删 team 触发 1 条 team_deleted + N 条 team_member_removed (reason="team_deleted")，同事务 N+1 条原子写（Q10.1 ③ B）
 - R10-1 批量独立事件：删 team 时 N 个成员各写一条独立事件，不汇总
+- **F2.4 软切断 audit 字段**：`team_member_removed` metadata 必填 `residual_project_count + residual_project_ids[:10]`（manual 路径 + team_deleted 路径都填，让 audit 能追溯软切断后的残留 ProjectMember 状况，而不是仅 HTTP 响应通知前端）
+- **F2.9 correlation_id（0 schema 改）**：所有 transfer 流程 2 条事件 + 删 team 流程 N+1 条事件，metadata 内必填 `correlation_id: UUID`（Service 入口生成 1 个 uuid4，同流程事件共享）。审计跨条目硬关联，不靠 timestamp 推断（避免 timestamp 同毫秒时序混淆）
 
 ### 10.2 R10-2 主规则确认
 
 M20 不申请 R10-2 例外（不是横切专用审计表 own，复用 M15 activity_log）。
+
+### 10.3 R10-1 删 team N+1 条事件合规说明（防汇总漂移）
+
+删 team 流程触发 N+1 条 activity_log，必须**严格独立写入**（不汇总成 1 条带成员列表的 metadata），合规字段约束：
+
+| 字段约束 | team_deleted | team_member_removed × N |
+|---------|--------------|------------------------|
+| **写入顺序** | 先（第 1 条） | 后（按 team_members.joined_at 升序，避免乱序） |
+| **target_type** | `team` | `team` |
+| **target_id** | `team_id`（不是 user_id，与 G8 测试断言对齐） | `team_id`（聚焦"在哪个 team 里删了人"，不是 user 自己的事件） |
+| **actor** | 操作者（owner） | 操作者（owner，非被删 user 自己） |
+| **metadata.user_id** | N/A | **必填**：被删成员 user_id（让 audit 能反查 user 视角） |
+| **metadata.reason** | N/A | `"team_deleted"`（与 manual 路径区分） |
+
+**禁止做法**：
+- ❌ 写 1 条 team_deleted 把 metadata.member_user_ids 列成数组（违反 R10-1 批量独立）
+- ❌ N 条 team_member_removed 的 target_id 写 user_id（破坏「team 视角」检索）
+- ❌ 不带 metadata.user_id（user 视角检索丢失）
+
+实施落点：见 §8.7 `delete_team` 第 3 步签名注释。
 
 ---
 
@@ -630,9 +730,18 @@ M20 无 idempotency key。
 >
 > 决策来源：Q6=A 纯同步 CRUD（M20 brainstorming 2026-04-26）。
 >
-> AC2「一键迁移」由前端循环调 `PATCH /api/projects/{pid}` N 次，进度条与失败重试由前端维护，后端不做事务原子回滚。
+> AC2「一键迁移」由前端循环调 `POST /api/projects/{pid}/move-team` N 次（M20 own 独立端点，F2.7 拆分后），进度条与失败重试由前端维护，后端不做事务原子回滚。
 
-不适用 §12A（流式 SSE）/ §12B（后台 fire-and-forget）/ §12C（Queue 持久化）/ §12D（embedding 持久化）任一子模板。
+不适用 §12A（流式 SSE）/ §12B（后台 fire-and-forget）/ §12C（Queue 持久化）/ §12D（embedding 持久化）任一子模板，参照 [`../README.md` §12 4 子模板表](../README.md#12-异步形态-4-子模板) 显式排除：
+
+| 子模板 | 触发条件 | M20 是否触发 | 排除理由 |
+|--------|---------|-------------|---------|
+| §12A 流式 SSE | 长耗时 + 渐进展示 | ❌ | 团队 CRUD 全部 < 200ms，无渐进价值 |
+| §12B 后台 fire-and-forget | 用户不等结果 | ❌ | 所有操作用户必须看到结果（创建 team / 加成员 / 删 team） |
+| §12C Queue 持久化 | 跨 worker / 重投递 / 失败重试 | ❌ | Q6=A 决策同步 + AC2 走前端循环（前端控制重试） |
+| §12D embedding 持久化 | 派生表批量 backfill | ❌ | M20 无 embedding 派生 |
+
+catalog 4 维异步标注 = **同步**（与 README 模块清单 M20 行一致）。
 
 ---
 
@@ -645,16 +754,19 @@ M20 无 idempotency key。
 | TEAM_NOT_FOUND | 404 | team 不存在或无访问权 | `{}` |
 | TEAM_NAME_DUPLICATE | 409 | 同 creator 下 team name 重复 | `{name, creator_id}` |
 | TEAM_HAS_PROJECTS | 422 | 删 team 前 projects 非空（Q8） | `{project_count, project_ids: list[UUID][:10]}` |
-| TEAM_OWNER_REQUIRED | 422 | 不变量守护 | `{reason: "last_owner_demote" \| "last_owner_remove" \| "transfer_target_not_member"}` |
+| TEAM_OWNER_REQUIRED | 422 | 不变量守护 | `{reason: "last_owner_demote" \| "last_owner_remove" \| "transfer_target_not_member" \| "target_is_self"}` |
 | TEAM_MEMBER_NOT_FOUND | 404 | team_member 不存在 | `{team_id, user_id}` |
 | TEAM_MEMBER_DUPLICATE | 409 | 同 user 重复加同 team | `{team_id, user_id}` |
 | TEAM_PERMISSION_DENIED | 403 | team 操作 role 不足（含跨级直升 member→owner） | `{required_role, current_role}` |
 | CROSS_TEAM_MOVE_FORBIDDEN | 422 | 跨 team 直跳被拒（Q7） | `{current_team_id, target_team_id}` |
 
-### 13.2 复用全局 ErrorCode
+### 13.2 复用全局 / 跨模块 ErrorCode
 
 - `CONFLICT`（409）—— teams 乐观锁 version 冲突（PATCH /teams/{tid} 影响行数 0）
 - `VALIDATION_ERROR`（422）—— Pydantic 入参校验失败
+- `PROJECT_ARCHIVED`（422，M02 own，F2.3 复用）—— archived project 拒加入 team（POST /api/projects/{pid}/move-team 入口）
+- `USER_HAS_OWNED_TEAMS`（422，M01 own，F3.10 / F3.13 baseline-patch 提议）—— 删 user 时 U 是任何 team 的 creator
+- `USER_IS_LAST_TEAM_OWNER`（422，M01 own，F3.10 baseline-patch 提议）—— 删 user 时 U 是任何 team 的最后 owner
 
 ### 13.3 AppError 子类草案（R13-x 教训：每个 ErrorCode 必有对应子类）
 
@@ -728,8 +840,8 @@ class CrossTeamMoveForbiddenError(AppError):
 
 - [x] [`../../adr/ADR-005-team-extension.md`](../../adr/ADR-005-team-extension.md) supersede ADR-001 §预设 3 命名部分
 - [x] [`../baseline-patch-m20.md`](../baseline-patch-m20.md) M02 + M15 + M03-M19 横切清单
-- [ ] M02 §3 schema 块更新（space_id → team_id）+ §1 out of scope 表第 5 行 —— Phase 2 实施前补
-- [ ] M15 §3 ActionType / TargetType 枚举表加行 + §13 ErrorCode 全局表加 8 行 —— Phase 2 实施前补
+- [ ] M02 §3 schema 块更新（space_id → team_id）+ §1 out of scope 表第 5 行 —— **Phase 1 收官同步（M20 accept 当天必须完成，F1.11 硬触发器，未同步拒 accept）**
+- [ ] M15 §3 ActionType / TargetType 枚举表加行 + §13 ErrorCode 全局表加 8 行 + §9 list_for_team DAO 入口 —— **Phase 1 收官同步（M20 accept 当天必须完成，F1.11 硬触发器）**
 - [ ] README §10 R10-2 / §13 等如需 —— 本 baseline 不涉及
 
 ### 三轮 reviewer audit（Phase 1 收尾）
@@ -737,6 +849,36 @@ class CrossTeamMoveForbiddenError(AppError):
 - [ ] Round 1：完整性（16 节齐全 + Q0-Q15 决策落地 + R3-1/R3-2/R5-1/R10-2 等硬规则）
 - [ ] Round 2：边界（in/out scope 对齐 PRD + 异步形态选 §12 N/A 是否合理 + 跨 team / 删 team / 软切断 边界）
 - [ ] Round 3：演进（横切 L3 注入升级路径 + 未来加 organization 层 + 性能监控 + Phase 2 实施顺序）
+
+---
+
+## 16. Batch 4 Medium/Low Findings 登记表（接受 + 监控触发器）
+
+> 11 项 Medium/Low audit finding，按 reviewer 推荐方案统一接受。每条登记修复路径 + Phase 2 监控触发器，accept 不再阻塞。
+
+| ID | 严重度 | 主题 | 接受方案 / 修复落点 | 监控触发器 |
+|----|--------|------|--------------------|-----------|
+| **F1.9** | M | helper ADR-003 引用 | §9.2 helper 已声明 ADR-003 规则 4（embedding 豁免）+ §8.7 跨事务 Service 已声明 R-X3；R-X4 不适用（M20 无并发跨模 write）。在 §9.3 豁免清单注解「ADR-003 规则 4 / R-X3 共享 session」合规来源 | 无（设计阶段一次性合规） |
+| **F1.10** | M | endpoint 嵌套 max 自洽 | F2.7 拆 POST /move-team 后，`assert_project_role(owner) + assert_team_role(target, admin)` 双 role 校验语义清晰：project owner（自身资源 owner）+ target team admin（目标容器写权限），与 §8.6 嵌套 max 解析一致（写路径取「源 + 目标」双向校验） | 无（已随 F2.7 一并解决） |
+| **F1.11** | M | M02/M15 同步时机（§15 vs baseline 冲突）| 锁定 **Phase 1 收官同步**：M20 accept 当天 M02/M15 文档级回写（§3 schema / ActionType 表 / ErrorCode 表）必须完成；不留 Phase 2。已在 baseline-patch-m20.md §3 实施顺序 4-5 步登记 | 硬触发器：M20 accept 前 M02/M15 文档未同步 → 拒 accept |
+| **F1.12** | L | README 状态格式 | 已修：`待开` → `draft（含 audit + verify 链路注解）`；accept 当天再改 `accepted` | 一次性，已修 |
+| **F2.8** | M | out-of-scope 反测覆盖 | 接受当前覆盖：Q15 15 项 out-of-scope 中 8 项有反向测试 case（如 #1 cross-team 直跳→E10 / #2 删 team 强制前置→B8/E3 / #4 邀请审批→Pydantic 入参拒）；其余 7 项（#3 邮件、#5 评论、#7 头像、#10 嵌套 team、#11 多 org、#12 模板、#15 P4 token）属"完全不实现"，无端点可反测，仅文档锁死 | Phase 2 实施时若引入对应功能，反向测试 case 同步加；否则不补 |
+| **F2.12** | M | M15 read 范围（list_for_user / get_by_id）| F2.5 已加 list_for_team 入口；list_for_user 走 §8.6 resolve_project_role 并集（Phase 2 实施时复用 user_accessible_project_ids_subquery 同形）；get_by_id 走 L1 require_team_access 单事件级校验 | Phase 2 实施时跑 T 类用例覆盖 |
+| **F2.13** | M | M02 ProjectDAO 双重过滤去重 | 接受冗余：M02 ProjectDAO.list_for_user 既走 owner_id 校验（Q14=A 已 own）又叠加 user_accessible_project_ids 子查询（M20 横切）。两者**叠加（AND）非替换**：内层 `WHERE id IN (subquery)` 保证 tenant 隔离，外层 `OR owner_id=:uid` 保证个人 project 召回（不依赖 ProjectMember 行）。**去重逻辑**：subquery 已 union ProjectMember + team_members 路径；owner_id 仅作 fallback 防 ProjectMember 数据漂移 | Phase 2 实施时跑 T2 / T4 验证去重正确 |
+| **F2.14** | L | M09 死代码 | 已修：baseline-patch-m20.md §M03-M19 表删 M09 行 + 受影响模块数 17→16 | 一次性，已修 |
+| **F3.7** | M | 命名空间膨胀（promoted_admin 承载 owner）| 接受现状：ActionType `team_member_promoted_admin` 实际语义是「升角色」（含 transfer 升 owner），detail.to_role 区分「admin」「owner」（参 §10.1 注解）。命名偏 `promoted_admin` 字面实为 `promoted` 的早期信号，已记入 README §设计回看触发器（2026-10-26 ActionType 枚举膨胀回看） | 半年触发器：使用率 < 30% → 评估合并 promoted_admin / demoted_member → role_changed + detail.from/to_role |
+| **F3.11** | L | role endpoint 对称性 | 接受：TeamMemberRoleUpdate Pydantic Literal["admin","member"]（不能直改 owner）+ POST /transfer-ownership 独立端点 是**有意非对称**——transfer 是单事务 2-step 原子操作（demote + promote），不能拆 PATCH。Schema 注释已锁定 | 无（设计意图） |
+| **F3.12** | L | AC2 锚点重复（§12 N/A + out-of-scope #13）| 接受重复：§12 N/A 段 = 形态层声明（Q6=A 同步）；out-of-scope #13 = 功能层声明（不做批量后端 API）。两者锚点不同非冗余。Phase 2 引批量 API 时两处同步删 | 引批量 API 时两处同步改 |
+
+**统一加注**：以上 11 项均为接受 + 登记，accept 不阻塞；监控触发器随 README §设计回看触发器或 Phase 2 实施过程中跑 tests.md 验证。
+
+### 16.1 §9.3 豁免清单合规来源补注（F1.9 落点）
+
+§9.3 豁免清单各项的合规来源：
+- M18 embedding backfill / monitor cron → **ADR-003 规则 4**（embedding 派生模块批量豁免，无用户上下文）
+- M15 activity_log write 路径 → **R10-2 主规则**（M15 own，写入由各模块 Service 主动调用，非用户查询入口）
+- M20 自身（teams / team_members）→ team_members 子查询语义不同于 user_accessible_project_ids（teams 不是 project，走 team 自身 tenant 边界）
+- §8.7 跨事务 Service（delete_team / transfer_ownership）→ **R-X3 共享外部 session**（Router 持 commit/rollback 权）
 
 ---
 
@@ -758,7 +900,8 @@ class CrossTeamMoveForbiddenError(AppError):
 | Q10.1 ① | 转让 owner 事件 | B 2 条 | 2026-04-26 |
 | Q10.1 ② | team 改字段事件 | B 拆分 | 2026-04-26 |
 | Q10.1 ③ | 删 team 是否级联 N 条 member_removed | B 写 1+N | 2026-04-26 |
-| Q11 | Auth 路径 | A 全 P1 | 2026-04-26 |
+| Q11 | Auth 路径 | A 全 P1+P2（require_user 合并入口） | 2026-04-26 |
+| Q13.2 | Service 跨事务签名（删 team / transfer owner） | A 接受外部 `db: Session`（R-X3 共享事务） | 2026-04-26 |
 | Q12 | ErrorCode 粒度 | A 粗粒度 8 个 | 2026-04-26 |
 | Q13 | teams owner 字段 | C creator_id（创建者只读） | 2026-04-26 |
 | Q13.1 ① | team name 唯一约束 | A 同 creator 下唯一 | 2026-04-26 |

@@ -22,8 +22,8 @@ parent_design: ./00-design.md
 | G3 | 升级 admin | U1 PATCH /api/teams/{tid}/members/{U2} { role: "admin" } | 200；DB role 改 admin；activity_log 写 1 条 team_member_promoted_admin (detail: from_role=member, to_role=admin) |
 | G4 | 转让 owner | U1 (owner) POST /api/teams/{tid}/transfer-ownership { new_owner_id: U2 } | 200；单事务原子：U1 → admin + U2 → owner；activity_log 同事务写 2 条（demoted + promoted），actor 都是 U1，timestamp 相同 |
 | G5 | 改 team 名 | U1 (admin) PATCH /api/teams/{tid} { name: "Eng-renamed", version: 1 } | 200；teams.version 自增至 2；activity_log 写 1 条 team_renamed (detail: from_name, to_name) |
-| G6 | project 加入 team | U1 (project owner + team admin) PATCH /api/projects/{pid} { team_id: tid }（前提 project.team_id IS NULL） | 200；project.team_id 改；activity_log 写 1 条 project_joined_team (detail: team_id=tid) |
-| G7 | project 移回个人 | U1 PATCH /api/projects/{pid} { team_id: null }（前提 project.team_id = tid） | 200；project.team_id 改 null；activity_log 写 1 条 project_left_team (detail: from_team_id=tid) |
+| G6 | project 加入 team | U1 (project owner + team admin) POST /api/projects/{pid}/move-team { target_team_id: tid }（前提 project.team_id IS NULL） | 200；project.team_id 改；activity_log 写 1 条 project_joined_team (detail: team_id=tid) |
+| G7 | project 移回个人 | U1 POST /api/projects/{pid}/move-team { target_team_id: null }（前提 project.team_id = tid） | 200；project.team_id 改 null；activity_log 写 1 条 project_left_team (detail: from_team_id=tid) |
 | G8 | 删 team（前置已清空） | U1 (owner) DELETE /api/teams/{tid}（前提 projects WHERE team_id=tid 为空） | 204；Service 5 步执行：① 校验 projects 空 ② 查 N 个 team_members ③ 写 N 条 team_member_removed (reason="team_deleted") + 1 条 team_deleted ④ 删 N 条 team_members ⑤ 删 1 条 teams；同事务原子 |
 | G9 | 软切断移成员 | U1 (admin) DELETE /api/teams/{tid}/members/{U3}（U3 在 team 下 2 个 project 有 ProjectMember 记录） | 200；team_members 删 1 行，project_members 不动；响应 `{removed_user_id: U3, residual_project_members: [pid1, pid2], residual_count: 2}`；activity_log 写 1 条 team_member_removed (detail.reason="manual") |
 | G10 | 列出 U 所在所有 team | U1 GET /api/teams | 200；返回 U1 通过 team_members 关联的所有 team（含 member_count 聚合字段） |
@@ -37,14 +37,18 @@ parent_design: ./00-design.md
 | B1 | name 长度边界 | name = "" / "a" / 100 字符 / 101 字符 | 空 / 101 → 422 VALIDATION_ERROR；1 / 100 → 201 |
 | B2 | description 为 null | POST /api/teams { name: "X", description: null } | 201；DB description = NULL |
 | B3 | team_members 为 0 删 team | 创建 team 后立即 DELETE（仅 creator 一个 member） | 200；删 team 流程仍走 5 步：N=1 → 写 1 条 team_member_removed (reason="team_deleted") + 1 条 team_deleted |
-| B4 | transfer 给自己 | U1 (owner) POST /transfer-ownership { new_owner_id: U1 } | 422 TEAM_OWNER_REQUIRED (detail.reason="transfer_target_not_member" 或专门处理"target_is_self") —— 或 Service 层接受成 noop（设计阶段倾向拒绝，归 Phase 2 实施时定） |
-| B5 | 同 creator 不同 team 同名 | U1 创建两个 team 都叫 "X" | 第二个 409 TEAM_NAME_DUPLICATE |
+| B4 | transfer 给自己 | U1 (owner) POST /transfer-ownership { new_owner_id: U1 } | **422 TEAM_OWNER_REQUIRED detail.reason="target_is_self"**（Phase 1 锁定：拒绝 + 新增第 4 个 reason 枚举值，与 transfer_target_not_member 区分）|
+| B5 | 同 creator 不同 team 同名 | U1 创建两个 team 都叫 "X" | 第二个 409 TEAM_NAME_DUPLICATE detail: `{name:"X", creator_id:U1}` |
+| B5b | transfer 后 creator 想再用同名（F2.6 边界） | U1 创建 team "X" → transfer ownership 给 U2（creator_id 仍 U1）→ U1 再创建 "X" | 拒 409 TEAM_NAME_DUPLICATE detail: `{name:"X", creator_id:U1}`；前端基于 detail.creator_id 给文案区分「您之前创建过 X（已转让给他人）」 |
 | B6 | 不同 creator 同名 team | U1 创建 "X" + U2 创建 "X" | 两个都 201（uq_teams_creator_name 仅同 creator 唯一） |
 | B7 | team 下 0 个 project 时删 team | 仅 creator 是 member，无 project | 204 |
 | B8 | team 下 N 个 project 时删 team | projects WHERE team_id=tid 有 5 个 | 422 TEAM_HAS_PROJECTS, detail: project_count=5, project_ids=[...前 10 个] |
 | B9 | 移成员但 U 在 0 个 project 有 ProjectMember | U3 在 team 下无 ProjectMember 记录 | 200；residual_count=0, residual_project_members=[] |
 | B10 | 移成员但 U 在 100 个 project 有 ProjectMember | U3 在 team 下 100 个 project 有 ProjectMember | 200；residual_count=100, residual_project_members 完整列出（不截断） |
 | B11 | 创建 team 时 creator 自动成为 owner | 单事务原子：teams INSERT + team_members INSERT(creator_id, role=owner) | 失败任一步整体回滚 |
+| B12 | AC2 一键迁移规模假设上限（F2.2）| U1 在 100 个 individual project 都是 owner，POST move-team 100 次 | 全部 200，前端进度条 100%；总耗时 ≤ 20s；> 100 触发 Phase 2 批量 API 决策（不在本期实现） |
+| B13 | archived project 拒加入 team（F2.3 源头）| project P 状态 archived（M02），POST /api/projects/{P}/move-team { target_team_id: T } | 422 PROJECT_ARCHIVED（M02 ErrorCode 复用），不允许加入 team |
+| B14 | 删 team 时 archived project 自动迁出（F2.3 历史兜底）| team T 下含 1 个 active project P_a + 1 个 archived project P_b，DELETE /teams/{T} | 422 TEAM_HAS_PROJECTS detail.project_count=1（仅 P_a 计入，P_b 走豁免）；先 P_a 解绑后再 DELETE → P_b 自动 team_id=NULL + 写 1 条 project_left_team detail.reason="team_deleted_archived_auto_unbind"；team 删除成功 |
 
 ---
 
@@ -58,6 +62,7 @@ parent_design: ./00-design.md
 | C4 | 同时 promote 同一 user | A 把 U → admin，B 也把 U → admin | UniqueConstraint(team_id, user_id) 守护 + 最终一致；最后写入获胜（role 字段一致即可） |
 | C5 | 跨 team 移 project 与删 team A 并发 | A 把 project 移出 team T，B 同时删 team T | 若 A 先 commit：B 删 team T 成功（projects 空）；若 B 先获锁：A 解绑后 B 拒 422 TEAM_HAS_PROJECTS |
 | C6 | 同时改 team name 触发 version 冲突 | 两人读到 version=1 后都 PATCH | 第一个写 version=2 成功；第二个 WHERE version=1 影响行数 0 → 抛 ConflictError → 409 CONFLICT |
+| C7 | 性能压测前置硬节点（F3.5 锚定，Phase 2 实施前必跑） | 构造数据：U 加入 20 个 team，每 team 含 50 个 project（共 1000 project），跑 `user_accessible_project_ids_subquery` 在 M03-M19 各 list 入口 | P95 < 100ms 通过；> 100ms 触发 ADR-005 §4 T1 Redis 缓存路径 + 实施 5 处失效路径（U 加入/移出 team / 删 team / project 加入/移出 team） |
 
 ---
 
@@ -109,10 +114,11 @@ parent_design: ./00-design.md
 | E4 | demote 最后 owner | TEAM_OWNER_REQUIRED (reason="last_owner_demote") | 422 |
 | E5 | remove 最后 owner | TEAM_OWNER_REQUIRED (reason="last_owner_remove") | 422 |
 | E6 | transfer 给非 team 成员 | TEAM_OWNER_REQUIRED (reason="transfer_target_not_member") | 422 |
+| E6b | transfer 给自己（B4 错误码归位） | TEAM_OWNER_REQUIRED (reason="target_is_self") | 422 |
 | E7 | DELETE /teams/{tid}/members/{随机 UUID} | TEAM_MEMBER_NOT_FOUND | 404 |
 | E8 | POST /teams/{tid}/members 重复加 user | TEAM_MEMBER_DUPLICATE | 409 |
 | E9 | member 尝试 admin 操作 | TEAM_PERMISSION_DENIED | 403 |
-| E10 | PATCH /projects/{pid} 从 team A 直接到 team B | CROSS_TEAM_MOVE_FORBIDDEN | 422 |
+| E10 | POST /api/projects/{pid}/move-team 从 team A 直接到 team B（target_team_id=B 但当前 team_id=A 非 null） | CROSS_TEAM_MOVE_FORBIDDEN | 422 |
 | E11 | PATCH /teams/{tid} 用过期 version | CONFLICT（复用全局） | 409 |
 | E12 | POST /teams { name: "" } | VALIDATION_ERROR（Pydantic min_length=1） | 422 |
 | E13 | POST /teams { name: 101 字符 } | VALIDATION_ERROR | 422 |
@@ -137,7 +143,7 @@ parent_design: ./00-design.md
 | Q12 ErrorCode | E1-E14 |
 | Q13/Q13.1 schema | B1-B6, B11 |
 
-**覆盖陈述**：6 类共 51 个测试用例；Q0-Q15 全部决策有至少 1 个测试 case 覆盖；critical path（G1-G10 + C1-C6 + E1-E14）必须 100% 通过才允许 accept。
+**覆盖陈述**：6 类共 68 个测试用例（grep 实测：G1-G10×10 + B1-B14×14 + C1-C7×7 + T1-T6×6 + P1-P15×15 + E1-E14+E6b×16）；Q0-Q15 + Q13.2 全部决策 + F2.2/F2.3/F2.4/F2.5/F2.9/F3.5/F3.10 finding 有至少 1 个测试 case 覆盖；critical path（G1-G10 + C1-C7 + E1-E14）必须 100% 通过才允许 accept。
 
 ---
 
