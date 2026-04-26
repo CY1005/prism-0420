@@ -1,9 +1,9 @@
 ---
 title: M20 团队 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-26
-accepted: null
+accepted: 2026-04-26
 supersedes: []
 superseded_by: null
 last_reviewed_at: null

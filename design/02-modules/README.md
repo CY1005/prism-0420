@@ -27,7 +27,7 @@
 | **Pilot 4** | M13 需求分析（**流式 SSE pilot**）| **accepted（2026-04-25）** | [`M13-requirement-analysis/`](./M13-requirement-analysis/) |
 | **Pilot 5** | M16 AI 快照（**后台 fire-and-forget pilot**）| **accepted（2026-04-25）** | [`M16-ai-snapshot/`](./M16-ai-snapshot/) |
 | **Pilot 6** | M18 语义搜索（🗂️ §12D embedding 持久化 pilot） | **accepted（2026-04-26，三轮 audit + fix v1/v2/v3/v4/v4.1/v4.2/v4.3 + verify v1-v4.2 共 6 轮独立审）** | [`M18-semantic-search/`](./M18-semantic-search/) |
-| 扩展 | M20 团队/空间（多 space 扩展）| **draft（2026-04-26 三轮 audit + Batch 1-4 修复 + verify v1-v3 通过；待 CY 最终 accept）** | [`M20-team/`](./M20-team/) |
+| 扩展 | M20 团队/空间（多 space 扩展）| **accepted（2026-04-26，三轮 audit + Batch 1-4 + Phase 1 sync 共 6 轮独立审）** | [`M20-team/`](./M20-team/) |
 
 **Pilot 范本**（新模块设计前必读）：
 - 同步模块 → `M04-feature-archive/00-design.md`
@@ -326,8 +326,8 @@ Generate（implementer Agent 并行）→ Audit r1（reviewer Agent 三轮）
 - [x] **Pilot 4 M13 需求分析（流式 SSE）accepted（2026-04-25）**：§12A 流式子模板定稿 + ADR-001 §4.1 补 aclose 协议 + ADR-002 L116 替换 M13 结论 + M04 baseline-patch（`create_dimension_record` + `get_latest`）+ M07 §6 对外契约登记 `list_by_project(node_id=...)`；驳回 reviewer M15 部分（合理 🔵）
 - [x] **Pilot 5 M16 AI 快照（后台 🪷 fire-and-forget）accepted（2026-04-25）**：§12B 后台子模板定稿（7 字段+位次不通用警告）+ ADR-002 §横切影响 M16 脚注（不走 Queue + 反悔触发器）+ M05 baseline-patch（`count_by_node`）+ M15 Alembic 迁移 3+1 枚举（Phase 2）+ M04 契约锁定（复用 M13 补丁的 `create_dimension_record`）；19 项 audit（4 Blocker / 9 Major / 6 Minor）全部 🟢/🔵 关闭
 - [ ] **Pilot 6 M18 语义搜索（🗂️ §12D embedding 持久化）draft（2026-04-25）**：brainstorming Q0-Q11 完成 + 00-design.md draft + §12D 子模板首次实战；待 tests.md + baseline-patch + 三轮 audit
-- [ ] 扩展 M20 团队 / 空间 —— 待开
-- [ ] 20 模块全部 status=accepted（剩 2 个：M18 / M20）
+- [x] **扩展 M20 团队 accepted（2026-04-26）**：ADR-005 + 16 节 00-design.md + tests.md（68 用例）+ baseline-patch-m20.md（M01+M02+M15+M03-M19 横切 16 模块）+ 3 轮 audit + 4 批修复 + Phase 1 sync 共 6 轮独立审；F1.11 硬触发器 M02/M15/ADR-001 已同步
+- [x] **20 模块全部 status=accepted**（M01-M20 全收齐，M09 superseded by M18）—— Phase 1 设计前置收官
 - [ ] 99-comparison/ 对照报告：每模块一份
 
 ---

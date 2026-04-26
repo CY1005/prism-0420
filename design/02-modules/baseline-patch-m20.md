@@ -1,9 +1,9 @@
 ---
 title: M20 基线补丁：M02 space_id→team_id / M15 ActionType+ErrorCode / M03-M19 横切 L3 SQL 注入升级
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-26
-accepted: null
+accepted: 2026-04-26
 supersedes: []
 superseded_by: null
 last_reviewed_at: null
