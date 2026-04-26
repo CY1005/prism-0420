@@ -2208,8 +2208,123 @@ grep -rn ": any" web/src/ | wc -l
 > 待第 2 次填充
 
 ## 13. Code review 清单（C）
+
+> Phase 2.0 启动决策（A3）— 2026-04-26 accepted
+
+### 13.1 PR reviewer 配置
+
+| 候选 | 优 | 缺 |
+|------|----|----|
+| **A CY 自己 + 2 AI Agent**（spec-reviewer + code-quality-reviewer）| 单人项目可行 / Agent 独立审 / 与 Phase 1 三轮 audit 范式一致 | 无第二人盲点 |
+| B 2 人 + 2 Agent | 多视角 | 单人项目不可行 |
+| C 0 人 + 3 Agent | 全 AI | 无人工兜底 |
+
+**决定**：✅ **A CY + 2 Agent**
+
+**理由**：
+1. 单人项目，B 不可行
+2. 与 Phase 1 M20 三轮 audit + 4 批修复 verify 范式一致
+3. CY 是产品 / 业务判断的最终把关人，AI 处理形式合规 + spec 偏差
+
+**替代触发**：未来加入第二人 → 切 B
+
+### 13.2 三 Agent 流水线触发时机
+
+| 候选 | 优 | 缺 |
+|------|----|----|
+| A 每个 PR 强制触发 | 最严 | 小改动也耗资源 |
+| B 每个模块（多 PR 合并时）触发 | 节省 | 漏掉单 PR 隐患 |
+| **C ≥50 行或 ≥2 文件触发**（与 simplify-checklist 同门槛）| 与既有规则一致 / 自然过滤小改动 | 跨模块大改动需手动判断 |
+
+**决定**：✅ **C ≥50 行或 ≥2 文件触发**
+
+**理由**：与 superpowers Prism-simplify-checklist 已定门槛一致，单一规则覆盖；小改动主 AI 自扫即可
+
+**替代触发**：实施后发现 C 规则漏过 ≥2 次重大问题 → 切 A
+
+### 13.3 拒合并硬条件（任一不过 → block）
+
+- [ ] **lint fail**（ruff / ESLint / Prettier 任一报错）
+- [ ] **test fail**（critical path 100% 是真门槛，见 02-quality-spec §4-5）
+- [ ] **spec-reviewer Agent 给 BLOCKER 级 finding**
+- [ ] **code-quality-reviewer Agent 给 BLOCKER 级 finding**
+- [ ] **simplify-checklist 跑出未 SKIP 的 finding**（≥50 行或 ≥2 文件触发时）
+- [ ] **PR 描述未填风险段**（§8 PR 模板已要求）
+
+**决定**：✅ **6 项全选**
+
+**理由**：任何一项放过都给 Phase 3「设计前置 vs VibeCoding」对照数据掺水
+
+**替代触发**：项目末期 / 紧急修复 → 走 design/99-comparison/phase-gate-bypass-log.md 记录绕开原因
+
+### 13.4 PR Self-review checklist 与 §8 PR 模板的关系
+
+§8 已有详细 self-review checklist（设计 / Schema / 测试 / 性能 / 安全 / 文档 / 命名 / lint / type 9 类）。本节 §13 是**强制级别 + reviewer 配置**，§8 是**填表内容**。两者互补，PR 模板取 §8。
+
+---
+
 ## 14. 版本号规则（C）
+
+> Phase 2.0 启动决策（C 档残留），因为单人项目 + 单仓部署，简化处理
+
+### 14.1 版本号方案
+
+| 候选 | 优 | 缺 |
+|------|----|----|
+| A SemVer 严格（major.minor.patch）| 行业标准 | 单人项目过度 |
+| **B 日期 + 短 sha**（如 `2026.04.26-1207d5b`）| 直观对应当天进度 / 与 commit 关联 | 非标准 |
+| C 不打 tag | 0 维护 | 无回滚锚点 |
+
+**决定**：✅ **B 日期 + 短 sha**（仅在 Phase 2.3 上线时打 tag，开发阶段不打）
+
+**理由**：
+1. 单人项目 + 单仓 + 内部使用，SemVer 形式主义
+2. 日期格式直接对应 git log，回滚 / 数据对照（Phase 3）锚点清晰
+
+**替代触发**：项目走向多人 / 公开发布 → 切 A SemVer
+
+---
+
 ## 15. 代码注释规范（C）
+
+### 15.1 必写注释场景
+
+只在以下场景必写（否则不写——避免噪音）：
+- **Why 非显然**：业务约束 / 性能权衡 / 历史 bug 修复
+- **跨模块隐式契约**：如「此方法接受外部 db: Session（R-X3）」
+- **设计文档锚点引用**：如「实现 ADR-005 §8.7 delete_team 5 步流程」
+
+### 15.2 禁止注释场景
+
+- ❌ 解释 WHAT（well-named identifiers 已说明）
+- ❌ 提及当前任务 / fix / 调用方（"used by X" / "added for Y flow"）
+- ❌ TODO 不写日期（写也行不强求）
+
+### 15.3 docstring
+
+| 候选 | 决定 |
+|------|------|
+| Service / DAO 公开方法 | ✅ 写 docstring（输入 / 输出 / 错误 / 跨事务约束）|
+| 内部 helper | ✅ 一行 docstring 即可 |
+| Pydantic schema | ✅ Field(..., description=...) 而非 docstring |
+| Test 函数 | ❌ 名字够清楚 → 不写 docstring |
+
+### 15.4 模板
+
+```python
+def delete_team(self, db: Session, team_id: PyUUID, actor_id: PyUUID) -> None:
+    """
+    删 team 5 步流程（同事务原子，N+1 条 activity_log）。
+
+    实现 ADR-005 §8.7 + M20-team/00-design.md §10.3 R10-1 合规。
+    R-X3：接受外部 db: Session，不在本方法内 commit。
+
+    Raises:
+        TeamHasProjectsError: 422，project 非空时
+        OptimisticLockError: 409，version 冲突时
+    """
+    ...
+```
 
 ---
 
@@ -2223,7 +2338,7 @@ grep -rn ": any" web/src/ | wc -l
 
 - [x] A 档 7 条全部填写
 - [x] B 档 5 条全部填写
-- [ ] C 档 3 条全部填写
+- [x] C 档 3 条全部填写（2026-04-26）
 - [ ] 强制清单总览
 - [ ] 与 ADR-001 / 06-design-principles.md 引用关系明确
 - [ ] AI 完整性质疑通过

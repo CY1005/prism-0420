@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-04-26
-current_phase: Phase 1 完结 / Phase 2.0 未启动
+last_updated: 2026-04-26（Phase 2.0 A1-A4 决策全 accepted）
+current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -26,16 +26,16 @@ current_phase: Phase 1 完结 / Phase 2.0 未启动
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ⏳ ░░░░░░░░░░░░░░░░   0%   ← 你在这里
+Phase 2.0 工程基线  ⏳ ████░░░░░░░░░░░░  25%   ← 你在这里（A 决策完，B 代码未起）
 Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 ```
 
-**上次更新**：2026-04-26（M20 accepted + Phase 1 收官）
+**上次更新**：2026-04-26（A1-A4 决策全 accepted + 02/03/04/05-spec 文档落地）
 
-**下一步动作**：A1 测试策略决策（02-quality-spec §3-4）
+**下一步动作**：B1 仓库脚手架（api/ + app/ + .env.example + Makefile）
 
 ---
 
@@ -107,16 +107,16 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 > **闸门**：本 Phase 全 ✅ 才能开 Phase 2.1。详见 [`00-phase-gate.md`](./00-phase-gate.md)。
 
-### 5.1 A 阶段：4 项决策（半天）
+### 5.1 A 阶段：4 项决策（半天）✅ **2026-04-26 完成**
 
-- [ ] **A1 测试策略**（02-quality-spec §3-4）
-  - 后端测试框架 / 前端测试框架 / DB 隔离 / 覆盖率门槛
-- [ ] **A2 Lint + Formatter + pre-commit**（02-quality-spec §1-2）
-  - Python lint + format / TS lint + format / pre-commit hook 工具链
-- [ ] **A3 Code review 流程**（engineering-spec §13）
-  - PR reviewer 数 / 三 Agent 流水线触发时机 / simplify-checklist 门槛 / 拒合并硬条件
-- [ ] **A4 CICD/可观测/安全占位决策**（03/04/05-spec 关键决策栏）
-  - CI 平台 / 日志方案 / 密钥管理 三项最小集
+- [x] **A1 测试策略**（02-quality-spec §3-4-5）
+  - 后端 pytest / 前端 vitest / E2E 暂不做（推 Phase 2.3）/ DB 每用例 transaction rollback / 不设硬覆盖率门槛 + critical path 100% 是真门槛
+- [x] **A2 Lint + Formatter + pre-commit**（02-quality-spec §1-2-6）
+  - Python ruff（lint+format 一体）/ TS ESLint v9 + Prettier / pre-commit Python 包 / commit message 项目内约定
+- [x] **A3 Code review 流程**（engineering-spec §13）
+  - CY + 2 Agent / 三 Agent ≥50 行或 ≥2 文件触发 / 拒合并 6 项硬条件全选
+- [x] **A4 CICD/可观测/安全占位决策**（03/04/05-spec 关键决策栏）
+  - GitHub Actions / stdout JSON + structlog / .env + .env.example + .gitignore + AES-256-GCM
 
 ### 5.2 B 阶段：10 项工程基线代码（2-3 天）
 
@@ -256,4 +256,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 |------|------|-------|
 | 2026-04-26 | Phase 1 完结（M20 accepted + 6 commit push）| CY + AI |
 | 2026-04-26 | Phase 2.0 启动 / roadmap.md 建立 | CY |
+| 2026-04-26 | A1-A4 4 项决策全 accepted（02/03/04/05-spec + engineering-spec §13/§14/§15 落地，含候选+优缺点+理由+替代触发完整记录）| CY + AI |
 | _（未来变更追加在这里）_ | | |
