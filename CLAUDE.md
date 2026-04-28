@@ -12,18 +12,25 @@ GitHub：https://github.com/CY1005/prism-0420
 
 ## 当前阶段
 
-**Phase 1：设计前置**（2026-04-20 起）—— 只做设计文档，不写代码。
+**Phase 2.0：工程基线（A 决策完成 / B 代码未起，进度 25%）**（截至 2026-04-29）
 
-**档位进度**（读 `design/README.md` 看最新）：
-- ✅ 档位 A：架构骨架（8 工件完成）
-- ⏳ 档位 B：工程规约决策（5 项，下一步）
-- ⏳ 档位 C：模块详细设计（最小模块待选）
+**真实进度**（权威来源 `design/00-roadmap.md`，每次进度变化必须同步更新）：
+- ✅ Phase 0 准备 100%
+- ✅ Phase 1 设计前置 100%（2026-04-26 完成）
+  - 档位 A 架构骨架 7 份 / 档位 B 工程规约 5 份 / 档位 C 模块详设 M01–M20 全交付 / 5 个 ADR
+- ⏳ **Phase 2.0 工程基线 25%** ← 当前位置
+  - A 决策（quality-spec / engineering-spec §13）已 accepted
+  - B 代码（仓库脚手架 / make dev / make test / make migrate / api/errors / api/auth / activity_log_service / tenant_filter）未起
+- ⏳ Phase 2.1 业务模块 0%（M01 用户系统是探针模块）
+- ⏳ Phase 2.2 前端继承 Prism 0%
+- ⏳ Phase 2.3 集成验证 0%
+- ⏳ Phase 3 数据对照报告 0%
 
-**Phase 2（未来）**：基于完整设计用 AI 实现 20 个模块。
+**下一件事**：B1 仓库脚手架（api/ + app/ + .env.example + Makefile）。详见 `design/00-phase-gate.md` 闸门 2 checkbox。
 
 ## 协作规则（严格遵守）
 
-**主文档**：`/root/cy/ai-quality-engineering/02-技术/架构设计/设计前置执行方法论-人机协作与对抗式Reviewer.md`
+**主文档**：`/root/workspace/projects/ai-quality-engineering/02-技术/架构设计/设计前置执行方法论-人机协作与对抗式Reviewer.md`
 
 核心三原则：
 
@@ -111,15 +118,16 @@ GitHub：https://github.com/CY1005/prism-0420
 ## 快速上手（新 session 读这个顺序）
 
 1. 本文件（协作规则）
-2. `design/README.md`（当前进度）
-3. TaskList pending 任务（下一件事）
-4. `design/adr/ADR-001-shadow-prism.md`（核心决策）
-5. 开始工作前：告诉 CY "我看到进度是 X，下一件是 Y，可以开始吗？"
+2. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
+3. `design/00-phase-gate.md`（下一闸门 checkbox）
+4. TaskList pending 任务（下一件事）
+5. `design/adr/ADR-001-shadow-prism.md`（核心决策）
+6. 开始工作前：告诉 CY "我看到进度是 X，下一件是 Y，可以开始吗？"
 
 ## 关键路径
 
-- 设计文档：`/root/cy/prism-0420/design/`
-- 方法论：`/root/cy/ai-quality-engineering/02-技术/架构设计/`（三篇）
-- Pain-log：`/root/cy/ai-quality-engineering/00-GTD/日志/pain-log.md`
-- TODO：`/root/cy/ai-quality-engineering/00-GTD/待办/TODO-index.md`
-- Prism 代码参考：`/root/cy/prism/`（做对照用，不直接抄）
+- 设计文档：`/root/workspace/projects/prism-0420/design/`
+- 方法论：`/root/workspace/projects/ai-quality-engineering/02-技术/架构设计/`（三篇）
+- Pain-log：`/root/workspace/projects/ai-quality-engineering/00-GTD/日志/pain-log.md`
+- TODO：`/root/workspace/projects/ai-quality-engineering/00-GTD/待办/TODO-index.md`
+- Prism 代码参考：`/root/workspace/projects/prism/`（做对照用，不直接抄）
