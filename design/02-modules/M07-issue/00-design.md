@@ -449,12 +449,12 @@ class IssueDAO:
 
 class ErrorCode(str, Enum):
     # 模块 M07
-    ISSUE_NOT_FOUND = "ISSUE_NOT_FOUND"
-    ISSUE_TRANSITION_INVALID = "ISSUE_TRANSITION_INVALID"   # 状态机非法转换（如 open→closed）
-    ISSUE_CLOSED_ERROR = "ISSUE_CLOSED_ERROR"               # closed 状态不可重开
-    ISSUE_ASSIGNEE_REQUIRED = "ISSUE_ASSIGNEE_REQUIRED"     # in_progress 时 assigned_to 必填
-    ISSUE_CATEGORY_INVALID = "ISSUE_CATEGORY_INVALID"       # category 非枚举值
-    ISSUE_NODE_CROSS_PROJECT = "ISSUE_NODE_CROSS_PROJECT"   # node_id 属于其他项目
+    ISSUE_NOT_FOUND = "issue_not_found"
+    ISSUE_TRANSITION_INVALID = "issue_transition_invalid"   # 状态机非法转换（如 open→closed）
+    ISSUE_CLOSED_ERROR = "issue_closed_error"               # closed 状态不可重开
+    ISSUE_ASSIGNEE_REQUIRED = "issue_assignee_required"     # in_progress 时 assigned_to 必填
+    ISSUE_CATEGORY_INVALID = "issue_category_invalid"       # category 非枚举值
+    ISSUE_NODE_CROSS_PROJECT = "issue_node_cross_project"   # node_id 属于其他项目
 ```
 
 ```python

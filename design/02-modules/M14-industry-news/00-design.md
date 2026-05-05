@@ -438,10 +438,10 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M14 行业动态
-    NEWS_NOT_FOUND = "NEWS_NOT_FOUND"
-    NEWS_LINK_DUPLICATE = "NEWS_LINK_DUPLICATE"     # (news_id, node_id) 重复关联
-    NEWS_LINK_NOT_FOUND = "NEWS_LINK_NOT_FOUND"
-    NEWS_FORBIDDEN = "NEWS_FORBIDDEN"               # 非本人/非管理员尝试删除/编辑
+    NEWS_NOT_FOUND = "news_not_found"
+    NEWS_LINK_DUPLICATE = "news_link_duplicate"     # (news_id, node_id) 重复关联
+    NEWS_LINK_NOT_FOUND = "news_link_not_found"
+    NEWS_FORBIDDEN = "news_forbidden"               # 非本人/非管理员尝试删除/编辑
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

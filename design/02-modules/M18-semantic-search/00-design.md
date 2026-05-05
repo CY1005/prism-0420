@@ -1105,24 +1105,24 @@ class ErrorCode(str, Enum):
     # ... existing
 
     # M18 search
-    INVALID_QUERY_LENGTH = "INVALID_QUERY_LENGTH"
-    SEARCH_TIMEOUT = "SEARCH_TIMEOUT"
-    PGVECTOR_UNAVAILABLE = "PGVECTOR_UNAVAILABLE"     # 降级为 keyword_only 时不抛错，仅写日志/embedding_failures
+    INVALID_QUERY_LENGTH = "invalid_query_length"
+    SEARCH_TIMEOUT = "search_timeout"
+    PGVECTOR_UNAVAILABLE = "pgvector_unavailable"     # 降级为 keyword_only 时不抛错，仅写日志/embedding_failures
 
     # M18 embedding worker
-    EMBEDDING_PROVIDER_FAILED = "EMBEDDING_PROVIDER_FAILED"        # OpenAI/bge 调用失败
-    EMBEDDING_PROVIDER_TIMEOUT = "EMBEDDING_PROVIDER_TIMEOUT"
-    EMBEDDING_TARGET_NOT_FOUND = "EMBEDDING_TARGET_NOT_FOUND"      # 业务表已删（noop 不算失败）
-    EMBEDDING_ZOMBIE = "EMBEDDING_ZOMBIE"                          # zombie cron 兜底
-    EMBEDDING_TASK_TERMINAL_VIOLATION = "EMBEDDING_TASK_TERMINAL_VIOLATION"
-    EMBEDDING_TASK_INVALID_TRANSITION = "EMBEDDING_TASK_INVALID_TRANSITION"
+    EMBEDDING_PROVIDER_FAILED = "embedding_provider_failed"        # OpenAI/bge 调用失败
+    EMBEDDING_PROVIDER_TIMEOUT = "embedding_provider_timeout"
+    EMBEDDING_TARGET_NOT_FOUND = "embedding_target_not_found"      # 业务表已删（noop 不算失败）
+    EMBEDDING_ZOMBIE = "embedding_zombie"                          # zombie cron 兜底
+    EMBEDDING_TASK_TERMINAL_VIOLATION = "embedding_task_terminal_violation"
+    EMBEDDING_TASK_INVALID_TRANSITION = "embedding_task_invalid_transition"
 
     # M18 admin
-    EMBEDDING_BACKFILL_ALREADY_RUNNING = "EMBEDDING_BACKFILL_ALREADY_RUNNING"   # 防并发触发
-    EMBEDDING_MODEL_UPGRADE_INVALID = "EMBEDDING_MODEL_UPGRADE_INVALID"          # 切到不存在的 model
+    EMBEDDING_BACKFILL_ALREADY_RUNNING = "embedding_backfill_already_running"   # 防并发触发
+    EMBEDDING_MODEL_UPGRADE_INVALID = "embedding_model_upgrade_invalid"          # 切到不存在的 model
 
     # M18 删除一致性（baseline-patch 决策 5）
-    EMBEDDING_DELETE_FAILED = "EMBEDDING_DELETE_FAILED"                          # delete_by_target 失败不阻塞，写 failures
+    EMBEDDING_DELETE_FAILED = "embedding_delete_failed"                          # delete_by_target 失败不阻塞，写 failures
 ```
 
 ### AppError 子类（R13-1 每 ErrorCode 必有子类）

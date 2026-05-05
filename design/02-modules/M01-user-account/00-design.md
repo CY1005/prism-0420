@@ -980,23 +980,23 @@ class ErrorCode(str, Enum):
     # ... 已有 ...
 
     # M01 auth errors
-    UNAUTHENTICATED = "UNAUTHENTICATED"           # 401
-    INVALID_CREDENTIALS = "INVALID_CREDENTIALS"   # 401 登录邮箱/密码错误（不暴露具体原因）
-    ACCOUNT_DISABLED = "ACCOUNT_DISABLED"         # 403
-    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"             # 423
-    ACCOUNT_PENDING = "ACCOUNT_PENDING"           # 403（Q1 预留）
-    INVALID_REFRESH_TOKEN = "INVALID_REFRESH_TOKEN"  # 401
-    REFRESH_TOKEN_EXPIRED = "REFRESH_TOKEN_EXPIRED"  # 401
-    OLD_PASSWORD_MISMATCH = "OLD_PASSWORD_MISMATCH"  # 400 改密码时旧密码错
-    PASSWORD_TOO_WEAK = "PASSWORD_TOO_WEAK"       # 422
-    EMAIL_ALREADY_EXISTS = "EMAIL_ALREADY_EXISTS" # 409
-    USER_NOT_FOUND = "USER_NOT_FOUND"             # 404
-    PERMISSION_DENIED = "PERMISSION_DENIED"       # 403（require_admin 失败）
-    SELF_DOWNGRADE_FORBIDDEN = "SELF_DOWNGRADE_FORBIDDEN"  # 400 admin 改自己 role
-    LAST_ADMIN_PROTECTED = "LAST_ADMIN_PROTECTED" # 400 禁用最后一个 admin
-    INVALID_STATUS_TRANSITION = "INVALID_STATUS_TRANSITION"  # 400
-    VERSION_CONFLICT = "VERSION_CONFLICT"         # 409 Concern 1：乐观锁失败
-    REGISTRATION_DISABLED = "REGISTRATION_DISABLED"  # 403 Q1 预留（本期开放注册未启用时的稳定错误码）
+    UNAUTHENTICATED = "unauthenticated"           # 401
+    INVALID_CREDENTIALS = "invalid_credentials"   # 401 登录邮箱/密码错误（不暴露具体原因）
+    ACCOUNT_DISABLED = "account_disabled"         # 403
+    ACCOUNT_LOCKED = "account_locked"             # 423
+    ACCOUNT_PENDING = "account_pending"           # 403（Q1 预留）
+    INVALID_REFRESH_TOKEN = "invalid_refresh_token"  # 401
+    REFRESH_TOKEN_EXPIRED = "refresh_token_expired"  # 401
+    OLD_PASSWORD_MISMATCH = "old_password_mismatch"  # 400 改密码时旧密码错
+    PASSWORD_TOO_WEAK = "password_too_weak"       # 422
+    EMAIL_ALREADY_EXISTS = "email_already_exists" # 409
+    USER_NOT_FOUND = "user_not_found"             # 404
+    PERMISSION_DENIED = "permission_denied"       # 403（require_admin 失败）
+    SELF_DOWNGRADE_FORBIDDEN = "self_downgrade_forbidden"  # 400 admin 改自己 role
+    LAST_ADMIN_PROTECTED = "last_admin_protected" # 400 禁用最后一个 admin
+    INVALID_STATUS_TRANSITION = "invalid_status_transition"  # 400
+    VERSION_CONFLICT = "version_conflict"         # 409 Concern 1：乐观锁失败
+    REGISTRATION_DISABLED = "registration_disabled"  # 403 Q1 预留（本期开放注册未启用时的稳定错误码）
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

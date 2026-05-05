@@ -434,14 +434,14 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M11 冷启动
-    COLD_START_TASK_NOT_FOUND = "COLD_START_TASK_NOT_FOUND"
-    COLD_START_CSV_INVALID = "COLD_START_CSV_INVALID"             # CSV 格式无效（文件解析失败）
-    COLD_START_ROW_VALIDATION_FAILED = "COLD_START_ROW_VALIDATION_FAILED"  # 行级校验失败（含行号）
-    COLD_START_BATCH_INSERT_FAILED = "COLD_START_BATCH_INSERT_FAILED"      # 批量入库事务失败
-    COLD_START_TASK_FINALIZED = "COLD_START_TASK_FINALIZED"       # 终态不可重操作
-    COLD_START_INVALID_STATE_TRANSITION = "COLD_START_INVALID_STATE_TRANSITION"
+    COLD_START_TASK_NOT_FOUND = "cold_start_task_not_found"
+    COLD_START_CSV_INVALID = "cold_start_csv_invalid"             # CSV 格式无效（文件解析失败）
+    COLD_START_ROW_VALIDATION_FAILED = "cold_start_row_validation_failed"  # 行级校验失败（含行号）
+    COLD_START_BATCH_INSERT_FAILED = "cold_start_batch_insert_failed"      # 批量入库事务失败
+    COLD_START_TASK_FINALIZED = "cold_start_task_finalized"       # 终态不可重操作
+    COLD_START_INVALID_STATE_TRANSITION = "cold_start_invalid_state_transition"
     # G2/G6 决策：移除 COLD_START_DUPLICATE（无 idempotency）
-    COLD_START_FILE_TOO_LARGE = "COLD_START_FILE_TOO_LARGE"       # 超过大小阈值
+    COLD_START_FILE_TOO_LARGE = "cold_start_file_too_large"       # 超过大小阈值
 ```
 
 ```python

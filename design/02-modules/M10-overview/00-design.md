@@ -435,9 +435,9 @@ export const COMPLETION_THRESHOLDS = {
 class ErrorCode(str, Enum):
     # ... 已有
     # 模块（M10）
-    OVERVIEW_PROJECT_NOT_FOUND = "OVERVIEW_PROJECT_NOT_FOUND"    # project 不存在或无权限
-    OVERVIEW_NODE_NOT_FOUND    = "OVERVIEW_NODE_NOT_FOUND"       # 单节点查询 node 不存在
-    OVERVIEW_NO_DIMENSIONS     = "OVERVIEW_NO_DIMENSIONS"        # 项目未配置任何启用维度（分母=0，无法计算完善度）
+    OVERVIEW_PROJECT_NOT_FOUND = "overview_project_not_found"    # project 不存在或无权限
+    OVERVIEW_NODE_NOT_FOUND    = "overview_node_not_found"       # 单节点查询 node 不存在
+    OVERVIEW_NO_DIMENSIONS     = "overview_no_dimensions"        # 项目未配置任何启用维度（分母=0，无法计算完善度）
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

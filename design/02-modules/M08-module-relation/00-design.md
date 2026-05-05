@@ -567,11 +567,11 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M08 模块关系图
-    RELATION_NOT_FOUND = "RELATION_NOT_FOUND"
-    RELATION_DUPLICATE = "RELATION_DUPLICATE"          # 三元组唯一约束冲突
-    RELATION_SELF_LOOP = "RELATION_SELF_LOOP"          # source == target
-    RELATION_NODE_NOT_IN_PROJECT = "RELATION_NODE_NOT_IN_PROJECT"  # 节点不属于该 project
-    RELATION_TYPE_INVALID = "RELATION_TYPE_INVALID"    # 非法 relation_type 枚举值（理论上 Pydantic 先拦）
+    RELATION_NOT_FOUND = "relation_not_found"
+    RELATION_DUPLICATE = "relation_duplicate"          # 三元组唯一约束冲突
+    RELATION_SELF_LOOP = "relation_self_loop"          # source == target
+    RELATION_NODE_NOT_IN_PROJECT = "relation_node_not_in_project"  # 节点不属于该 project
+    RELATION_TYPE_INVALID = "relation_type_invalid"    # 非法 relation_type 枚举值（理论上 Pydantic 先拦）
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

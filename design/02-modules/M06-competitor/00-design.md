@@ -417,10 +417,10 @@ class CompetitorDAO:
 
 class ErrorCode(str, Enum):
     # 模块 M06
-    COMPETITOR_NOT_FOUND = "COMPETITOR_NOT_FOUND"
-    COMPETITOR_REF_NOT_FOUND = "COMPETITOR_REF_NOT_FOUND"
-    COMPETITOR_REF_DUPLICATE = "COMPETITOR_REF_DUPLICATE"   # (node_id, competitor_id) 唯一约束
-    COMPETITOR_CROSS_PROJECT = "COMPETITOR_CROSS_PROJECT"   # 引用了其他项目的竞品
+    COMPETITOR_NOT_FOUND = "competitor_not_found"
+    COMPETITOR_REF_NOT_FOUND = "competitor_ref_not_found"
+    COMPETITOR_REF_DUPLICATE = "competitor_ref_duplicate"   # (node_id, competitor_id) 唯一约束
+    COMPETITOR_CROSS_PROJECT = "competitor_cross_project"   # 引用了其他项目的竞品
 ```
 
 ```python

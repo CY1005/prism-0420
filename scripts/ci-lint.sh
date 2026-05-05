@@ -14,9 +14,10 @@ cd "$(dirname "$0")/.."
 CODES_FILE="api/errors/codes.py"
 EXC_FILE="api/errors/exceptions.py"
 
-# ErrorCode 业务码（不含 INTERNAL_ERROR）：匹配 ^    XXX = "XXX" 形式
-ERROR_CODES=$(grep -cE '^[[:space:]]+[A-Z][A-Z_]+ = "[A-Z_]+"$' "$CODES_FILE")
-INTERNAL_COUNT=$(grep -cE '^[[:space:]]+INTERNAL_ERROR = "INTERNAL_ERROR"$' "$CODES_FILE")
+# ErrorCode 业务码（不含 INTERNAL_ERROR）：匹配 ^    UPPER_NAME = "lower_value" 形式
+# （N1 命名规范：enum 名 UPPER_SNAKE，value 全小写 snake；详见 design/00-architecture/08-namespaces.md）
+ERROR_CODES=$(grep -cE '^[[:space:]]+[A-Z][A-Z_]+ = "[a-z_]+"$' "$CODES_FILE")
+INTERNAL_COUNT=$(grep -cE '^[[:space:]]+INTERNAL_ERROR = "internal_error"$' "$CODES_FILE")
 BUSINESS_CODES=$((ERROR_CODES - INTERNAL_COUNT))
 
 # AppError 子类：直接或间接继承 AppError 的 *Error 类（基类 AppError 不计）
@@ -26,7 +27,7 @@ if [ "$BUSINESS_CODES" -ne "$APP_ERRORS" ]; then
   echo "ERROR (R13-1): 业务 ErrorCode 数 ($BUSINESS_CODES, INTERNAL_ERROR 除外)" \
        "与 AppError 子类数 ($APP_ERRORS) 不一致。"
   echo "  $CODES_FILE 中 ErrorCode 业务码:"
-  grep -E '^[[:space:]]+[A-Z][A-Z_]+ = "[A-Z_]+"$' "$CODES_FILE" \
+  grep -E '^[[:space:]]+[A-Z][A-Z_]+ = "[a-z_]+"$' "$CODES_FILE" \
     | grep -v INTERNAL_ERROR
   echo "  $EXC_FILE 中 AppError 子类:"
   grep -E '^class [A-Z][A-Za-z]*Error\(AppError\):' "$EXC_FILE"

@@ -689,14 +689,14 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # 模块（M17）
-    IMPORT_TASK_NOT_FOUND = "IMPORT_TASK_NOT_FOUND"
-    IMPORT_TASK_FINALIZED = "IMPORT_TASK_FINALIZED"           # 终态不可变
-    IMPORT_INVALID_SOURCE = "IMPORT_INVALID_SOURCE"           # zip 损坏 / git URL 无效
-    IMPORT_AI_PROVIDER_ERROR = "IMPORT_AI_PROVIDER_ERROR"     # AI 调用失败（重试用尽）
-    IMPORT_BATCH_INSERT_FAILED = "IMPORT_BATCH_INSERT_FAILED" # 入库阶段失败
-    IMPORT_QUOTA_EXCEEDED = "IMPORT_QUOTA_EXCEEDED"           # 用户 / 项目 AI 配额超限
-    IMPORT_TASK_DUPLICATE = "IMPORT_TASK_DUPLICATE"           # idempotency 命中（非错误，但需特殊响应）
-    IMPORT_INVALID_STATE_TRANSITION = "IMPORT_INVALID_STATE_TRANSITION"  # 状态机非法转换
+    IMPORT_TASK_NOT_FOUND = "import_task_not_found"
+    IMPORT_TASK_FINALIZED = "import_task_finalized"           # 终态不可变
+    IMPORT_INVALID_SOURCE = "import_invalid_source"           # zip 损坏 / git URL 无效
+    IMPORT_AI_PROVIDER_ERROR = "import_ai_provider_error"     # AI 调用失败（重试用尽）
+    IMPORT_BATCH_INSERT_FAILED = "import_batch_insert_failed" # 入库阶段失败
+    IMPORT_QUOTA_EXCEEDED = "import_quota_exceeded"           # 用户 / 项目 AI 配额超限
+    IMPORT_TASK_DUPLICATE = "import_task_duplicate"           # idempotency 命中（非错误，但需特殊响应）
+    IMPORT_INVALID_STATE_TRANSITION = "import_invalid_state_transition"  # 状态机非法转换
 ```
 
 ```python

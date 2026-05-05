@@ -29,16 +29,16 @@ purpose: 全项目共享标识符的单一真相源
 
 ## 0.2 修订总账（PRISM-0420）
 
-| 类型 | 当前 | 新规约 | 修订量 |
-|------|-----|-------|------|
-| ErrorCode enum value | 125 条 UPPER_SNAKE | 全改 lower_snake | 125 条 string 值修改（design 文档）|
-| ActionType（CRUD 通用）| 10 条单词原型 | 拆为每实体独立过去式 | 删 10 + 加 ~14（按 TargetType 数）|
-| ActionType（dot.notation）| 14 条 | 全改 snake 过去式 | 14 条修订 |
-| Queue task name | 6 个 Payload class（无函数名）| 加 task 函数名映射 | M01 实施时落地 |
-| Pydantic schema | 0 条（无业务代码）| M01 实施按规范 | 无历史修订 |
-| ADR-002 边界 | 未规约 cron user_id | 加 SYSTEM_USER_UUID 常量条款 | ADR-002 § 1 加段 |
+| 类型 | 当前 | 新规约 | 修订量 | 状态 |
+|------|-----|-------|------|-----|
+| ErrorCode enum value | 125 条 UPPER_SNAKE | 全改 lower_snake | 161 处 string 值修改（21 文件）| ✅ 2026-05-06 baseline-patch |
+| ActionType（CRUD 通用）| 10 条单词原型 | 拆为每实体独立过去式 | 删 10 + 加 33（按各 TargetType 适用动词）| ✅ 2026-05-06 baseline-patch |
+| ActionType（dot.notation）| 14 条 | 全改 snake 过去式 | 14 条修订 | ✅ 2026-05-06 baseline-patch |
+| Queue task name | 6 个 Payload class（无函数名）| 加 task 函数名映射 | M01 实施时落地 | ⏳ 待 M01 |
+| Pydantic schema | 0 条（无业务代码）| M01 实施按规范 | 无历史修订 | ⏳ 待 M01 |
+| ADR-002 边界 | 未规约 cron user_id | 加 SYSTEM_USER_UUID 常量条款 | ADR-002 § 1 加段 | ✅ 2026-05-06 |
 
-**修订时机**：等 contracts 1+3 落地后跑 baseline-patch（建议下个会话集中做）。
+**baseline-patch 落地**：见 commit `baseline-patch ErrorCode value + ActionType CRUD split + dot→snake`。
 
 ---
 
@@ -154,82 +154,40 @@ purpose: 全项目共享标识符的单一真相源
 - [AWS EventBridge event structure](https://docs.aws.amazon.com/eventbridge/latest/userguide/event-reference.html)
 - [How to name events in EDA](https://richygreat.medium.com/how-to-name-events-in-event-driven-architecture-cc962d93ed60)
 
-### 2.2 ActionType 登记（41 条 — M15 schema）
+### 2.2 ActionType 登记（baseline-patch 2026-05-06 → 56 条统一 snake 过去式）
 
-> 提取自 design/02-modules/M15-activity-stream/00-design.md `class ActionType`
+> 提取自 design/02-modules/M15-activity-stream/00-design.md `class ActionType`。
+> 全表统一 `{entity}_{past_verb}` 风格——无通用 CRUD、无 dot.notation。
 
-**通用动作**（不带模块前缀）：
-| enum 名 | string value | 触发模块 | 风格 |
-|---------|--------------|---------|------|
-| create | "create" | 通用 | 单词 |
-| update | "update" | 通用 | 单词 |
-| delete | "delete" | 通用 | 单词 |
-| import_ | "import" | 通用 | 单词（trailing _ 因 import 是 keyword）|
-| analyze | "analyze" | 通用 | 单词 |
-| archive | "archive" | 通用 | 单词 |
-| reorder | "reorder" | 通用 | 单词 |
-| move | "move" | 通用 | 单词 |
-| status_change | "status_change" | 通用 | snake |
-| orphan | "orphan" | M07 | 单词 |
+| 模块 | enum 名 / value（一致）| 备注 |
+|-----|------------------------|------|
+| M01 | user_created / user_updated / user_deleted | |
+| M02 | project_created / project_updated / project_archived / project_deleted | |
+| M02 | project_member_invited / project_member_role_updated / project_member_removed | 替原 invite_member / update_member_role / remove_member |
+| M02 | project_dimension_config_updated / project_ai_provider_updated | |
+| M03 | node_created / node_updated / node_deleted / node_reordered / node_moved | 替原通用 reorder / move |
+| M04 | dimension_record_created / dimension_record_updated / dimension_record_deleted | |
+| M05 | version_record_created / version_record_updated / version_record_deleted | |
+| M06 | competitor_created / competitor_updated / competitor_deleted | |
+| M06 | competitor_ref_created / competitor_ref_deleted | |
+| M07 | issue_created / issue_updated / issue_deleted | |
+| M07 | issue_status_changed / issue_orphaned | 替原通用 status_change / orphan |
+| M08 | module_relation_created / module_relation_deleted | |
+| M11 | cold_start_created / cold_start_completed / cold_start_failed | dot.notation 改 snake |
+| M12 | comparison_snapshot_created / comparison_snapshot_renamed / comparison_snapshot_deleted | dot.notation `snapshot.*` → 实体前缀 + snake |
+| M17 | import_created / import_status_changed / import_ai_step_completed / import_review_confirmed | dot.notation 改 snake |
+| M17 | import_batch_inserted / import_canceled / import_failed / import_partial_failed | |
+| M18 | embedding_model_upgrade_triggered / embedding_backfill_triggered | _triggered 是过去式合法变体（已触发但未完成）|
+| M20 | team_created / team_renamed / team_description_changed / team_deleted | |
+| M20 | team_member_added / team_member_removed | |
+| M20 | team_member_promoted_admin / team_member_demoted_member | 字面命名，半年回看（README 2026-10-26）评估合并为 role_changed |
+| M20 | project_joined_team / project_left_team | |
 
-**M02 项目相关**：
-| enum 名 | string value | 风格 |
-|---------|--------------|------|
-| invite_member | "invite_member" | snake 原型 |
-| update_member_role | "update_member_role" | snake 原型 |
-| remove_member | "remove_member" | snake 原型 |
-| update_dimension_config | "update_dimension_config" | snake 原型 |
-| update_ai_provider | "update_ai_provider" | snake 原型 |
-
-**M11 / M16 / M17 dot.notation 风格**：
-| enum 名 | string value | 风格 | 状态 |
-|---------|--------------|------|------|
-| cold_start_create | "cold_start.create" | ⚠️ dot 在 value | 待 A1 定稿 |
-| cold_start_completed | "cold_start.completed" | ⚠️ dot | 待 A1 定稿 |
-| cold_start_failed | "cold_start.failed" | ⚠️ dot | 待 A1 定稿 |
-| snapshot_create | "snapshot.create" | ⚠️ dot | 待 A1 定稿 |
-| snapshot_rename | "snapshot.rename" | ⚠️ dot | 待 A1 定稿 |
-| snapshot_delete | "snapshot.delete" | ⚠️ dot | 待 A1 定稿 |
-| import_create | "import.create" | ⚠️ dot | 待 A1 定稿 |
-| import_status_change | "import.status_change" | ⚠️ dot | 待 A1 定稿 |
-| import_ai_step_complete | "import.ai_step_complete" | ⚠️ dot | 待 A1 定稿 |
-| import_review_confirmed | "import.review_confirmed" | ⚠️ dot | 待 A1 定稿 |
-| import_batch_insert | "import.batch_insert" | ⚠️ dot | 待 A1 定稿 |
-| import_cancel | "import.cancel" | ⚠️ dot | 待 A1 定稿 |
-| import_failed | "import.failed" | ⚠️ dot | 待 A1 定稿 |
-| import_partial_failed | "import.partial_failed" | ⚠️ dot | 待 A1 定稿 |
-
-**M18 _triggered 后缀**：
-| enum 名 | string value | 风格 |
-|---------|--------------|------|
-| embedding_model_upgrade_triggered | "embedding_model_upgrade_triggered" | snake + _triggered |
-| embedding_backfill_triggered | "embedding_backfill_triggered" | snake + _triggered |
-
-**M20 团队（snake_case + 过去式）**：
-| enum 名 | string value | 风格 |
-|---------|--------------|------|
-| team_created | "team_created" | snake + 过去式 |
-| team_renamed | "team_renamed" | snake + 过去式 |
-| team_description_changed | "team_description_changed" | snake + 过去式 |
-| team_deleted | "team_deleted" | snake + 过去式 |
-| team_member_added | "team_member_added" | snake + 过去式 |
-| team_member_removed | "team_member_removed" | snake + 过去式 |
-| team_member_promoted_admin | "team_member_promoted_admin" | snake + 过去式（过长 4 词）|
-| team_member_demoted_member | "team_member_demoted_member" | snake + 过去式（过长 4 词）|
-| project_joined_team | "project_joined_team" | snake + 过去式 |
-| project_left_team | "project_left_team" | snake + 过去式 |
-
-**风格混乱总结**：
-
-| 风格 | 占比 | 模块 |
-|------|-----|------|
-| 单词原型（create/update/delete/...）| ~10/41 | 通用 |
-| snake 原型（update_member_role）| ~5/41 | M02 |
-| **dot.notation**（cold_start.create）| ~14/41 | M11/M16/M17 |
-| snake 过去式（team_created）| ~10/41 | M20 |
-| snake + _triggered（embedding_*_triggered）| ~2/41 | M18 |
-
-**4 种风格混用** — 待 A1-A3 规则定稿后批量重命名。
+**baseline-patch 2026-05-06 变更摘要**：
+- 删除 10 条通用 CRUD（create / update / delete / import_ / analyze / archive / reorder / move / status_change / orphan）
+- 删除 5 条 M02 命令式 snake 原型（invite_member 等）→ 改为实体前缀 + 过去式
+- 14 条 dot.notation（cold_start.* / snapshot.* / import.*）→ 全改 snake 过去式
+- 总数：41 → 56；风格：4 种 → 1 种统一
 
 ### 2.3 TargetType 登记（14 条）
 

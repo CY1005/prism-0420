@@ -22,9 +22,9 @@ prism_ref: F15
 |----|------|------|------|
 | G1 | 查询项目操作日志列表 | owner（或 editor）→ GET `/api/projects/{pid}/activity-stream?page=1&page_size=20` | 200；items 按 created_at 降序；每条含 user_name（JOIN users）；has_more 正确 |
 | G2 | 按 user_id 过滤 | `?user_id={uid}` 过滤 | 200；返回的 items 全部来自该 user；total 反映过滤后数量 |
-| G3 | 按 action_type 过滤 | `?action_type=update` | 200；items 全部为 action_type="update" 的记录 |
+| G3 | 按 action_type 过滤 | `?action_type=node_updated` | 200；items 全部为 action_type="node_updated" 的记录 |
 | G4 | 按时间范围过滤 | `?from_dt=2026-01-01T00:00:00&to_dt=2026-04-01T00:00:00` | 200；items 全部在时间范围内；边界日期记录包含 |
-| G5 | 组合过滤 | `?user_id={uid}&action_type=create&target_type=node` | 200；items 满足全部三个过滤条件 |
+| G5 | 组合过滤 | `?user_id={uid}&action_type=node_created&target_type=node` | 200；items 满足全部三个过滤条件 |
 
 ---
 

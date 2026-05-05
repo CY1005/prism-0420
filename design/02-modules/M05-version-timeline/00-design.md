@@ -430,9 +430,9 @@ def set_current(self, db: Session, version_id: UUID, node_id: UUID, project_id: 
 
 class ErrorCode(str, Enum):
     # 模块 M05
-    VERSION_NOT_FOUND = "VERSION_NOT_FOUND"
-    VERSION_LABEL_DUPLICATE = "VERSION_LABEL_DUPLICATE"       # (node_id, version_label) 唯一约束
-    VERSION_SNAPSHOT_INVALID = "VERSION_SNAPSHOT_INVALID"     # snapshot_data 格式校验失败
+    VERSION_NOT_FOUND = "version_not_found"
+    VERSION_LABEL_DUPLICATE = "version_label_duplicate"       # (node_id, version_label) 唯一约束
+    VERSION_SNAPSHOT_INVALID = "version_snapshot_invalid"     # snapshot_data 格式校验失败
 ```
 
 ```python

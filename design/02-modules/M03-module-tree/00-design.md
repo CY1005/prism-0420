@@ -516,13 +516,13 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M03 功能模块树
-    NODE_NOT_FOUND = "NODE_NOT_FOUND"
-    NODE_NAME_EMPTY = "NODE_NAME_EMPTY"
-    NODE_PARENT_NOT_FOUND = "NODE_PARENT_NOT_FOUND"  # 指定的 parent_id 不存在
-    NODE_TYPE_IMMUTABLE = "NODE_TYPE_IMMUTABLE"      # 节点类型创建后不可变
-    NODE_REORDER_INVALID = "NODE_REORDER_INVALID"    # 重排节点不属于同一父节点
-    NODE_DELETE_HAS_CHILDREN = "NODE_DELETE_HAS_CHILDREN"  # 删除有子节点时的级联确认（G2：直接级联，此码不触发，保留备用）
-    NODE_MOVE_CYCLE_DETECTED = "NODE_MOVE_CYCLE_DETECTED"  # G5：跨父移动检测到循环引用（移到子孙节点）
+    NODE_NOT_FOUND = "node_not_found"
+    NODE_NAME_EMPTY = "node_name_empty"
+    NODE_PARENT_NOT_FOUND = "node_parent_not_found"  # 指定的 parent_id 不存在
+    NODE_TYPE_IMMUTABLE = "node_type_immutable"      # 节点类型创建后不可变
+    NODE_REORDER_INVALID = "node_reorder_invalid"    # 重排节点不属于同一父节点
+    NODE_DELETE_HAS_CHILDREN = "node_delete_has_children"  # 删除有子节点时的级联确认（G2：直接级联，此码不触发，保留备用）
+    NODE_MOVE_CYCLE_DETECTED = "node_move_cycle_detected"  # G5：跨父移动检测到循环引用（移到子孙节点）
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

@@ -452,11 +452,11 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # 模块（M04）
-    DIMENSION_NOT_FOUND = "DIMENSION_NOT_FOUND"
-    DIMENSION_TYPE_DISABLED = "DIMENSION_TYPE_DISABLED"  # 项目级配置禁用
-    DIMENSION_TYPE_NOT_FOUND = "DIMENSION_TYPE_NOT_FOUND"
-    DIMENSION_CONTENT_INVALID = "DIMENSION_CONTENT_INVALID"  # field_schema 校验失败
-    DIMENSION_DUPLICATE = "DIMENSION_DUPLICATE"          # (node_id, type_id) 唯一约束
+    DIMENSION_NOT_FOUND = "dimension_not_found"
+    DIMENSION_TYPE_DISABLED = "dimension_type_disabled"  # 项目级配置禁用
+    DIMENSION_TYPE_NOT_FOUND = "dimension_type_not_found"
+    DIMENSION_CONTENT_INVALID = "dimension_content_invalid"  # field_schema 校验失败
+    DIMENSION_DUPLICATE = "dimension_duplicate"          # (node_id, type_id) 唯一约束
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

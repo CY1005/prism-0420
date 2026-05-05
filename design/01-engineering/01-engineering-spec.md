@@ -750,26 +750,26 @@ from enum import Enum
 
 class ErrorCode(str, Enum):
     # 通用
-    INTERNAL_ERROR = "INTERNAL_ERROR"
-    NOT_FOUND = "NOT_FOUND"
-    PERMISSION_DENIED = "PERMISSION_DENIED"
-    VALIDATION_ERROR = "VALIDATION_ERROR"
-    CONFLICT = "CONFLICT"                          # 乐观锁冲突
-    RATE_LIMITED = "RATE_LIMITED"
+    INTERNAL_ERROR = "internal_error"
+    NOT_FOUND = "not_found"
+    PERMISSION_DENIED = "permission_denied"
+    VALIDATION_ERROR = "validation_error"
+    CONFLICT = "conflict"                          # 乐观锁冲突
+    RATE_LIMITED = "rate_limited"
 
     # 认证
-    UNAUTHENTICATED = "UNAUTHENTICATED"
-    ACCESS_TOKEN_EXPIRED = "ACCESS_TOKEN_EXPIRED"
-    REFRESH_TOKEN_EXPIRED = "REFRESH_TOKEN_EXPIRED"
-    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
+    UNAUTHENTICATED = "unauthenticated"
+    ACCESS_TOKEN_EXPIRED = "access_token_expired"
+    REFRESH_TOKEN_EXPIRED = "refresh_token_expired"
+    ACCOUNT_LOCKED = "account_locked"
 
     # 模块（M03）
-    MODULE_NOT_FOUND = "MODULE_NOT_FOUND"
-    MODULE_ARCHIVED = "MODULE_ARCHIVED"
+    MODULE_NOT_FOUND = "module_not_found"
+    MODULE_ARCHIVED = "module_archived"
 
     # 项目（M02）
-    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
-    PROJECT_QUOTA_EXCEEDED = "PROJECT_QUOTA_EXCEEDED"
+    PROJECT_NOT_FOUND = "project_not_found"
+    PROJECT_QUOTA_EXCEEDED = "project_quota_exceeded"
 
     # ... 按模块续加
 ```

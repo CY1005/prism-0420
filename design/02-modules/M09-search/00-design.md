@@ -437,9 +437,9 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M09 全局搜索
-    SEARCH_QUERY_TOO_SHORT = "SEARCH_QUERY_TOO_SHORT"   # 关键词长度 < 1（Pydantic 先拦，兜底）
-    SEARCH_QUERY_TOO_LONG = "SEARCH_QUERY_TOO_LONG"     # 关键词长度 > 200
-    SEARCH_PROJECT_ACCESS_DENIED = "SEARCH_PROJECT_ACCESS_DENIED"  # 指定 project 无权访问
+    SEARCH_QUERY_TOO_SHORT = "search_query_too_short"   # 关键词长度 < 1（Pydantic 先拦，兜底）
+    SEARCH_QUERY_TOO_LONG = "search_query_too_long"     # 关键词长度 > 200
+    SEARCH_PROJECT_ACCESS_DENIED = "search_project_access_denied"  # 指定 project 无权访问
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

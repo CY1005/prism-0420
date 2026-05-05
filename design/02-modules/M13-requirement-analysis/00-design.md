@@ -618,13 +618,13 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # 模块（M13）
-    ANALYSIS_NODE_NOT_FOUND = "ANALYSIS_NODE_NOT_FOUND"           # node 不存在 / 跨项目越权
-    ANALYSIS_PROVIDER_NOT_CONFIGURED = "ANALYSIS_PROVIDER_NOT_CONFIGURED"  # 项目未配置 AI provider（引导用户去配置页）
-    ANALYSIS_PROVIDER_ERROR = "ANALYSIS_PROVIDER_ERROR"           # AI provider 调用失败（瞬时故障，提示重试）
-    ANALYSIS_TIMEOUT = "ANALYSIS_TIMEOUT"                         # 5 分钟硬超时
-    ANALYSIS_QUOTA_EXCEEDED = "ANALYSIS_QUOTA_EXCEEDED"           # 用户 / 项目 AI 配额超限
-    ANALYSIS_SAVE_FAILED = "ANALYSIS_SAVE_FAILED"                 # save 阶段写 dimension_record 失败
-    ANALYSIS_INVALID_LEVEL = "ANALYSIS_INVALID_LEVEL"             # L1/L2/L3 以外（理论上 Pydantic Enum 拦住，预留）
+    ANALYSIS_NODE_NOT_FOUND = "analysis_node_not_found"           # node 不存在 / 跨项目越权
+    ANALYSIS_PROVIDER_NOT_CONFIGURED = "analysis_provider_not_configured"  # 项目未配置 AI provider（引导用户去配置页）
+    ANALYSIS_PROVIDER_ERROR = "analysis_provider_error"           # AI provider 调用失败（瞬时故障，提示重试）
+    ANALYSIS_TIMEOUT = "analysis_timeout"                         # 5 分钟硬超时
+    ANALYSIS_QUOTA_EXCEEDED = "analysis_quota_exceeded"           # 用户 / 项目 AI 配额超限
+    ANALYSIS_SAVE_FAILED = "analysis_save_failed"                 # save 阶段写 dimension_record 失败
+    ANALYSIS_INVALID_LEVEL = "analysis_invalid_level"             # L1/L2/L3 以外（理论上 Pydantic Enum 拦住，预留）
 ```
 
 ```python

@@ -649,19 +649,19 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M02 项目管理
-    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
-    PROJECT_ALREADY_ARCHIVED = "PROJECT_ALREADY_ARCHIVED"
-    PROJECT_ALREADY_ACTIVE = "PROJECT_ALREADY_ACTIVE"
-    PROJECT_DELETE_NOT_SUPPORTED = "PROJECT_DELETE_NOT_SUPPORTED"
-    PROJECT_NAME_DUPLICATE = "PROJECT_NAME_DUPLICATE"  # G3=B：同 owner 下 active 项目名唯一（部分唯一索引）
-    MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND"
-    MEMBER_ALREADY_EXISTS = "MEMBER_ALREADY_EXISTS"
-    MEMBER_CANNOT_REMOVE_OWNER = "MEMBER_CANNOT_REMOVE_OWNER"
-    MEMBER_ROLE_INVALID = "MEMBER_ROLE_INVALID"
-    DIMENSION_CONFIG_INVALID = "DIMENSION_CONFIG_INVALID"  # 维度配置批量更新校验失败
-    AI_KEY_ENCRYPT_FAILED = "AI_KEY_ENCRYPT_FAILED"        # API Key 加密失败
+    PROJECT_NOT_FOUND = "project_not_found"
+    PROJECT_ALREADY_ARCHIVED = "project_already_archived"
+    PROJECT_ALREADY_ACTIVE = "project_already_active"
+    PROJECT_DELETE_NOT_SUPPORTED = "project_delete_not_supported"
+    PROJECT_NAME_DUPLICATE = "project_name_duplicate"  # G3=B：同 owner 下 active 项目名唯一（部分唯一索引）
+    MEMBER_NOT_FOUND = "member_not_found"
+    MEMBER_ALREADY_EXISTS = "member_already_exists"
+    MEMBER_CANNOT_REMOVE_OWNER = "member_cannot_remove_owner"
+    MEMBER_ROLE_INVALID = "member_role_invalid"
+    DIMENSION_CONFIG_INVALID = "dimension_config_invalid"  # 维度配置批量更新校验失败
+    AI_KEY_ENCRYPT_FAILED = "ai_key_encrypt_failed"        # API Key 加密失败
     # M20 baseline-patch（2026-04-26）F2.3 archived×team 互锁
-    PROJECT_ARCHIVED = "PROJECT_ARCHIVED"                  # 422，archived project 拒加入 team
+    PROJECT_ARCHIVED = "project_archived"                  # 422，archived project 拒加入 team
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

@@ -1024,21 +1024,21 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # 模块（M16）
-    SNAPSHOT_NODE_NOT_FOUND = "SNAPSHOT_NODE_NOT_FOUND"               # node 不存在 / 跨项目越权
-    SNAPSHOT_INSUFFICIENT_VERSIONS = "SNAPSHOT_INSUFFICIENT_VERSIONS" # 版本数 < 3，AC1 兜底
-    SNAPSHOT_PROVIDER_NOT_CONFIGURED = "SNAPSHOT_PROVIDER_NOT_CONFIGURED"  # 项目未配置 AI provider
-    SNAPSHOT_PROVIDER_ERROR = "SNAPSHOT_PROVIDER_ERROR"               # AI provider 调用失败
-    SNAPSHOT_TIMEOUT = "SNAPSHOT_TIMEOUT"                             # 10 分钟硬超时
-    SNAPSHOT_QUOTA_EXCEEDED = "SNAPSHOT_QUOTA_EXCEEDED"               # 用户 / 项目 AI 配额超限
-    SNAPSHOT_SAVE_FAILED = "SNAPSHOT_SAVE_FAILED"                     # save 阶段写 dimension_record 失败
-    SNAPSHOT_TASK_NOT_FOUND = "SNAPSHOT_TASK_NOT_FOUND"               # task_id 不存在 / 越权
-    SNAPSHOT_NOT_READY = "SNAPSHOT_NOT_READY"                         # save 时任务还未 succeeded
-    SNAPSHOT_TASK_FINALIZED = "SNAPSHOT_TASK_FINALIZED"               # 状态机非法转换（终态不可变）
-    SNAPSHOT_INVALID_STATE_TRANSITION = "SNAPSHOT_INVALID_STATE_TRANSITION"
-    SNAPSHOT_ZOMBIE = "SNAPSHOT_ZOMBIE"                               # cron 兜底标记的 zombie task
-    SNAPSHOT_PARSE_FAILED = "SNAPSHOT_PARSE_FAILED"                   # AI 输出 JSON parse 失败
-    SNAPSHOT_INVALID_DIMENSION_KEY = "SNAPSHOT_INVALID_DIMENSION_KEY" # save 时 selected_dimension_keys 不在 review_data 中
-    SNAPSHOT_TASK_PATH_MISMATCH = "SNAPSHOT_TASK_PATH_MISMATCH"       # save 时 task.project_id/node_id 与 URL path 不一致（audit M5 修复）
+    SNAPSHOT_NODE_NOT_FOUND = "snapshot_node_not_found"               # node 不存在 / 跨项目越权
+    SNAPSHOT_INSUFFICIENT_VERSIONS = "snapshot_insufficient_versions" # 版本数 < 3，AC1 兜底
+    SNAPSHOT_PROVIDER_NOT_CONFIGURED = "snapshot_provider_not_configured"  # 项目未配置 AI provider
+    SNAPSHOT_PROVIDER_ERROR = "snapshot_provider_error"               # AI provider 调用失败
+    SNAPSHOT_TIMEOUT = "snapshot_timeout"                             # 10 分钟硬超时
+    SNAPSHOT_QUOTA_EXCEEDED = "snapshot_quota_exceeded"               # 用户 / 项目 AI 配额超限
+    SNAPSHOT_SAVE_FAILED = "snapshot_save_failed"                     # save 阶段写 dimension_record 失败
+    SNAPSHOT_TASK_NOT_FOUND = "snapshot_task_not_found"               # task_id 不存在 / 越权
+    SNAPSHOT_NOT_READY = "snapshot_not_ready"                         # save 时任务还未 succeeded
+    SNAPSHOT_TASK_FINALIZED = "snapshot_task_finalized"               # 状态机非法转换（终态不可变）
+    SNAPSHOT_INVALID_STATE_TRANSITION = "snapshot_invalid_state_transition"
+    SNAPSHOT_ZOMBIE = "snapshot_zombie"                               # cron 兜底标记的 zombie task
+    SNAPSHOT_PARSE_FAILED = "snapshot_parse_failed"                   # AI 输出 JSON parse 失败
+    SNAPSHOT_INVALID_DIMENSION_KEY = "snapshot_invalid_dimension_key" # save 时 selected_dimension_keys 不在 review_data 中
+    SNAPSHOT_TASK_PATH_MISMATCH = "snapshot_task_path_mismatch"       # save 时 task.project_id/node_id 与 URL path 不一致（audit M5 修复）
 ```
 
 ```python

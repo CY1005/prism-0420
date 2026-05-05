@@ -580,11 +580,11 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M12 对比矩阵
-    COMPARISON_SNAPSHOT_NOT_FOUND = "COMPARISON_SNAPSHOT_NOT_FOUND"
-    COMPARISON_SNAPSHOT_NAME_EMPTY = "COMPARISON_SNAPSHOT_NAME_EMPTY"  # 快照名为空
-    COMPARISON_NODE_NOT_FOUND = "COMPARISON_NODE_NOT_FOUND"            # 所选 node 不属于该 project
-    COMPARISON_EMPTY_SELECTION = "COMPARISON_EMPTY_SELECTION"          # nodes 或 dimensions 选择为空
-    COMPARISON_SNAPSHOT_CONFLICT = "COMPARISON_SNAPSHOT_CONFLICT"      # 乐观锁冲突（rename 并发）
+    COMPARISON_SNAPSHOT_NOT_FOUND = "comparison_snapshot_not_found"
+    COMPARISON_SNAPSHOT_NAME_EMPTY = "comparison_snapshot_name_empty"  # 快照名为空
+    COMPARISON_NODE_NOT_FOUND = "comparison_node_not_found"            # 所选 node 不属于该 project
+    COMPARISON_EMPTY_SELECTION = "comparison_empty_selection"          # nodes 或 dimensions 选择为空
+    COMPARISON_SNAPSHOT_CONFLICT = "comparison_snapshot_conflict"      # 乐观锁冲突（rename 并发）
 ```
 
 ```python

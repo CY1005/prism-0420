@@ -407,41 +407,75 @@ from enum import Enum
 
 
 class ActionType(str, Enum):
-    create                   = "create"
-    update                   = "update"
-    delete                   = "delete"
-    import_                  = "import"
-    analyze                  = "analyze"
-    archive                  = "archive"
+    """A1 命名规范（详见 design/00-architecture/08-namespaces.md §2.1）：
+    `{entity}_{past_verb}` snake_case 过去时；CRUD 与模块特定动作统一格式；
+    禁 dot.notation；禁命令式（activity log 是已发生事实）。
+
+    baseline-patch 2026-05-06：
+    - 删 10 条通用 CRUD（create/update/delete/archive/...）→ 拆为每实体独立过去式
+    - 删 14 条 dot.notation（cold_start.create / snapshot.create / import.* ）
+      → 全改 snake 过去式
+    """
+    # M01 用户账号
+    user_created                          = "user_created"
+    user_updated                          = "user_updated"
+    user_deleted                          = "user_deleted"
     # M02 项目管理
-    invite_member            = "invite_member"
-    update_member_role       = "update_member_role"
-    remove_member            = "remove_member"
-    update_dimension_config  = "update_dimension_config"
-    update_ai_provider       = "update_ai_provider"
-    # M03 模块树
-    reorder                  = "reorder"
-    move                     = "move"
+    project_created                       = "project_created"
+    project_updated                       = "project_updated"
+    project_archived                      = "project_archived"
+    project_deleted                       = "project_deleted"
+    project_member_invited                = "project_member_invited"
+    project_member_role_updated           = "project_member_role_updated"
+    project_member_removed                = "project_member_removed"
+    project_dimension_config_updated      = "project_dimension_config_updated"
+    project_ai_provider_updated           = "project_ai_provider_updated"
+    # M03 模块树（节点）
+    node_created                          = "node_created"
+    node_updated                          = "node_updated"
+    node_deleted                          = "node_deleted"
+    node_reordered                        = "node_reordered"
+    node_moved                            = "node_moved"
+    # M04 功能项档案（维度记录）
+    dimension_record_created              = "dimension_record_created"
+    dimension_record_updated              = "dimension_record_updated"
+    dimension_record_deleted              = "dimension_record_deleted"
+    # M05 版本时间线
+    version_record_created                = "version_record_created"
+    version_record_updated                = "version_record_updated"
+    version_record_deleted                = "version_record_deleted"
+    # M06 竞品
+    competitor_created                    = "competitor_created"
+    competitor_updated                    = "competitor_updated"
+    competitor_deleted                    = "competitor_deleted"
+    competitor_ref_created                = "competitor_ref_created"
+    competitor_ref_deleted                = "competitor_ref_deleted"
     # M07 问题沉淀
-    status_change            = "status_change"
-    orphan                   = "orphan"              # M07 节点级联删除后 issue 游离化
+    issue_created                         = "issue_created"
+    issue_updated                         = "issue_updated"
+    issue_deleted                         = "issue_deleted"
+    issue_status_changed                  = "issue_status_changed"
+    issue_orphaned                        = "issue_orphaned"             # 节点级联删除后 issue 游离化
+    # M08 模块关系
+    module_relation_created               = "module_relation_created"
+    module_relation_deleted               = "module_relation_deleted"
     # M11 冷启动
-    cold_start_create        = "cold_start.create"
-    cold_start_completed     = "cold_start.completed"
-    cold_start_failed        = "cold_start.failed"
-    # M12 对比矩阵
-    snapshot_create          = "snapshot.create"
-    snapshot_rename          = "snapshot.rename"
-    snapshot_delete          = "snapshot.delete"
+    cold_start_created                    = "cold_start_created"
+    cold_start_completed                  = "cold_start_completed"
+    cold_start_failed                     = "cold_start_failed"
+    # M12 对比矩阵（comparison_snapshot）
+    comparison_snapshot_created           = "comparison_snapshot_created"
+    comparison_snapshot_renamed           = "comparison_snapshot_renamed"
+    comparison_snapshot_deleted           = "comparison_snapshot_deleted"
     # M17 AI 导入
-    import_create            = "import.create"
-    import_status_change     = "import.status_change"
-    import_ai_step_complete  = "import.ai_step_complete"
-    import_review_confirmed  = "import.review_confirmed"
-    import_batch_insert      = "import.batch_insert"
-    import_cancel            = "import.cancel"
-    import_failed            = "import.failed"
-    import_partial_failed    = "import.partial_failed"
+    import_created                        = "import_created"
+    import_status_changed                 = "import_status_changed"
+    import_ai_step_completed              = "import_ai_step_completed"
+    import_review_confirmed               = "import_review_confirmed"
+    import_batch_inserted                 = "import_batch_inserted"
+    import_canceled                       = "import_canceled"
+    import_failed                         = "import_failed"
+    import_partial_failed                 = "import_partial_failed"
     # M18 语义搜索（baseline-patch 2026-04-26）
     embedding_model_upgrade_triggered = "embedding_model_upgrade_triggered"
     embedding_backfill_triggered      = "embedding_backfill_triggered"
@@ -603,19 +637,19 @@ class ActivityStreamResponse(BaseModel):
 class ErrorCode(str, Enum):
     # ... 已有
     # 模块（M15）
-    ACTIVITY_STREAM_PROJECT_NOT_FOUND = "ACTIVITY_STREAM_PROJECT_NOT_FOUND"  # project 不存在或无权限
-    ACTIVITY_STREAM_FORBIDDEN         = "ACTIVITY_STREAM_FORBIDDEN"          # 非 owner/editor 角色访问（viewer / 无成员身份）
-    ACTIVITY_STREAM_INVALID_FILTER    = "ACTIVITY_STREAM_INVALID_FILTER"     # 过滤参数不合法（如 from_dt > to_dt）
+    ACTIVITY_STREAM_PROJECT_NOT_FOUND = "activity_stream_project_not_found"  # project 不存在或无权限
+    ACTIVITY_STREAM_FORBIDDEN         = "activity_stream_forbidden"          # 非 owner/editor 角色访问（viewer / 无成员身份）
+    ACTIVITY_STREAM_INVALID_FILTER    = "activity_stream_invalid_filter"     # 过滤参数不合法（如 from_dt > to_dt）
 
     # M20 baseline-patch（2026-04-26，Q12=A 粗粒度 8 个 ErrorCode 全局注册到 M15 ErrorCode 表）
-    TEAM_NOT_FOUND                    = "TEAM_NOT_FOUND"                    # 404
-    TEAM_NAME_DUPLICATE               = "TEAM_NAME_DUPLICATE"               # 409  detail: name, creator_id
-    TEAM_HAS_PROJECTS                 = "TEAM_HAS_PROJECTS"                 # 422  detail: project_count, project_ids[:10]
-    TEAM_OWNER_REQUIRED               = "TEAM_OWNER_REQUIRED"               # 422  detail: reason ∈ {last_owner_demote, last_owner_remove, transfer_target_not_member, target_is_self}
-    TEAM_MEMBER_NOT_FOUND             = "TEAM_MEMBER_NOT_FOUND"             # 404
-    TEAM_MEMBER_DUPLICATE             = "TEAM_MEMBER_DUPLICATE"             # 409
-    TEAM_PERMISSION_DENIED            = "TEAM_PERMISSION_DENIED"            # 403  detail: required_role, current_role
-    CROSS_TEAM_MOVE_FORBIDDEN         = "CROSS_TEAM_MOVE_FORBIDDEN"         # 422  detail: current_team_id, target_team_id
+    TEAM_NOT_FOUND                    = "team_not_found"                    # 404
+    TEAM_NAME_DUPLICATE               = "team_name_duplicate"               # 409  detail: name, creator_id
+    TEAM_HAS_PROJECTS                 = "team_has_projects"                 # 422  detail: project_count, project_ids[:10]
+    TEAM_OWNER_REQUIRED               = "team_owner_required"               # 422  detail: reason ∈ {last_owner_demote, last_owner_remove, transfer_target_not_member, target_is_self}
+    TEAM_MEMBER_NOT_FOUND             = "team_member_not_found"             # 404
+    TEAM_MEMBER_DUPLICATE             = "team_member_duplicate"             # 409
+    TEAM_PERMISSION_DENIED            = "team_permission_denied"            # 403  detail: required_role, current_role
+    CROSS_TEAM_MOVE_FORBIDDEN         = "cross_team_move_forbidden"         # 422  detail: current_team_id, target_team_id
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）

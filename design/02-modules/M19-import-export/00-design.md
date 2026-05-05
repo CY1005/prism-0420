@@ -404,9 +404,9 @@ class ErrorCode(str, Enum):
     # ... 已有
 
     # M19 导出
-    EXPORT_NODE_LIMIT_EXCEEDED = "EXPORT_NODE_LIMIT_EXCEEDED"  # node_ids 数量超上限
-    EXPORT_NODE_NOT_IN_PROJECT = "EXPORT_NODE_NOT_IN_PROJECT"  # node 不属于该 project
-    EXPORT_EMPTY_CONTENT = "EXPORT_EMPTY_CONTENT"              # 所有 node 均无内容（422）
+    EXPORT_NODE_LIMIT_EXCEEDED = "export_node_limit_exceeded"  # node_ids 数量超上限
+    EXPORT_NODE_NOT_IN_PROJECT = "export_node_not_in_project"  # node 不属于该 project
+    EXPORT_EMPTY_CONTENT = "export_empty_content"              # 所有 node 均无内容（422）
 ```
 
 ### 新增 AppError 子类（`api/errors/exceptions.py`）
