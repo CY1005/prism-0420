@@ -13,5 +13,12 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
     app_env: str = Field(default="local")
 
+    jwt_secret: str = Field(default="dev-only-jwt-secret-change-me-in-prod-min-32-chars")
+    jwt_algorithm: str = Field(default="HS256")
+    jwt_access_ttl_seconds: int = Field(default=3600)
+
+    internal_token: str = Field(default="dev-only-internal-token-change-me-in-prod-min-32-chars")
+    internal_signature_window_seconds: int = Field(default=300)
+
 
 settings = Settings()

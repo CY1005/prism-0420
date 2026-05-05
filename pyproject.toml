@@ -12,6 +12,7 @@ dependencies = [
     "redis>=5.2",
     "alembic>=1.14",
     "structlog>=24.4",
+    "pyjwt>=2.10",
 ]
 
 [dependency-groups]
