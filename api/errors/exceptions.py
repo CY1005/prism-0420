@@ -51,3 +51,21 @@ class RateLimitedError(AppError):
     code = ErrorCode.RATE_LIMITED
     http_status = 429
     message = "Too many requests"
+
+
+class AccessTokenExpiredError(AppError):
+    code = ErrorCode.ACCESS_TOKEN_EXPIRED
+    http_status = 401
+    message = "Access token expired"
+
+
+class RefreshTokenExpiredError(AppError):
+    code = ErrorCode.REFRESH_TOKEN_EXPIRED
+    http_status = 401
+    message = "Refresh token expired"
+
+
+class AccountLockedError(AppError):
+    code = ErrorCode.ACCOUNT_LOCKED
+    http_status = 423
+    message = "Account is locked"
