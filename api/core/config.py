@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="postgresql+asyncpg://prism:prism@localhost:55432/prism"
+        default="postgresql+asyncpg://prism:prism@localhost:5432/prism"
     )
-    redis_url: str = Field(default="redis://localhost:56379/0")
+    redis_url: str = Field(default="redis://localhost:6379/0")
     app_env: str = Field(default="local")
 
 
