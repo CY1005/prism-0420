@@ -762,7 +762,7 @@ class ErrorCode(str, Enum):
     TOKEN_EXPIRED = "TOKEN_EXPIRED"
     LOGIN_LOCKED = "LOGIN_LOCKED"
 
-    # 模块（M01）
+    # 模块（M03）
     MODULE_NOT_FOUND = "MODULE_NOT_FOUND"
     MODULE_ARCHIVED = "MODULE_ARCHIVED"
 
