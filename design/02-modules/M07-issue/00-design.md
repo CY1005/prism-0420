@@ -11,6 +11,41 @@ module_id: M07
 prism_ref: F7
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [§6 Service get_for_embedding 走规则 1] }
+  rules:
+    - R10-1  # 批量操作写 N 条独立 activity_log 事件（batch_create / orphan_by_node_id）
+    - R-X3   # orphan_by_node_id / batch_create 接受外部 db session
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - VALIDATION_ERROR
+      codes_added:
+        - ISSUE_NOT_FOUND
+        - ISSUE_TRANSITION_INVALID
+        - ISSUE_CLOSED_ERROR
+        - ISSUE_ASSIGNEE_REQUIRED
+        - ISSUE_CATEGORY_INVALID
+        - ISSUE_NODE_CROSS_PROJECT
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "orphan_by_node_id 调用时通过 FK node_id 关联节点；§6 对外契约登记 list_by_project 供 M13 跨模块调用"
+  consumes_action_types: []  # 非 M15，不订阅 action_type
+  produces_action_types:
+    - issue_created
+    - issue_updated
+    - issue_deleted
+    - issue_status_changed
+    - issue_orphaned
 ---
 
 # M07 问题沉淀 - 详细设计

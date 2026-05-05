@@ -11,6 +11,48 @@ module_id: M12
 prism_ref: F12
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [规则 1 精神（矩阵聚合读走 M04 DimensionService 接口）] }
+  rules:
+    - R3-3   # project_id 冗余 tenant 字段
+    - R3-4   # 候选 B 改回成本量化（comparison_snapshot_items 表）
+    - R4-1   # 无状态字段显式声明（快照无 status）
+    - R4-2   # 操作限制 3 条（含 ErrorCode）
+    - R5-1   # 4 维表格无 ⚠️ 占位
+    - R5-2   # 状态转换竞态分析（rename/delete/读-删竞态）
+    - R8-1   # 三层权限防御
+    - R10-1  # 批量操作写 N 条独立事件（无批量，自然合规）
+    - R10-2  # action_type 回写 M15 枚举
+    - R11-1  # idempotency 显式声明（无）
+    - R11-2  # project_id 参与 key 计算显式回答
+    - R13-1  # 每个 ErrorCode 必有 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - PERMISSION_DENIED
+        - UNAUTHENTICATED
+      codes_added:
+        - COMPARISON_SNAPSHOT_NOT_FOUND
+        - COMPARISON_SNAPSHOT_NAME_EMPTY
+        - COMPARISON_NODE_NOT_FOUND
+        - COMPARISON_EMPTY_SELECTION
+        - COMPARISON_SNAPSHOT_CONFLICT
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "M04 Service 接口内部读 nodes 做 tenant 过滤；M12 Service 调 M04 接口间接依赖"
+    - module: M04
+      tables: [dimension_records]
+      reason: "comparison_service 调 DimensionService.batch_get_by_nodes 聚合矩阵数据（batch3 基线补丁决策 6）"
+  consumes_action_types: []  # M12 不订阅 M15 activity_log
+  produces_action_types:
+    - comparison_snapshot_created
+    - comparison_snapshot_renamed
+    - comparison_snapshot_deleted
 ---
 
 # M12 功能对比矩阵 - 详细设计

@@ -11,6 +11,37 @@ module_id: M14
 prism_ref: F14
 pilot: false
 complexity: low
+references:
+  adrs:
+    - { id: ADR-003, adopts: [no_dependency] }  # M14 无自有聚合读；全局数据直查自有表，不引用 ADR-003 任何规则
+  rules:
+    - R3-1   # SQLAlchemy class 代码块
+    - R3-2   # source_type 字段三重防护（CheckConstraint 显式列出枚举值）
+    - R3-4   # 无 ⚠️ 核心决策待决项（全局豁免已 ack）
+    - R3-5   # 不适用（M14 有自有实体表，此处显式排除）
+    - R5-1   # 4 维表格无 ⚠️ 占位
+    - R10-1  # 批量操作写 N 条独立事件（无批量，自然合规）
+    - R10-2  # action_type 回写 M15 枚举
+    - R13-1  # 每个 ErrorCode 必有 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - NOT_FOUND
+      codes_added:
+        - NEWS_NOT_FOUND
+        - NEWS_LINK_DUPLICATE
+        - NEWS_LINK_NOT_FOUND
+        - NEWS_FORBIDDEN
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "关联功能项时校验 node 存在（news_node_links 引用 nodes.id）"
+  consumes_action_types: []  # M14 不订阅 M15 activity_log
+  produces_action_types: [no_dependency]  # §10 明确：M14 写 industry_news / news_node_link 事件，但当前 M15 ActionType 枚举未含对应值；§10 action_type 为 create/update/delete/link/unlink（通用 CRUD），尚未回写 M15 schema（baseline-patch 待做）
 ---
 
 # M14 行业动态 - 详细设计

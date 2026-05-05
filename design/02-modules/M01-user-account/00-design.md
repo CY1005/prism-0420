@@ -11,6 +11,62 @@ module_id: M01
 prism_ref: F1
 pilot: true
 complexity: high
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§预设架构选型（shadow 定位、FastAPI、SQLAlchemy）] }
+    - { id: ADR-002, adopts: [Queue 路径 P7；未来邮件 Queue TaskPayload 规范] }
+    - { id: ADR-003, adopts: [跨模块读策略（§6 注释引用）] }
+    - { id: ADR-004, adopts: [P1 Bearer token, P2 internal token HMAC, P3 refresh token, P4 预留, P5 token_invalidated_at, §2 签名协议, §3 威胁模型] }
+  rules:
+    - R3-1  # 7 个表均含完整 SQLAlchemy class
+    - R3-2  # users.role / users.status / auth_identities.provider 三重防护（String + CheckConstraint + Mapped[Enum]）
+    - R3-4  # 候选 B 改回成本块（§3）
+    - R4-1  # refresh_tokens 无状态显式声明
+    - R4-2  # users.status 禁止转换 4 条（disabled/pending 终态）
+    - R5-1  # 4 维必答无 ⚠️ 占位
+    - R5-2  # status 转换竞态分析（role+status 乐观锁）
+    - R8-1  # 三层权限防御（Server Action / Router / Service）
+    - R10-1 # N/A（无批量端点；前瞻声明已列）
+    - R10-2 # 例外：auth_audit_log 由 M01 own（不归 M15），满足三适用条件
+    - R11-1 # 显式声明 M01 不使用 idempotency_key
+    - R11-2 # project_id 不参与 key 计算（M01 无 tenant 概念）
+    - R13-1 # 每个 ErrorCode 对应 AppError 子类（守护脚本 §13）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED   # 横向通用码，M01 重声明作 wrap（N4 规则，待定稿后评估清理）
+        - PERMISSION_DENIED # 横向通用码，require_admin 失败场景（N3 规则，待定稿后评估清理）
+      codes_added:
+        - INVALID_CREDENTIALS
+        - ACCOUNT_DISABLED
+        - ACCOUNT_LOCKED
+        - ACCOUNT_PENDING
+        - INVALID_REFRESH_TOKEN
+        - REFRESH_TOKEN_EXPIRED
+        - OLD_PASSWORD_MISMATCH
+        - PASSWORD_TOO_WEAK
+        - EMAIL_ALREADY_EXISTS
+        - USER_NOT_FOUND
+        - SELF_DOWNGRADE_FORBIDDEN
+        - LAST_ADMIN_PROTECTED
+        - INVALID_STATUS_TRANSITION
+        - VERSION_CONFLICT
+        - REGISTRATION_DISABLED
+    auth:
+      protocols: [AuthServiceProtocol@v2]  # M01 是 auth 横切源头，自身产出 AuthServiceProtocol
+    models:
+      mixins: [TimestampMixin]  # users / refresh_tokens / auth_identities 等 7 表均 extends Base, TimestampMixin
+  cross_module_reads:
+    - module: [no_dependency]
+      reason: M01 是 auth 横切源头，不读其他模块表；其他模块通过 require_user Depends 消费 M01 产出的 User 对象
+  consumes_action_types: []
+  produces_action_types:
+    - user_created
+    - user_updated
+    - user_deleted
+    # 注：M01 auth 审计事件（login_success / password_change 等）写入自有 auth_audit_log，
+    # 不写 M15 activity_log（R10-2 例外：auth_audit_log 由 M01 own）
 ---
 
 # M01 用户账号 - 详细设计

@@ -11,6 +11,59 @@ module_id: M02
 prism_ref: F2
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§预设 3 projects 表 tenant 锚点（ADR-005 superseded space_id 段；个人 project nullable=True 保留）] }
+    - { id: ADR-005, adopts: [team_id FK 引用（M20 baseline-patch 2026-04-26；F1.11 硬触发器）] }
+  rules:
+    - R3-2  # projects.status / project_members.role 三重防护（String + CheckConstraint + Mapped[Enum]）
+    - R3-3  # project_members / project_dimension_configs 冗余 project_id
+    - R4-1  # project_members / project_dimension_configs 无状态机显式声明
+    - R4-2  # projects 禁止转换 3 条（archived 终态 N=2）
+    - R5-1  # 4 维必答无 ⚠️ 占位
+    - R5-2  # archive_project 归档竞态分析
+    - R8-1  # 三层权限（Server Action / Router check_project_access / Service _check_owner）
+    - R10-1 # 批量维度配置更新每个 config 写独立事件（batch3 基线补丁）
+    - R11-1 # 显式声明 M02 无 idempotency_key 操作
+    - R11-2 # project_id 不参与任何 key 计算（无 idempotency 操作）
+    - R13-1 # 每个 ErrorCode 对应 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED   # Server Action session 校验失败
+        - PERMISSION_DENIED # check_project_access 失败
+        - VALIDATION_ERROR  # 入参校验失败
+      codes_added:
+        - PROJECT_NOT_FOUND
+        - PROJECT_ALREADY_ARCHIVED
+        - PROJECT_ALREADY_ACTIVE
+        - PROJECT_DELETE_NOT_SUPPORTED
+        - PROJECT_NAME_DUPLICATE
+        - MEMBER_NOT_FOUND
+        - MEMBER_ALREADY_EXISTS
+        - MEMBER_CANNOT_REMOVE_OWNER
+        - MEMBER_ROLE_INVALID
+        - DIMENSION_CONFIG_INVALID
+        - AI_KEY_ENCRYPT_FAILED
+        - PROJECT_ARCHIVED
+    models:
+      mixins: [TimestampMixin]  # Project / ProjectMember / ProjectDimensionConfig 均 extends Base, TimestampMixin
+  cross_module_reads:
+    - module: M01
+      tables: [users]
+      reason: "邀请成员时查找被邀请人信息（users 是全局表，ADR-003 规则 3 横切表直查豁免）；check_project_access 校验 project_members"
+  consumes_action_types: []
+  produces_action_types:
+    - project_created
+    - project_updated
+    - project_archived
+    - project_deleted
+    - project_member_invited
+    - project_member_role_updated
+    - project_member_removed
+    - project_dimension_config_updated
+    - project_ai_provider_updated
 ---
 
 # M02 项目管理 - 详细设计

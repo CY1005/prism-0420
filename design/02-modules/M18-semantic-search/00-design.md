@@ -11,6 +11,66 @@ module_id: M18
 prism_ref: F18
 pilot: true
 complexity: high
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§4 LLM provider abstraction (M18 embedding provider 仿此), §4.2 task timeout ai_embedding=15min] }
+    - { id: ADR-002, adopts: [Queue 消费者强制带 user_id+project_id, worker 入口反查 target 仍存在 + project_id 一致] }
+    - { id: ADR-003, adopts: [rule 1 增量路径 Service.get_for_embedding, rule 4 embedding专用豁免 backfill DAO 只读 import 上游 model] }
+    - { id: ADR-004, adopts: [P1 Bearer JWT search 路由, admin endpoint require_platform_admin] }
+  rules:
+    - R3-1   # SQLAlchemy class（四表：embeddings / embedding_tasks / embedding_failures / search_evaluation_log）
+    - R3-2   # 三重防护（target_type / modality / provider / status 各自 CHECK）
+    - R3-3   # project_id 冗余 tenant 字段（embeddings 表）
+    - R3-4   # 候选 B 改回成本块（embeddings 表加 project_id 列 / PK 含 model_name+model_version 改回）
+    - R3-5   # 聚合读部分双重声明（search 路由关键词路径无自有主表）
+    - R5-2   # 状态转换竞态分析（embedding task 并发 enqueue / backfill 重入）
+    - R10-2  # 例外声明：embedding 计算失败写自有 embedding_failures 表，不进 activity_log；search 1%采样写 search_evaluation_log
+    - R11-2  # project_id 参与 idempotency key 计算（三层幂等：Redis SET + worker content_hash + DB 7字段PK）
+    - R13-1  # 每个 ErrorCode 必有对应 AppError 子类（12 个全覆盖）
+    - R13-2  # 跨模块错误 wrap：worker 调上游 → EmbeddingTargetNotFoundError；search 路由透传上游 ErrorCode（明示豁免 R13-2 wrap）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+      codes_added:
+        - INVALID_QUERY_LENGTH
+        - SEARCH_TIMEOUT
+        - PGVECTOR_UNAVAILABLE
+        - EMBEDDING_PROVIDER_FAILED
+        - EMBEDDING_PROVIDER_TIMEOUT
+        - EMBEDDING_TARGET_NOT_FOUND
+        - EMBEDDING_ZOMBIE
+        - EMBEDDING_TASK_TERMINAL_VIOLATION
+        - EMBEDDING_TASK_INVALID_TRANSITION
+        - EMBEDDING_BACKFILL_ALREADY_RUNNING
+        - EMBEDDING_MODEL_UPGRADE_INVALID
+        - EMBEDDING_DELETE_FAILED
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M02
+      tables: [projects]
+      reason: "读取项目 rrf_k + similarity_threshold 参数（baseline-patch-m18 ProjectSettings 字段）"
+    - module: M03
+      tables: [nodes]
+      reason: "增量路径 Service.get_for_embedding（规则 1）+ backfill DAO 只读 import Node model（规则 4）"
+    - module: M04
+      tables: [dimension_records]
+      reason: "增量路径 Service.get_for_embedding（规则 1）+ backfill DAO 只读 import DimensionRecord model（规则 4）"
+    - module: M06
+      tables: [competitors]
+      reason: "增量路径 Service.get_for_embedding（规则 1）+ backfill DAO 只读 import Competitor model（规则 4）"
+    - module: M07
+      tables: [issues]
+      reason: "增量路径 Service.get_for_embedding（规则 1）+ backfill DAO 只读 import Issue model（规则 4）"
+  consumes_action_types: []
+  produces_action_types:
+    - embedding_model_upgrade_triggered
+    - embedding_backfill_triggered
 ---
 
 # M18 语义搜索 - 详细设计

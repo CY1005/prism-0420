@@ -11,6 +11,66 @@ module_id: M20
 prism_ref: F20
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [rule 4 embedding 豁免声明（§9.3 M18 backfill DAO 豁免 user_accessible_project_ids_subquery）] }
+    - { id: ADR-004, adopts: [P1+P2 合并入口 (app/actions/teams.ts → api/routers/teams.py require_user), P3/P4 不适用] }
+    - { id: ADR-005, adopts: [team 架构核心决策 Q0-Q15, L3 SQL 注入升级 M03-M19 横切, projects.space_id→team_id baseline-patch] }
+  rules:
+    - R0-1   # frontmatter 12 字段
+    - R3-2   # 三重防护（team_members.role CheckConstraint + Mapped[TeamRole] + String(20)）
+    - R3-4   # 改回成本块（9 项核心决策反悔代价，§3.5）
+    - R4-2   # 状态机禁止转换（≥4 条：owner移除/跨级直升/非transfer降owner/直降member）
+    - R4-3   # mermaid stateDiagram-v2 格式
+    - R5-1   # 5 项清单（activity_log/乐观锁/Queue N/A/idempotency N/A/DAO tenant）
+    - R5-2   # 状态转换竞态分析（5 场景：并发 transfer/demote/删team/promote/跨team移project）
+    - R7-2   # Pydantic Literal 枚举（TeamMemberRoleUpdate Literal["admin","member"]）
+    - R7-3   # Queue payload Literal N/A（同步模块）
+    - R8-1   # 三层防御（L1 Router粗校验 / L2 Service精校验 / L3 SQL兜底）
+    - R8-2   # 异步路径 N/A（同步模块）
+    - R8-3   # WebSocket N/A（同步模块）
+    - R10-1  # 批量独立事件（删 team 写 N+1 条各自独立，禁汇总）
+    - R10-2  # action_type/target_type 回写 M15（10 个 team_* 事件 + target_type="team"）
+    - R11-1  # idempotency 显式声明 N/A
+    - R11-2  # project_id 参与 key 计算 N/A（M20 无 idempotency key）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - CONFLICT        # 乐观锁 version 冲突（PATCH /teams/{tid}）
+        - VALIDATION_ERROR
+        - PROJECT_ARCHIVED  # F2.3 M02 own，archived project 拒加入 team
+        - USER_HAS_OWNED_TEAMS      # M01 own，baseline-patch 提议
+        - USER_IS_LAST_TEAM_OWNER   # M01 own，baseline-patch 提议
+      codes_added:
+        - TEAM_NOT_FOUND
+        - TEAM_NAME_DUPLICATE
+        - TEAM_HAS_PROJECTS
+        - TEAM_OWNER_REQUIRED
+        - TEAM_MEMBER_NOT_FOUND
+        - TEAM_MEMBER_DUPLICATE
+        - TEAM_PERMISSION_DENIED
+        - CROSS_TEAM_MOVE_FORBIDDEN
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [no_dependency]  # Team/TeamMember 不继承 TimestampMixin，直接声明 DateTime 列（created_at / updated_at / joined_at）
+  cross_module_reads:
+    - module: M02
+      tables: [projects, project_members]
+      reason: "baseline-patch：projects.space_id→team_id FK 启用；权限并集解析读 ProjectMember.role（resolve_project_role）"
+  consumes_action_types: []
+  produces_action_types:
+    - team_created
+    - team_renamed
+    - team_description_changed
+    - team_deleted
+    - team_member_added
+    - team_member_removed
+    - team_member_promoted_admin
+    - team_member_demoted_member
+    - project_joined_team
+    - project_left_team
 ---
 
 # M20 团队 - 详细设计

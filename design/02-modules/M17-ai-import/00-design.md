@@ -11,6 +11,59 @@ module_id: M17
 prism_ref: F17
 pilot: true
 complexity: high
+references:
+  adrs:
+    - { id: ADR-002, adopts: [P1 user_id+project_id in Queue payload, P2 worker-side Service re-auth, P3 指数退避重试策略, P4 死信 30 天保留, WS task_id rebind 握手校验] }
+    - { id: ADR-004, adopts: [P1+P2 合并入口 (Server Action → FastAPI require_user), WebSocket 握手校验 + 每命令 task_id 重校] }
+  rules:
+    - R10-2  # action_type/target_type 回写 M15（8 个 import_* 事件）
+    - R11-2  # project_id 必须参与 idempotency key（key = user_id+project_id+source_hash，B1 修复）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - NOT_FOUND
+      codes_added:
+        - IMPORT_TASK_NOT_FOUND
+        - IMPORT_TASK_FINALIZED
+        - IMPORT_INVALID_SOURCE
+        - IMPORT_AI_PROVIDER_ERROR
+        - IMPORT_BATCH_INSERT_FAILED
+        - IMPORT_QUOTA_EXCEEDED
+        - IMPORT_TASK_DUPLICATE
+        - IMPORT_INVALID_STATE_TRANSITION
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M02
+      tables: [projects]
+      reason: "读取项目 AI provider 配置（get_project_ai_config），via ADR-003 规则 1"
+    - module: M03
+      tables: [nodes]
+      reason: "批量入库阶段调 NodeService.batch_create_in_transaction，共享外层事务"
+    - module: M04
+      tables: [dimension_records]
+      reason: "批量入库阶段调 DimensionService.batch_create_in_transaction，共享外层事务"
+    - module: M06
+      tables: [competitors]
+      reason: "批量入库阶段调 CompetitorService.batch_create_in_transaction，共享外层事务"
+    - module: M07
+      tables: [issues]
+      reason: "批量入库阶段调 IssueService.batch_create_in_transaction，共享外层事务"
+  consumes_action_types: []
+  produces_action_types:
+    - import_created
+    - import_status_changed
+    - import_ai_step_completed
+    - import_review_confirmed
+    - import_batch_inserted
+    - import_canceled
+    - import_failed
+    - import_partial_failed
 ---
 
 # M17 AI 智能导入 - 详细设计

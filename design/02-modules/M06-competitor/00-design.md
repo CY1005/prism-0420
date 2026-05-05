@@ -11,6 +11,37 @@ module_id: M06
 prism_ref: F6
 pilot: false
 complexity: low
+references:
+  adrs:
+    - { id: ADR-003, adopts: [§6 Service get_for_embedding 走规则 1] }
+  rules:
+    - R10-1  # 批量操作写 N 条独立 activity_log 事件
+    - R-X3   # 级联删除方法接受外部 db session
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - VALIDATION_ERROR
+      codes_added:
+        - COMPETITOR_NOT_FOUND
+        - COMPETITOR_REF_NOT_FOUND
+        - COMPETITOR_REF_DUPLICATE
+        - COMPETITOR_CROSS_PROJECT
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: no_dependency  # M06 通过 FK 约束关联 M03 nodes，不直接 import Node model；Service 层校验走 project_id 一致性，非跨模块读
+  consumes_action_types: []  # 非 M15，不订阅 action_type
+  produces_action_types:
+    - competitor_created
+    - competitor_updated
+    - competitor_deleted
+    - competitor_ref_created
+    - competitor_ref_deleted
 ---
 
 # M06 竞品参考 - 详细设计

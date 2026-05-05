@@ -11,6 +11,106 @@ module_id: M15
 prism_ref: F15
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [规则 3 横切共享表消费模块豁免——M15 直查 activity_logs 表] }
+  rules:
+    - R3-4   # 候选 A→B 改回成本量化
+    - R3-5   # 纯读聚合规范（无自有业务实体表）
+    - R5-1   # 4 维表格无 ⚠️ 占位
+    - R10-1  # activity_log 写 N 条独立事件（各业务模块遵守；M15 作 owner 声明此规则）
+    - R10-2  # activity_log 横切表 owner（ActionType / TargetType schema + Alembic 迁移）
+    - R13-1  # 每个 ErrorCode 必有 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+      codes_added:
+        - ACTIVITY_STREAM_PROJECT_NOT_FOUND
+        - ACTIVITY_STREAM_FORBIDDEN
+        - ACTIVITY_STREAM_INVALID_FILTER
+        - TEAM_NOT_FOUND          # M20 baseline-patch：M15 §13 统一登记
+        - TEAM_NAME_DUPLICATE
+        - TEAM_HAS_PROJECTS
+        - TEAM_OWNER_REQUIRED
+        - TEAM_MEMBER_NOT_FOUND
+        - TEAM_MEMBER_DUPLICATE
+        - TEAM_PERMISSION_DENIED
+        - CROSS_TEAM_MOVE_FORBIDDEN
+    models:
+      mixins: [no_dependency]  # M15 无自有业务实体 SQLAlchemy model；activity_log model 是横切 owner，非 mixin
+  cross_module_reads:
+    - module: M01
+      tables: [users]
+      reason: "JOIN users 表获取操作者 name 用于时间轴展示"
+    - module: M02
+      tables: [projects]
+      reason: "校验 project 存在 + 用户是项目管理员（tenant 校验）"
+  consumes_action_types:  # M15 是 activity_log 所有 action_type 的唯一展示消费者
+    - user_created
+    - user_updated
+    - user_deleted
+    - project_created
+    - project_updated
+    - project_archived
+    - project_deleted
+    - project_member_invited
+    - project_member_role_updated
+    - project_member_removed
+    - project_dimension_config_updated
+    - project_ai_provider_updated
+    - node_created
+    - node_updated
+    - node_deleted
+    - node_reordered
+    - node_moved
+    - dimension_record_created
+    - dimension_record_updated
+    - dimension_record_deleted
+    - version_record_created
+    - version_record_updated
+    - version_record_deleted
+    - competitor_created
+    - competitor_updated
+    - competitor_deleted
+    - competitor_ref_created
+    - competitor_ref_deleted
+    - issue_created
+    - issue_updated
+    - issue_deleted
+    - issue_status_changed
+    - issue_orphaned
+    - module_relation_created
+    - module_relation_deleted
+    - cold_start_created
+    - cold_start_completed
+    - cold_start_failed
+    - comparison_snapshot_created
+    - comparison_snapshot_renamed
+    - comparison_snapshot_deleted
+    - import_created
+    - import_status_changed
+    - import_ai_step_completed
+    - import_review_confirmed
+    - import_batch_inserted
+    - import_canceled
+    - import_failed
+    - import_partial_failed
+    - embedding_model_upgrade_triggered
+    - embedding_backfill_triggered
+    - team_created
+    - team_renamed
+    - team_description_changed
+    - team_deleted
+    - team_member_added
+    - team_member_removed
+    - team_member_promoted_admin
+    - team_member_demoted_member
+    - project_joined_team
+    - project_left_team
+  produces_action_types: []  # M15 是纯读模块，自身不写 activity_log 事件
 ---
 
 # M15 数据流转可视化 - 详细设计

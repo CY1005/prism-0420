@@ -11,6 +11,43 @@ module_id: M05
 prism_ref: F5
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§4 db session（Service 层事务边界；is_current 切换事务原子）] }
+  rules:
+    - R3-1  # version_records 含完整 SQLAlchemy class
+    - R3-2  # change_type / release_mode 三重防护（Text + CheckConstraint + Mapped[str]）；is_current 是布尔非枚举
+    - R3-3  # version_records.project_id 冗余 tenant 字段
+    - R4-1  # M05 无 status 枚举实体，is_current 是布尔标记非状态机，显式声明
+    - R5-1  # 4 维必答无 ⚠️ 占位
+    - R8-1  # 三层权限（Server Action / Router check_project_access / Service _check_node_belongs_to_project 隐含）
+    - R10-1 # N/A——所有操作均单条事件，无批量场景
+    - R11-1 # 显式声明 M05 无 idempotency_key 操作
+    - R13-1 # 每个 ErrorCode 对应 AppError 子类
+    - R-X3  # count_by_node / list_by_node 对外契约接受外部 db session（M16 pilot 基线补丁）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED  # Server Action session 校验失败
+        - PERMISSION_DENIED # check_project_access 失败
+        - VALIDATION_ERROR  # 入参校验失败
+        - CONFLICT          # VERSION_LABEL_DUPLICATE（唯一约束冲突；使用横向 CONFLICT 语义）
+      codes_added:
+        - VERSION_NOT_FOUND
+        - VERSION_LABEL_DUPLICATE
+        - VERSION_SNAPSHOT_INVALID
+    models:
+      mixins: [TimestampMixin]  # VersionRecord extends Base, TimestampMixin
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "version_records.node_id FK 引用 nodes；VersionService 校验 node 归属（ADR-003 规则 1 上游 Service 调用）"
+  consumes_action_types: []
+  produces_action_types:
+    - version_record_created
+    - version_record_updated
+    - version_record_deleted
 ---
 
 # M05 版本演进时间线 - 详细设计

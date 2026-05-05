@@ -11,6 +11,46 @@ module_id: M19
 prism_ref: F19
 pilot: false
 complexity: low
+references:
+  adrs:
+    - { id: ADR-003, adopts: [只读 import 上游各模块 DAO（export_service 复用 DimensionDAO/VersionDAO/CompetitorDAO/IssueDAO/NodeDAO）] }
+    - { id: ADR-004, adopts: [P1+P2 合并入口 (Server Action → FastAPI require_user / require_project_access viewer)] }
+  rules:
+    - [no_dependency]  # M19 低复杂度只读模块，无显式 R-X 规约引用；分层合规通过 06-design-principles 原则 2 + 5 清单 1/5 保证
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - NOT_FOUND
+      codes_added:
+        - EXPORT_NODE_LIMIT_EXCEEDED
+        - EXPORT_NODE_NOT_IN_PROJECT
+        - EXPORT_EMPTY_CONTENT
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [no_dependency]  # M19 无自有 SQLAlchemy model，复用上游模块 model
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "只读聚合：校验 node 归属 + 拿 name/path，via DimensionDAO（DAO 复用策略）"
+    - module: M04
+      tables: [dimension_records, dimension_types]
+      reason: "只读聚合：拿维度内容 + 类型名称，via DimensionDAO"
+    - module: M05
+      tables: [version_records]
+      reason: "只读聚合：版本历史，via VersionDAO"
+    - module: M06
+      tables: [competitors, competitor_refs]
+      reason: "只读聚合：竞品参考，via CompetitorDAO"
+    - module: M07
+      tables: [issues]
+      reason: "只读聚合：问题沉淀，via IssueDAO"
+  consumes_action_types: []
+  produces_action_types:
+    - [no_dependency]  # M19 写 export 事件到 activity_log，但 export action_type 不在当前 M15 ActionType 枚举中；待 Phase 2 Alembic 迁移添加
 ---
 
 # M19 导入/导出 - 详细设计

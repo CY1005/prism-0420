@@ -11,6 +11,55 @@ module_id: M11
 prism_ref: F11
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-002, adopts: [§1 orchestrator 模式（batch_create_in_transaction 共享事务）] }
+    - { id: ADR-003, adopts: [规则 1 上游 Service 接口（M03/M04/M06/M07）] }
+  rules:
+    - R3-2   # status 字段三重防护（String(20)+CheckConstraint+Mapped[ColdStartStatus]）
+    - R3-3   # project_id 冗余 tenant 字段
+    - R4-1   # 无状态声明（状态机 mermaid）
+    - R4-2   # 禁止转换 4 条（含 ErrorCode）
+    - R8-1   # 三层权限防御
+    - R10-1  # 批量操作写 N 条独立 activity_log 事件
+    - R10-2  # action_type 回写 M15 枚举
+    - R11-1  # idempotency 显式声明（无）
+    - R11-2  # project_id 参与 key 计算显式回答（无 idempotency）
+    - R13-1  # 每个 ErrorCode 必有 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - PERMISSION_DENIED
+        - UNAUTHENTICATED
+      codes_added:
+        - COLD_START_TASK_NOT_FOUND
+        - COLD_START_CSV_INVALID
+        - COLD_START_ROW_VALIDATION_FAILED
+        - COLD_START_BATCH_INSERT_FAILED
+        - COLD_START_TASK_FINALIZED
+        - COLD_START_INVALID_STATE_TRANSITION
+        - COLD_START_FILE_TOO_LARGE
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "orchestrator 调 NodeService.batch_create_in_transaction 写节点树"
+    - module: M04
+      tables: [dimension_records]
+      reason: "orchestrator 调 DimensionService.batch_create_in_transaction 写维度记录"
+    - module: M06
+      tables: [competitors]
+      reason: "orchestrator 调 CompetitorService.batch_create_in_transaction 写竞品"
+    - module: M07
+      tables: [issues]
+      reason: "orchestrator 调 IssueService.batch_create_in_transaction 写问题"
+  consumes_action_types: []  # M11 不订阅 M15 activity_log
+  produces_action_types:
+    - cold_start_created
+    - cold_start_completed
+    - cold_start_failed
 ---
 
 # M11 冷启动支持 - 详细设计

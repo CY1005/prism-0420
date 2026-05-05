@@ -11,6 +11,40 @@ module_id: M10
 prism_ref: F10
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [§3 规则 2 只读 import 上游 model 豁免, §6 OverviewDAO 只读 import Node/ProjectDimensionConfig/DimensionRecord] }
+  rules:
+    - R3-4   # folder 均值规则候选 B 改回成本块（overview_cache 表 + Alembic 2-3 步）
+    - R3-5   # 纯读聚合规范：无自有表声明 + 上游 model 清单 + ADR-003 规则 2 引用
+    - R5-1   # 4 维必答无 ⚠️ 占位
+    - R13-1  # 每个 ErrorCode 必有对应 AppError 子类
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+      codes_added:
+        - OVERVIEW_PROJECT_NOT_FOUND
+        - OVERVIEW_NODE_NOT_FOUND
+        - OVERVIEW_NO_DIMENSIONS
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [no_dependency]  # M10 无自有 SQLAlchemy model，纯读聚合无 mixin 使用
+  cross_module_reads:
+    - module: M02
+      tables: [project_dimension_configs]
+      reason: "OverviewDAO 只读 import ProjectDimensionConfig 计算启用维度数（分母），ADR-003 规则 2 豁免"
+    - module: M03
+      tables: [nodes]
+      reason: "OverviewDAO 只读 import Node 获取项目树结构，ADR-003 规则 2 豁免"
+    - module: M04
+      tables: [dimension_records]
+      reason: "OverviewDAO 只读 import DimensionRecord LEFT JOIN 计算每节点已填维度数（分子），ADR-003 规则 2 豁免"
+  consumes_action_types: []  # 非 M15，不订阅 action_type
+  produces_action_types: []  # M10 纯读聚合，不产生任何 activity_log 事件
 ---
 
 # M10 项目全景图 - 详细设计

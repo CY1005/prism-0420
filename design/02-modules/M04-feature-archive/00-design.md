@@ -11,6 +11,48 @@ module_id: M04
 prism_ref: F4
 pilot: true
 complexity: high
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§4 db session（Service 层事务边界）; 乐观锁 version 字段] }
+    - { id: ADR-003, adopts: [规则 1 上游 Service 调用（get_for_embedding, batch_get_by_nodes 均走 Service 接口，M18 baseline-patch）] }
+  rules:
+    - R3-1  # dimension_records 含完整 SQLAlchemy class
+    - R3-2  # 无状态字段（dimension_records 无 status 枚举）；content JSONB 无 CHECK 约束（运行时 jsonschema 校验）
+    - R3-3  # dimension_records.project_id 冗余 tenant 字段
+    - R5-1  # 4 维必答无 ⚠️ 占位
+    - R8-1  # 三层权限（Server Action / Router check_project_access / Service _check_node_belongs_to_project）
+    - R10-1 # batch_create_in_transaction / delete_by_node_id 写独立事件（batch3 基线补丁）
+    - R11-1 # 显式声明 M04 无 idempotency_key 操作
+    - R13-1 # 每个 ErrorCode 对应 AppError 子类
+    - R-X3  # batch_create_in_transaction / delete_by_node_id 接受外部 db session，不自开事务（供 M03/M11/M17 调用）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED  # Server Action session 校验失败
+        - PERMISSION_DENIED # check_project_access 失败
+        - VALIDATION_ERROR  # 入参校验失败
+        - CONFLICT          # 乐观锁冲突（version 不匹配）
+      codes_added:
+        - DIMENSION_NOT_FOUND
+        - DIMENSION_TYPE_DISABLED
+        - DIMENSION_TYPE_NOT_FOUND
+        - DIMENSION_CONTENT_INVALID
+        - DIMENSION_DUPLICATE
+    models:
+      mixins: [TimestampMixin]  # DimensionRecord extends Base, TimestampMixin
+  cross_module_reads:
+    - module: M02
+      tables: [project_dimension_configs, dimension_types]
+      reason: "渲染维度卡片前读项目启用的维度配置（ADR-003 规则 2 只读 import 豁免；dimension_types 是全局字典，规则 3 横切表豁免）"
+    - module: M03
+      tables: [nodes]
+      reason: "_check_node_belongs_to_project 校验 node 归属（ADR-003 规则 1，通过 NodeService 接口）"
+  consumes_action_types: []
+  produces_action_types:
+    - dimension_record_created
+    - dimension_record_updated
+    - dimension_record_deleted
 ---
 
 # M04 功能项档案页 - 详细设计

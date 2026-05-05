@@ -11,6 +11,56 @@ module_id: M03
 prism_ref: F3
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [规则 1 上游 Service 调用（get_for_embedding 走 ADR-003 规则 1，M18 baseline-patch）] }
+  rules:
+    - R3-1  # nodes 表含完整 SQLAlchemy class
+    - R3-2  # nodes.type 三重防护（String(20) + CheckConstraint + Mapped[NodeType]）
+    - R3-3  # nodes.project_id 冗余 tenant 字段
+    - R4-1  # nodes 无状态字段，显式声明
+    - R5-1  # 4 维必答无 ⚠️ 占位
+    - R8-1  # 三层权限（Server Action / Router check_project_access / Service _check_node_belongs_to_project）
+    - R10-1 # delete_node 子树 / reorder / move_subtree / batch_create 均写独立事件（batch3 基线补丁）
+    - R11-1 # 显式声明 M03 无 idempotency_key 操作
+    - R11-2 # project_id 不参与任何 key 计算
+    - R13-1 # 每个 ErrorCode 对应 AppError 子类
+    - R-X2  # delete_node 前 Service 层显式调下游 delete_by_node_id / orphan_by_node_id，防 CASCADE 绕过 activity_log
+    - R-X3  # batch_create_in_transaction / delete_node 内下游调用接受外部 db session，不自开事务
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED   # Server Action session 校验失败
+        - PERMISSION_DENIED # check_project_access 失败
+        - VALIDATION_ERROR  # 入参校验失败
+      codes_added:
+        - NODE_NOT_FOUND
+        - NODE_NAME_EMPTY
+        - NODE_PARENT_NOT_FOUND
+        - NODE_TYPE_IMMUTABLE
+        - NODE_REORDER_INVALID
+        - NODE_DELETE_HAS_CHILDREN
+        - NODE_MOVE_CYCLE_DETECTED
+    models:
+      mixins: [TimestampMixin]  # Node extends Base, TimestampMixin
+  cross_module_reads:
+    - module: M04
+      tables: [dimension_records]
+      reason: "delete_node 时调 DimensionService.delete_by_node_id（ADR-003 规则 1 上游 Service 调用，R-X2 共享 session）"
+    - module: M06
+      tables: [competitors]
+      reason: "delete_node 时调 CompetitorService.delete_by_node_id（ADR-003 规则 1，R-X2）"
+    - module: M07
+      tables: [issues]
+      reason: "delete_node 时调 IssueService.orphan_by_node_id（ADR-003 规则 1，R-X2；SET NULL 语义）"
+  consumes_action_types: []
+  produces_action_types:
+    - node_created
+    - node_updated
+    - node_deleted
+    - node_reordered
+    - node_moved
 ---
 
 # M03 功能模块树 - 详细设计

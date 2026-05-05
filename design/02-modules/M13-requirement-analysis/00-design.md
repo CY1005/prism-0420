@@ -11,6 +11,55 @@ module_id: M13
 prism_ref: F13
 pilot: true
 complexity: high
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§4.1 AI Provider stream() 接口 + aclose 协议约定] }
+    - { id: ADR-003, adopts: [规则 1 上游 Service 接口（M02/M03/M04/M07）, 规则 3 横切表豁免（activity_log 由 M04 代写）] }
+    - { id: ADR-004, adopts: [P1 Bearer JWT 浏览器直连 FastAPI 流式端点] }
+  rules:
+    - R3-5   # 纯读聚合规范（无自有实体表）
+    - R4-1   # 无状态机显式声明
+    - R4-2   # 生命周期阶段不可跳跃精神 3 条禁止
+    - R5-2   # 状态转换竞态分析 N/A 显式声明
+    - R7-1   # SSE event Pydantic 强类型序列化
+    - R10-1  # 单条 save，批量合规自然满足
+    - R10-2  # 不新增 action_type（复用 M04 既有 create）
+    - R11-2  # project_id 参与 key 计算显式回答（无 idempotency）
+    - R13-1  # 每个 ErrorCode 必有 AppError 子类
+    - R13-2  # 跨模块错误 wrap（M04/M02/M03 错误 wrap 为 M13 ErrorCode）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - PERMISSION_DENIED
+        - UNAUTHENTICATED
+      codes_added:
+        - ANALYSIS_NODE_NOT_FOUND
+        - ANALYSIS_PROVIDER_NOT_CONFIGURED
+        - ANALYSIS_PROVIDER_ERROR
+        - ANALYSIS_TIMEOUT
+        - ANALYSIS_QUOTA_EXCEEDED
+        - ANALYSIS_SAVE_FAILED
+        - ANALYSIS_INVALID_LEVEL
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [no_dependency]  # M13 无自有 SQLAlchemy model（R3-5 纯读聚合）
+  cross_module_reads:
+    - module: M02
+      tables: [projects]
+      reason: "ProjectService.get_by_id_for_user 读 ai_provider / ai_api_key_enc / ai_model 字段组装 prompt context"
+    - module: M03
+      tables: [nodes]
+      reason: "NodeService.get_by_id + list_subtree 获取 node 路径和 2 层子树做 prompt context"
+    - module: M04
+      tables: [dimension_records]
+      reason: "DimensionService.list_by_node / create_dimension_record / get_latest 读写维度记录（分析结果寄生 M04）"
+    - module: M07
+      tables: [issues]
+      reason: "IssueService.list_by_project(node_id=...) 获取关联 issues 做 prompt context"
+  consumes_action_types: []  # M13 不订阅 M15 activity_log
+  produces_action_types: [no_dependency]  # M13 不新增 action_type；save 复用 M04 既有 dimension_record_created，不写独立 activity_log 事件
 ---
 
 # M13 需求分析 - 详细设计

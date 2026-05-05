@@ -11,6 +11,50 @@ module_id: M09
 prism_ref: F9
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [§3 规则 1 通过上游 Service 接口读取, §6 SearchService 调各上游 Service.search_by_keyword] }
+  rules:
+    - R3-5   # 纯读聚合规范：无自有表声明 + 上游 Service 接口清单 + ADR-003 规则引用
+    - R11-1  # 无 idempotency_key 显式声明
+    - R11-2  # project_id 是否参与 key（不适用，显式声明）
+    - R13-1  # 每个 ErrorCode 必有对应 AppError 子类
+    - R-X1   # M09 不直接 db.query 上游 Model，必须通过上游 Service 接口
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+      codes_added:
+        - SEARCH_QUERY_TOO_SHORT
+        - SEARCH_QUERY_TOO_LONG
+        - SEARCH_PROJECT_ACCESS_DENIED
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [no_dependency]  # M09 无自有 SQLAlchemy model，纯读聚合无 mixin 使用
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "通过 M03 NodeService.search_by_keyword 接口聚合关键词搜索结果（ADR-003 规则 1）"
+    - module: M04
+      tables: [dimension_records]
+      reason: "通过 M04 DimensionService.search_by_keyword 接口聚合（ADR-003 规则 1）"
+    - module: M06
+      tables: [competitors]
+      reason: "通过 M06 CompetitorService.search_by_keyword 接口聚合（ADR-003 规则 1）"
+    - module: M07
+      tables: [issues]
+      reason: "通过 M07 IssueService.search_by_keyword 接口聚合（ADR-003 规则 1）"
+    - module: M08
+      tables: [module_relations]
+      reason: "通过 M08 ModuleRelationService.search_by_keyword 接口聚合（ADR-003 规则 1）"
+    - module: M14
+      tables: [industry_news]
+      reason: "通过 M14 IndustryNewsService.search_by_keyword 接口聚合（ADR-003 规则 1，M14 例外不传 project_id）"
+  consumes_action_types: []  # 非 M15，不订阅 action_type
+  produces_action_types: []  # M09 纯读，不产生任何 activity_log 事件
 ---
 
 # M09 全局搜索 - 详细设计

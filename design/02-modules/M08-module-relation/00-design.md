@@ -11,6 +11,45 @@ module_id: M08
 prism_ref: F8
 pilot: false
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-003, adopts: [§2 M08→M09 提供 search_by_keyword 接口 ADR-003 规则 1] }
+  rules:
+    - R3-2   # relation_type 三重防护（Mapped[Enum] + String + CheckConstraint）
+    - R3-3   # module_relations 冗余 project_id tenant 字段
+    - R3-4   # 候选 B 改回成本块（有向→无向约束变更）
+    - R7-2   # RelationType 枚举字段使用 Enum class
+    - R10-1  # delete_by_node_id 写 N 条独立 activity_log 事件
+    - R11-1  # 无 idempotency_key 显式声明
+    - R11-2  # project_id 是否参与 key 计算（不适用，显式声明）
+    - R13-1  # 每个 ErrorCode 必有对应 AppError 子类
+    - R-X1   # M08 不直接 INSERT/UPDATE nodes 表
+    - R-X2   # M03 删节点必须显式调 delete_by_node_id 而非依赖 DB CASCADE
+    - R-X3   # delete_by_node_id / batch_create_in_transaction 接受外部 db session
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+      codes_added:
+        - RELATION_NOT_FOUND
+        - RELATION_DUPLICATE
+        - RELATION_SELF_LOOP
+        - RELATION_NODE_NOT_IN_PROJECT
+        - RELATION_TYPE_INVALID
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M03
+      tables: [nodes]
+      reason: "create_relation 前校验 source/target node 属于同一 project（§8 Service 层 _check_nodes_belong_to_project）"
+  consumes_action_types: []  # 非 M15，不订阅 action_type
+  produces_action_types:
+    - module_relation_created
+    - module_relation_deleted
 ---
 
 # M08 模块关系图 - 详细设计

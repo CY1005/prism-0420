@@ -11,6 +11,63 @@ module_id: M16
 prism_ref: F16
 pilot: true
 complexity: medium
+references:
+  adrs:
+    - { id: ADR-001, adopts: [§4.1 AI provider generate() interface, §4.2 task timeout TASK_TIMEOUTS["ai_snapshot"]=600s] }
+    - { id: ADR-003, adopts: [rule 1 upstream Service interface for M02/M03/M04/M05 reads] }
+    - { id: ADR-004, adopts: [P1 Bearer JWT browser direct, P2 Internal HMAC Server Action, independent GET endpoint reverse-lookup pattern] }
+  rules:
+    - R3-4   # 改回成本块（ai_snapshot_tasks 轻量表 vs 复用 M17 import_tasks）
+    - R4-2   # 状态机禁止转换（终态不可变）
+    - R10-1  # 批量操作每条独立写 activity_log（save 阶段 N 条 dimension_record）
+    - R10-2  # action_type/target_type 回写 M15（ai_snapshot.start/complete/failed + ai_snapshot_task target_type）
+    - R11-2  # project_id 必须参与 idempotency key 计算（key = user_id+project_id+node_id+version_count）
+    - R11-3  # idempotency key 必须含 project_id（防跨租户污染，M17 audit B1 教训）
+    - R13-1  # 每个 ErrorCode 必有对应 AppError 子类（15 个全覆盖含 SnapshotZombieError）
+    - R13-2  # 跨模块错误 wrap（M04 create_dimension_record → SnapshotSaveFailedError）
+  helpers:
+    errors:
+      version: v3
+      codes_used:
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - NOT_FOUND
+      codes_added:
+        - SNAPSHOT_NODE_NOT_FOUND
+        - SNAPSHOT_INSUFFICIENT_VERSIONS
+        - SNAPSHOT_PROVIDER_NOT_CONFIGURED
+        - SNAPSHOT_PROVIDER_ERROR
+        - SNAPSHOT_TIMEOUT
+        - SNAPSHOT_QUOTA_EXCEEDED
+        - SNAPSHOT_SAVE_FAILED
+        - SNAPSHOT_TASK_NOT_FOUND
+        - SNAPSHOT_NOT_READY
+        - SNAPSHOT_TASK_FINALIZED
+        - SNAPSHOT_INVALID_STATE_TRANSITION
+        - SNAPSHOT_ZOMBIE
+        - SNAPSHOT_PARSE_FAILED
+        - SNAPSHOT_INVALID_DIMENSION_KEY
+        - SNAPSHOT_TASK_PATH_MISMATCH
+    auth:
+      protocols: [AuthServiceProtocol@v2]
+    models:
+      mixins: [TimestampMixin]
+  cross_module_reads:
+    - module: M02
+      tables: [projects]
+      reason: "读取项目 AI provider 配置（get_project_ai_config），via ADR-003 规则 1"
+    - module: M03
+      tables: [nodes]
+      reason: "读取 node 名称（get_by_id），via ADR-003 规则 1"
+    - module: M04
+      tables: [dimension_records]
+      reason: "读取当前维度内容（list_by_node）+ 写快照结果（create_dimension_record），via ADR-003 规则 1"
+    - module: M05
+      tables: [version_records]
+      reason: "读取版本演进记录（list_by_node / count_by_node），via ADR-003 规则 1"
+  consumes_action_types: []
+  produces_action_types:
+    - [no_dependency]  # ai_snapshot.start/complete/failed 使用 dot-notation，已被 baseline-patch 2026-05-06 删除；待 Alembic 迁移改为 snake_case 后回写 M15 ActionType CHECK
 ---
 
 # M16 AI 快照 - 详细设计
