@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（修正 03/04/05 工程规约状态为 accepted-minimal + Phase 2.3 加补完清单）
+last_updated: 2026-05-05（B1.1 最小 FastAPI 脚手架落地，commit 0bafb20）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -120,10 +120,14 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 ### 5.2 B 阶段：10 项工程基线代码（2-3 天）
 
-- [ ] **B1 仓库脚手架**（api/ + app/ + .env.example + Makefile + README Quick Start）
-- [ ] **B2 Docker Compose**（PG 16 + pgvector + Redis + init-db / make up）
-- [ ] **B3 SQLAlchemy base + Alembic init**（base.py + Mixin + session.py + alembic.ini + 跑通 base revision）
-- [ ] **B4 FastAPI 启动框架**（main.py + config.py + 中间件 + /health + uvicorn 跑起来）
+- [⚠️ 部分] **B1 仓库脚手架**（api/ + app/ + .env.example + Makefile + README Quick Start）
+  - [x] B1.1 最小 FastAPI（pyproject.toml + Makefile + api/main.py + tests/test_health.py，2026-05-05 commit `0bafb20`）
+  - [ ] B1.2 docker-compose（PG+Redis）+ config（pydantic-settings）+ db/redis 连接验证
+  - [ ] B1.3 Alembic 接入 + structlog JSON
+  - [ ] B1.4 Next.js + pnpm + vitest + eslint + pre-commit
+- [ ] **B2 Docker Compose**（PG 16 + pgvector + Redis + init-db / make up）—— 并入 B1.2
+- [ ] **B3 SQLAlchemy base + Alembic init**（base.py + Mixin + session.py + alembic.ini + 跑通 base revision）—— 并入 B1.3
+- [x] **B4 FastAPI 启动框架**（main.py + /health + uvicorn 跑起来）—— B1.1 已含；config + 中间件留 B1.2/B5
 - [ ] **B5 AppError + 错误中间件**（base + codes + handler + raise → HTTP 转换测试）
 - [ ] **B6 Auth 基础**（JWT + require_user Depends + P2 internal token + Auth.js v5 Redis adapter 配置）
 - [ ] **B7 activity_log 写入封装**（M15 own helper：write_event 接受外部 db）
@@ -284,4 +288,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-04-26 | Phase 2.0 启动 / roadmap.md 建立 | CY |
 | 2026-04-26 | A1-A4 4 项决策全 accepted（02/03/04/05-spec + engineering-spec §13/§14/§15 落地，含候选+优缺点+理由+替代触发完整记录）| CY + AI |
 | 2026-05-05 | 修正 03/04/05 spec 真实状态为 accepted-minimal + §8.0 加上线前必补清单（防漏） | CY + AI |
+| 2026-05-05 | B1.1 最小 FastAPI 脚手架落地（uv+py3.12+fastapi+ruff+pytest，/health 200，commit 0bafb20）| CY + AI |
 | _（未来变更追加在这里）_ | | |
