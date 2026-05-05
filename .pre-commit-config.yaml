@@ -30,3 +30,11 @@ repos:
         files: ^app/.*\.(ts|tsx|js|jsx|mjs|cjs)$
         pass_filenames: false
         require_serial: true
+
+      - id: ci-lint
+        name: ci-lint (R13-1 ErrorCode↔AppError parity)
+        entry: bash scripts/ci-lint.sh
+        language: system
+        files: ^api/errors/(codes|exceptions)\.py$
+        pass_filenames: false
+        require_serial: true
