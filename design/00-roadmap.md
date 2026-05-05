@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（B1.3 Alembic + structlog JSON 落地，commit c4c46e4）
+last_updated: 2026-05-05（B1 全 4 子块完成 + 日志统一 + pre-commit 实跑，commit 23b0385；下一步 B2 横切 helper）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -26,7 +26,7 @@ current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ⏳ ████░░░░░░░░░░░░  25%   ← 你在这里（A 决策完，B 代码未起）
+Phase 2.0 工程基线  ⏳ ████████░░░░░░░░  50%   ← 你在这里（A 决策完，B1 仓库脚手架完，B2 横切 helper 未起）
 Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -120,11 +120,11 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 ### 5.2 B 阶段：10 项工程基线代码（2-3 天）
 
-- [⚠️ 部分] **B1 仓库脚手架**（api/ + app/ + .env.example + Makefile + README Quick Start）
+- [x] **B1 仓库脚手架**（api/ + app/ + .env.example + Makefile + README Quick Start）
   - [x] B1.1 最小 FastAPI（pyproject.toml + Makefile + api/main.py + tests/test_health.py，2026-05-05 commit `0bafb20`）
   - [x] B1.2 docker-compose（pg16+pgvector / redis7，标准 5432/6379；老 v1 已 stop）+ config（pydantic-settings）+ /readyz 双探针，2026-05-05 commit `a08311b` + 端口归位 `b823461`
-  - [x] B1.3 Alembic（async 模板 + env.py 接 settings + initial baseline b1c62870faa5）+ structlog JSON（lifespan startup/shutdown 日志），2026-05-05 commit `c4c46e4`
-  - [ ] B1.4 Next.js + pnpm + vitest + eslint + pre-commit
+  - [x] B1.3 Alembic（async 模板 + env.py 接 settings + initial baseline b1c62870faa5）+ structlog JSON（lifespan startup/shutdown 日志），2026-05-05 commit `c4c46e4`；日志统一含 uvicorn 全 JSON commit `1c7fd5f`
+  - [x] B1.4 Next.js 16 + React 19 + TS + Tailwind 4 + ESLint 9 + vitest 4 + Testing Library + prettier + pre-commit 4 hooks（ruff/prettier/eslint），2026-05-05 commit `23b0385`
 - [ ] **B2 Docker Compose**（PG 16 + pgvector + Redis + init-db / make up）—— 并入 B1.2
 - [ ] **B3 SQLAlchemy base + Alembic init**（base.py + Mixin + session.py + alembic.ini + 跑通 base revision）—— 并入 B1.3
 - [x] **B4 FastAPI 启动框架**（main.py + /health + uvicorn 跑起来）—— B1.1 已含；config + 中间件留 B1.2/B5
@@ -291,4 +291,6 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-05 | B1.1 最小 FastAPI 脚手架落地（uv+py3.12+fastapi+ruff+pytest，/health 200，commit 0bafb20）| CY + AI |
 | 2026-05-05 | B1.2 docker-compose（pg16+pgvector / redis7，先 55432/56379 避让 v1）+ pydantic-settings + /readyz 双探针绿，commit a08311b；端口归位 5432/6379 + v1 stack stop，commit b823461 | CY + AI |
 | 2026-05-05 | B1.3 Alembic async 接 settings + initial baseline b1c62870faa5 + structlog JSON + lifespan 启动日志，commit c4c46e4 | CY + AI |
+| 2026-05-05 | 日志统一：uvicorn 接 ProcessorFormatter，access/startup/error 全 JSON，commit 1c7fd5f | CY + AI |
+| 2026-05-05 | B1.4 Next.js 16+React 19+TS+Tailwind 4+ESLint 9+vitest 4+TestLib+prettier+pre-commit 4 hooks 全跑通，commit 23b0385 | CY + AI |
 | _（未来变更追加在这里）_ | | |
