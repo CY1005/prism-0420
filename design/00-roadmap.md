@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（B1+B2+B9 全完成；剩 §5.3 文档残留 §14/§15/07-matrix）
+last_updated: 2026-05-05（Phase 2.0 100% 完成；§5.3 §13-15 修正为已完成 + 07-matrix 转 accepted；下一步 Phase 2.1 M01 探针）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -26,7 +26,7 @@ current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ✅ ███████████████░  98%   ← B1+B2+B9 全完成；剩 §5.3 残留文档（§14/§15/07-matrix）可与 Phase 2.1 并行
+Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅；进 Phase 2.1 M01 探针解锁
 Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -137,8 +137,8 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 ### 5.3 残留文档清理（与 B 并行可做）
 
-- [ ] **engineering-spec §13/§14/§15** 填实（C 档：code review 清单 / 版本号规则 / 注释规范）
-- [ ] **07-capability-matrix.md** draft → accepted
+- [x] **engineering-spec §13/§14/§15** 填实（实查 spec 行 2210-2327：§13 A3 accepted 2026-04-26 / §14 B 日期+短sha accepted / §15 4 子节填实 accepted；roadmap 之前误标，2026-05-05 修正）
+- [x] **07-capability-matrix.md** draft → accepted（2026-05-05：对照 M01-M20 accepted 设计 verify 9 推断项 + 决策 4 补漏候选；状态机命中收敛 9→6，幂等命中收敛 7→2，新增"文件上传"列）
 
 ### 5.4 Phase 2.0 完成判定
 
@@ -298,4 +298,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-05 | B2.3 api/services/activity_log_service（write_event stub）2 tests，commit e140306 | CY + AI |
 | 2026-05-05 | B2.4 api/auth/tenant_filter（user_accessible_project_ids_subquery + TenantContextProtocol 注入点）2 tests，commit 8e0be2e | CY + AI |
 | 2026-05-05 | B9 测试 fixtures（D1-D5 全 A）：async db_session + NESTED savepoint + alembic prod 路径 + 4 隔离自检 tests，commit 15d0329 | CY + AI |
+| 2026-05-05 | §5.3 残留文档对账：§13/§14/§15 实查为已完成（roadmap 之前误标）+ 07-capability-matrix.md draft→accepted（verify 9 推断项 + 4 补漏决策 + 加文件上传列）；Phase 2.0 100% | CY + AI |
 | _（未来变更追加在这里）_ | | |
