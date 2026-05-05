@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（B1+B2 全完成，闸门 2 全 ✅；下一步 Phase 2.1 M01 探针）
+last_updated: 2026-05-05（B1+B2+B9 全完成；剩 §5.3 文档残留 §14/§15/07-matrix）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -26,7 +26,7 @@ current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ✅ ████████████████  95%   ← B1+B2 全完成；§5.3 残留文档清理可与 Phase 2.1 并行
+Phase 2.0 工程基线  ✅ ███████████████░  98%   ← B1+B2+B9 全完成；剩 §5.3 残留文档（§14/§15/07-matrix）可与 Phase 2.1 并行
 Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -132,7 +132,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [x] **B6 Auth 基础**（JWT encode/decode + HMAC P2 签名 + require_user Depends + AuthServiceProtocol 注入点 + 11 tests，2026-05-05 commit `49f6eac`；Auth.js v5 Redis adapter 留 Phase 2.2 前端做）
 - [x] **B7 activity_log 写入封装**（write_event stub 走 structlog；M15 实装时换 INSERT，调用方接口稳定，2026-05-05 commit `e140306`）
 - [x] **B8 tenant_filter helper**（user_accessible_project_ids_subquery + TenantContextProtocol 注入点；M02/M20 上线时注入 concrete 实现，2026-05-05 commit `8e0be2e`）
-- [ ] **B9 测试 fixtures**（pytest conftest + DB rollback + factory + 跑空 test 验证）—— 留到 M01 探针时按需建（YAGNI，目前 24 unit tests 不需 DB fixture）
+- [x] **B9 测试 fixtures**（async db_session + NESTED savepoint per-test + alembic 走生产路径 + 4 隔离自检 tests，2026-05-05 commit `15d0329`）
 - [x] **B10 Next.js 脚手架**（已并入 B1.4 完成）
 
 ### 5.3 残留文档清理（与 B 并行可做）
@@ -296,5 +296,6 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-05 | B2.1 api/errors（AppError + ErrorCode + middleware）8 tests，commit 6f7949a | CY + AI |
 | 2026-05-05 | B2.2 api/auth（JWT + HMAC P2 签名 + require_user + AuthServiceProtocol 注入点）11 tests，commit 49f6eac | CY + AI |
 | 2026-05-05 | B2.3 api/services/activity_log_service（write_event stub）2 tests，commit e140306 | CY + AI |
-| 2026-05-05 | B2.4 api/auth/tenant_filter（user_accessible_project_ids_subquery + TenantContextProtocol 注入点）2 tests，commit 8e0be2e；闸门 2 全 ✅ | CY + AI |
+| 2026-05-05 | B2.4 api/auth/tenant_filter（user_accessible_project_ids_subquery + TenantContextProtocol 注入点）2 tests，commit 8e0be2e | CY + AI |
+| 2026-05-05 | B9 测试 fixtures（D1-D5 全 A）：async db_session + NESTED savepoint + alembic prod 路径 + 4 隔离自检 tests，commit 15d0329 | CY + AI |
 | _（未来变更追加在这里）_ | | |
