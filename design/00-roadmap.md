@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（B1 全 4 子块完成 + 日志统一 + pre-commit 实跑，commit 23b0385；下一步 B2 横切 helper）
+last_updated: 2026-05-05（B1+B2 全完成，闸门 2 全 ✅；下一步 Phase 2.1 M01 探针）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -26,7 +26,7 @@ current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ⏳ ████████░░░░░░░░  50%   ← 你在这里（A 决策完，B1 仓库脚手架完，B2 横切 helper 未起）
+Phase 2.0 工程基线  ✅ ████████████████  95%   ← B1+B2 全完成；§5.3 残留文档清理可与 Phase 2.1 并行
 Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -128,12 +128,12 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [ ] **B2 Docker Compose**（PG 16 + pgvector + Redis + init-db / make up）—— 并入 B1.2
 - [ ] **B3 SQLAlchemy base + Alembic init**（base.py + Mixin + session.py + alembic.ini + 跑通 base revision）—— 并入 B1.3
 - [x] **B4 FastAPI 启动框架**（main.py + /health + uvicorn 跑起来）—— B1.1 已含；config + 中间件留 B1.2/B5
-- [ ] **B5 AppError + 错误中间件**（base + codes + handler + raise → HTTP 转换测试）
-- [ ] **B6 Auth 基础**（JWT + require_user Depends + P2 internal token + Auth.js v5 Redis adapter 配置）
-- [ ] **B7 activity_log 写入封装**（M15 own helper：write_event 接受外部 db）
-- [ ] **B8 tenant_filter helper**（M20 引入：user_accessible_project_ids_subquery 实现 + 测试）
-- [ ] **B9 测试 fixtures**（pytest conftest + DB rollback + factory + 跑空 test 验证）
-- [ ] **B10 Next.js 脚手架**（create-next-app + shadcn/ui + Tailwind + api-client + openapi-typescript codegen）
+- [x] **B5 AppError + 错误中间件**（codes + 6 子类 + middleware + 8 tests，2026-05-05 commit `6f7949a`）
+- [x] **B6 Auth 基础**（JWT encode/decode + HMAC P2 签名 + require_user Depends + AuthServiceProtocol 注入点 + 11 tests，2026-05-05 commit `49f6eac`；Auth.js v5 Redis adapter 留 Phase 2.2 前端做）
+- [x] **B7 activity_log 写入封装**（write_event stub 走 structlog；M15 实装时换 INSERT，调用方接口稳定，2026-05-05 commit `e140306`）
+- [x] **B8 tenant_filter helper**（user_accessible_project_ids_subquery + TenantContextProtocol 注入点；M02/M20 上线时注入 concrete 实现，2026-05-05 commit `8e0be2e`）
+- [ ] **B9 测试 fixtures**（pytest conftest + DB rollback + factory + 跑空 test 验证）—— 留到 M01 探针时按需建（YAGNI，目前 24 unit tests 不需 DB fixture）
+- [x] **B10 Next.js 脚手架**（已并入 B1.4 完成）
 
 ### 5.3 残留文档清理（与 B 并行可做）
 
@@ -293,4 +293,8 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-05 | B1.3 Alembic async 接 settings + initial baseline b1c62870faa5 + structlog JSON + lifespan 启动日志，commit c4c46e4 | CY + AI |
 | 2026-05-05 | 日志统一：uvicorn 接 ProcessorFormatter，access/startup/error 全 JSON，commit 1c7fd5f | CY + AI |
 | 2026-05-05 | B1.4 Next.js 16+React 19+TS+Tailwind 4+ESLint 9+vitest 4+TestLib+prettier+pre-commit 4 hooks 全跑通，commit 23b0385 | CY + AI |
+| 2026-05-05 | B2.1 api/errors（AppError + ErrorCode + middleware）8 tests，commit 6f7949a | CY + AI |
+| 2026-05-05 | B2.2 api/auth（JWT + HMAC P2 签名 + require_user + AuthServiceProtocol 注入点）11 tests，commit 49f6eac | CY + AI |
+| 2026-05-05 | B2.3 api/services/activity_log_service（write_event stub）2 tests，commit e140306 | CY + AI |
+| 2026-05-05 | B2.4 api/auth/tenant_filter（user_accessible_project_ids_subquery + TenantContextProtocol 注入点）2 tests，commit 8e0be2e；闸门 2 全 ✅ | CY + AI |
 | _（未来变更追加在这里）_ | | |
