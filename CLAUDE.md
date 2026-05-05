@@ -118,11 +118,12 @@ GitHub：https://github.com/CY1005/prism-0420
 ## 快速上手（新 session 读这个顺序）
 
 1. 本文件（协作规则）
-2. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
-3. `design/00-phase-gate.md`（下一闸门 checkbox）
-4. TaskList pending 任务（下一件事）
-5. `design/adr/ADR-001-shadow-prism.md`（核心决策）
-6. 开始工作前：告诉 CY "我看到进度是 X，下一件是 Y，可以开始吗？"
+2. **`_handoff/next-session.md`**（上一 session 留的"接着做什么 + 怎么做"——含 prompt A/B/C 和状态快照）
+3. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
+4. `design/00-phase-gate.md`（下一闸门 checkbox）
+5. TaskList pending 任务（下一件事）
+6. `design/adr/ADR-001-shadow-prism.md`（核心决策）
+7. 开始工作前：告诉 CY "我看到进度是 X，handoff 推荐 prompt 是 Y，要按这个跑还是切别的？"
 
 ## 关键路径
 
