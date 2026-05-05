@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check clean up down logs migrate migrate-down migrate-rev
+.PHONY: install dev test lint format check clean up down logs migrate migrate-down migrate-rev web web-test web-lint web-format hooks
 
 install:
 	uv sync
@@ -36,6 +36,22 @@ format:
 	uv run ruff format .
 
 check: lint test
+
+web:
+	cd app && pnpm dev
+
+web-test:
+	cd app && pnpm test
+
+web-lint:
+	cd app && pnpm lint
+
+web-format:
+	cd app && pnpm format
+
+hooks:
+	uv run pre-commit install
+	uv run pre-commit run --all-files
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .venv __pycache__ */__pycache__
