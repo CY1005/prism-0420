@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-04-26（Phase 2.0 A1-A4 决策全 accepted）
+last_updated: 2026-05-05（修正 03/04/05 工程规约状态为 accepted-minimal + Phase 2.3 加补完清单）
 current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ---
 
@@ -81,10 +81,10 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 ### 4.2 档位 B 工程规约（01-engineering/）
 
 - [⚠️] 01-engineering-spec.md（A 档已填 + B 档已填 + **C 档 §13/§14/§15 未填** —— 推到 Phase 2.0）
-- [ ] **02-quality-spec.md**（CY 决策栏全空 → Phase 2.0 A1+A2）
-- [ ] **03-cicd-plan.md**（CY 决策栏全空 → Phase 2.0 A4）
-- [ ] **04-observability-plan.md**（CY 决策栏全空 → Phase 2.0 A4）
-- [ ] **05-security-baseline.md**（CY 决策栏全空 → Phase 2.0 A4）
+- [x] **02-quality-spec.md**（accepted）
+- [⚠️ accepted-minimal] **03-cicd-plan.md**（GitHub Actions 选型定 / 工作流文件 Phase 2.3 §8.0 补完）
+- [⚠️ accepted-minimal] **04-observability-plan.md**（日志 stdout JSON 定 / 指标+告警+追踪 Phase 2.3 §8.0 补完）
+- [⚠️ accepted-minimal] **05-security-baseline.md**（.env+gitignore 单人模式定 / 多人 prod 密钥 Phase 2.3 §8.0 补完）
 
 ### 4.3 档位 C 模块详细设计（02-modules/）
 
@@ -222,6 +222,32 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 ## 8. Phase 2.3：集成 + E2E + 上线 ⏳
 
+### 8.0 🔴 工程规约 minimal 补完（上线前硬前置）
+
+> 03/04/05 三份 spec 是 Phase 2.0 的"最小决策占位"，足够 2.0/2.1/2.2 业务开发，但上线前必须补完，否则线上会缺 CI/可观测/密钥能力。
+
+**03-cicd-plan 必补**：
+- [ ] `.github/workflows/ci.yml` 完整步骤（lint / typecheck / test / build / migrate dry-run）
+- [ ] 缓存策略（pip / pnpm / docker layer）
+- [ ] secrets 注入（GH Actions secrets → env）
+- [ ] 部署触发条件（main push / tag / 手动）
+
+**04-observability-plan 必补**：
+- [ ] 指标采集方案选型（Prometheus / OTel / 云厂商）+ 关键指标清单（QPS / P95 / 错误率 / Queue 堆积）
+- [ ] 告警阈值 + 通道（TG / 邮件）
+- [ ] traceId 贯穿（FastAPI middleware → arq job → 日志字段）
+- [ ] 错误聚合（Sentry or 自建）选型
+
+**05-security-baseline 必补**：
+- [ ] prod 密钥管理选型（Vault / Doppler / 云 KMS / GH secrets-only）
+- [ ] 密钥轮转流程（JWT / DB / 第三方 API key）
+- [ ] HTTPS / CSRF / CORS / Rate limit 上线前 checklist
+- [ ] 备份 + 灾恢方案（PG dump 频率 / 异地）
+
+**判定**：8.0 全 ✅ 才能进 8.1 上线冒烟。
+
+### 8.1 集成与上线
+
 - [ ] 全 20 模块端到端冒烟（用户注册 → 创建项目 → 加入团队 → 跑全功能流）
 - [ ] Playwright E2E（关键 10 路径）
 - [ ] 性能基线（C7 测试：1000 project / P95 < 100ms）
@@ -257,4 +283,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-04-26 | Phase 1 完结（M20 accepted + 6 commit push）| CY + AI |
 | 2026-04-26 | Phase 2.0 启动 / roadmap.md 建立 | CY |
 | 2026-04-26 | A1-A4 4 项决策全 accepted（02/03/04/05-spec + engineering-spec §13/§14/§15 落地，含候选+优缺点+理由+替代触发完整记录）| CY + AI |
+| 2026-05-05 | 修正 03/04/05 spec 真实状态为 accepted-minimal + §8.0 加上线前必补清单（防漏） | CY + AI |
 | _（未来变更追加在这里）_ | | |
