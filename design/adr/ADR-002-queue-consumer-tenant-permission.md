@@ -56,6 +56,44 @@ class ImportExtractPayload(TaskPayload):    # 继承基类
 
 **检查**：CI 静态扫描所有 `queue/tasks/*.py` 中 `@task` 装饰函数的入参类型必须是 `TaskPayload` 子类。
 
+#### 1.1 cron / 系统触发任务的 `user_id` 边界
+
+**背景**：异步任务并非全部由用户操作触发——cron 触发的清理任务（M16 zombie cleanup）和后台批处理任务（M18 embedding backfill / model upgrade）没有发起用户。但 §1 强制 `TaskPayload.user_id: UUID` 非空，无法直接传 `None`。
+
+**规约**：
+
+```python
+# api/queue/base.py（与 TaskPayload 同文件定义）
+from uuid import UUID
+
+# 系统触发任务专用 user_id；保留 UUID，永不分配给真实用户
+SYSTEM_USER_UUID: UUID = UUID("00000000-0000-0000-0000-000000000000")
+```
+
+**使用规则**：
+
+| 场景 | payload.user_id |
+|------|-----------------|
+| 用户操作触发（HTTP / WS）| 真实用户 UUID |
+| cron 周期任务（M16 zombie / M18 backfill）| `SYSTEM_USER_UUID` |
+| 系统级回调（model upgrade trigger）| `SYSTEM_USER_UUID` |
+
+**消费者侧 §1.2 校验链规约**：
+
+- 消费者入口 §1.2 ② 步 `service.check_access(...)` **必须**先判断 `payload.user_id == SYSTEM_USER_UUID`：若是，跳过 user-scoped 权限校验（ownership / role / quota），改走 system-scoped 校验（白名单 task 类型 / project_id 是否属于 active project 等）
+- 消费者入口禁止用 `is None` 判断系统任务——必须用 `SYSTEM_USER_UUID` 常量比对
+- payload validator 必须显式声明 `user_id` 字段允许 `SYSTEM_USER_UUID` 或真实用户，**禁止任意 UUID**
+
+**activity_log 写入规则**：
+
+- M15 ActivityLog 写入时 `user_id` 字段直接落 `SYSTEM_USER_UUID` 常量
+- 前端 next-intl 文案在 `user_id == SYSTEM_USER_UUID` 时显示"系统"（i18n key: `activity.actor.system`）
+- M15 § DAO 层查询 `WHERE user_id = ?` 时若过滤值为 `SYSTEM_USER_UUID` 同样可查询系统操作日志
+
+**触发方**：M16 cron `cleanup_zombie_snapshots` / M18 cron `embedding_backfill` / M18 `embedding_model_upgrade_triggered` payload 必须显式构造 `payload.user_id = SYSTEM_USER_UUID`。
+
+**追溯**：解 [`design/audit/full-reconcile-pass.md`](../audit/full-reconcile-pass.md) S-C2（cron 触发任务 user_id 未规约）；与 [`08-namespaces.md`](../00-architecture/08-namespaces.md) §3.1 Q3 一致。
+
 #### 2. Queue 消费者入口 3 步校验
 
 每个异步 task 函数体的**前 3 行**：
@@ -109,7 +147,7 @@ async def handle_client_command(self, command: ClientCommand):
 ### 负面
 
 - 每个异步模块都要写 `__init__` 调 base 校验代码（boilerplate）—— 接受
-- TaskPayload 基类的 user_id/project_id 字段对"系统级任务"（无 user 上下文，如 cron 清理任务）显得多余——通过显式 `system_user_id = UUID('00000000-...')` 解决，并在 ADR 备注
+- TaskPayload 基类的 user_id/project_id 字段对"系统级任务"（无 user 上下文，如 cron 清理任务）显得多余——通过 §1.1 `SYSTEM_USER_UUID` 常量规约解决
 
 ### 横切影响
 
