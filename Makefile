@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check clean up down logs
+.PHONY: install dev test lint format check clean up down logs migrate migrate-down migrate-rev
 
 install:
 	uv sync
@@ -16,6 +16,15 @@ logs:
 
 dev:
 	uv run uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+migrate:
+	uv run alembic upgrade head
+
+migrate-down:
+	uv run alembic downgrade -1
+
+migrate-rev:
+	uv run alembic revision -m "$(m)"
 
 test:
 	uv run pytest

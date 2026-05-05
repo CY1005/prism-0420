@@ -1,10 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from sqlalchemy import text
 
 from api.core.db import engine
+from api.core.logging import configure_logging, log
 from api.core.redis import get_redis
 
-app = FastAPI(title="prism-0420", version="0.1.0")
+configure_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("app.startup", version="0.1.0")
+    yield
+    log.info("app.shutdown")
+
+
+app = FastAPI(title="prism-0420", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")
