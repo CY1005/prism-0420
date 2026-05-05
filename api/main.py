@@ -6,6 +6,7 @@ from sqlalchemy import text
 from api.core.db import engine
 from api.core.logging import configure_logging, log
 from api.core.redis import get_redis
+from api.errors import register_exception_handlers
 
 configure_logging()
 
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="prism-0420", version="0.1.0", lifespan=lifespan)
+register_exception_handlers(app)
 
 
 @app.get("/health")

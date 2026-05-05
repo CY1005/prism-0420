@@ -1,0 +1,19 @@
+from enum import StrEnum
+
+
+class ErrorCode(StrEnum):
+    """业务错误码（前后端一致 / OpenAPI codegen 同步至前端）。
+
+    新错误码按"{模块或域}_{具体错误}"命名，全部 SCREAMING_SNAKE。
+    """
+
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    NOT_FOUND = "NOT_FOUND"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    CONFLICT = "CONFLICT"
+    RATE_LIMITED = "RATE_LIMITED"
+
+    UNAUTHENTICATED = "UNAUTHENTICATED"
+    TOKEN_EXPIRED = "TOKEN_EXPIRED"
+    LOGIN_LOCKED = "LOGIN_LOCKED"
