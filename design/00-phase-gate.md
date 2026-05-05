@@ -41,6 +41,44 @@ created: 2026-04-26
 
 ---
 
+## 闸门 2.5：Phase 2.0 后置 / Phase 2.1 前置 — Scaffold ↔ Design Reconcile
+
+每个业务模块 sprint 启动前（M01 起每模块都跑一次），必须 ✅：
+
+- [ ] 模块 design 引用的所有 horizontal helper（`api/errors/`、`api/auth/`、
+      `api/models/base.py`、`api/queue/` 等）已对照模块 design 检查命名/接口/形态对齐
+- [ ] 发现的 seam 已分类（机械可做 / 待 CY 决策 / 已自我消解）并在
+      `design/audit/scaffold-design-reconcile.md` 登记
+- [ ] 机械可做项已在本模块 sprint 第一个 commit 内修掉（不留尾巴）
+- [ ] 待 CY 决策项已显式列出，CY 拍板后再启动业务实施
+
+**防御机制 — 任何 scaffold 后续改动 commit 前 3 问**（来自 memory
+`feedback_design_scaffold_reconcile.md`）：
+
+1. 我的实装是否和上游 design（ADR / engineering-spec / 引用模块 design）完全对齐？
+2. 如果不对齐，我已经在 **scaffold 注释** OR **对应 design 文档** 里写明
+   "这是简化决策，X 模块实施时扩齐到 Y 形态"？
+3. 如有未建的 horizontal helper 影响**非当前模块**实施，已在 phase-gate
+   登记 reconcile checkbox？
+
+任一 No → 不许 commit。
+
+---
+
+## 闸门 2.6：M17 前置 — Queue Scaffold Mini-Sprint
+
+M17 对话历程模块依赖 `api/queue/base.py:TaskPayload`（强制 user_id +
+project_id 字段），但 Phase 2.0 B1-B10 未单列 queue scaffold（reconcile
+S5）。M17 启动前必须 ✅：
+
+- [ ] `api/queue/__init__.py` + `api/queue/base.py:TaskPayload` 基类落地
+- [ ] 至少 1 个 dummy 子类化 + pytest 验证 user_id/project_id 强制
+- [ ] ADR-002 § 1 形态与实装一致
+
+可单独 commit 一次 mini-sprint，或 M02 sprint 顺手补（CY 拍）。
+
+---
+
 ## 闸门 3：Phase 2.1 启动 → M02-M20
 
 写**第二个业务模块**前必须 ✅：
