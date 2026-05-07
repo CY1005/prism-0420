@@ -37,3 +37,14 @@ if [ "$BUSINESS_CODES" -ne "$APP_ERRORS" ]; then
 fi
 
 echo "✓ R13-1: $BUSINESS_CODES 业务 ErrorCode = $APP_ERRORS AppError 子类"
+
+# L12: M01 auth_service 不得调用 M15 activity_log_service.write_event
+# （design tests.md L12 守护：auth_audit_log 与 activity_log 分表职责边界）
+AUTH_SERVICE="api/services/auth_service.py"
+if grep -E "from api\.services\.activity_log_service|activity_log_service\.write_event" "$AUTH_SERVICE"; then
+  echo "ERROR (L12): M01 auth_service.py 不应调用 M15 activity_log_service。" \
+       "auth 事件须写入 auth_audit_log（独立表，R10-2 例外，design §10）。"
+  exit 1
+fi
+
+echo "✓ L12: $AUTH_SERVICE 未引用 M15 activity_log_service"

@@ -14,8 +14,29 @@ from api.services.auth_service import get_auth_service
 configure_logging()
 
 
+def _validate_startup_config() -> None:
+    """ADR-004 §3.3 部署约束：INTERNAL_TOKEN 长度校验。
+
+    - prod: < 32 字节 raise（阻断启动）
+    - 非 prod: < 16 字节 warning，≥16 字节通过
+    """
+    token = settings.internal_token
+    if settings.app_env == "prod":
+        if len(token) < 32:
+            raise RuntimeError("INTERNAL_TOKEN must be >= 32 bytes in prod (ADR-004 §3.3)")
+    else:
+        if len(token) < 16:
+            log.warning(
+                "config.internal_token_short",
+                env=settings.app_env,
+                length=len(token),
+                hint="dev allows >= 16 bytes; prod requires >= 32",
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_startup_config()
     log.info("app.startup", version="0.1.0")
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
         try:

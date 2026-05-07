@@ -37,7 +37,7 @@ M01 作为用户账号的"源头模块"，是抽出范式的最佳锚点。
 |---|------|---------|-------|-------|--------------|
 | **P1** | Bearer JWT access token | `Authorization: Bearer <jwt>` | `users.id`（通过 JWT `sub`）| Router 层 Depends | 浏览器→FastAPI 所有业务路由 |
 | **P2** | Internal service token（HMAC）| `X-Internal-Token: <hmac>` + `X-User-Id: <uuid>` | `users.id`（header 显式）| Router 层 Depends | Next.js Server Action → FastAPI 服务间调用 |
-| **P3** | Refresh token | Cookie 或 request body `refresh_token` | `refresh_tokens.id` → `users.id` | 专用 `/auth/refresh` 端点 | Access token 过期后续杯 |
+| **P3** | Refresh token（**不透明 random，sha256 入 DB**）| Cookie 或 request body `refresh_token`（明文 random urlsafe，长度 ≥ 48 字节熵）| `refresh_tokens.token_hash` → `refresh_tokens.id` → `users.id` | 专用 `/auth/refresh` 端点 | Access token 过期后续杯 |
 | **P4** | 一次性 token（forgot-password / invite / email-change）| URL query 或 body 的一次性 string | 预留表的 token_hash → `users.id` | 专用半认证端点 | 本期仅**预留 schema**，未开放 |
 
 **其他路径（本期不开放，未来扩展）**：
@@ -211,6 +211,29 @@ def resolve_from_internal(
 
 **未来扩展方向**（不在本期）：当 Next.js 实例数 > 1 或 P2 端点含强安全敏感操作（财务/权限变更）时，加 Redis nonce store（`SETNX auth:nonce:{signature} "" EX 300` 防重放）。
 
+##### 3.5 P2 信任链（M01 sprint 反馈 2026-05-07 显式化）
+
+P2 的 `X-User-Id` 是 **server-side trusted value**，不是用户提供的可信端身份。完整信任链：
+
+```
+浏览器 → Next.js Server Action （getServerSession 校验 cookie）→ 
+   X-Internal-Token + X-User-Id（取自 session.user.id）+ HMAC 签名 → FastAPI
+```
+
+含义：
+- FastAPI `require_user` 的 P2 路径**不重新验证** `X-User-Id` 是否归属调用者；它信任 Next.js Server Action 已过 cookie/session 闸
+- 这意味着 **INTERNAL_TOKEN 泄露 + 私网可达 → 攻击者可冒任意 X-User-Id**（含 platform_admin）。这是 §3.1 威胁模型已声明的接受面
+- `require_admin` 仅看 `user.role == "platform_admin"`，不区分 P1/P2 来源——这是上述信任链的合理延伸（Next.js 已验是合法 admin）
+- **错误用法**：浏览器**直接**调 FastAPI 带 X-Internal-Token 头是被禁止的（INTERNAL_TOKEN 不应进浏览器，§3.3 部署约束已阻断）
+
+##### 3.6 P3 refresh_token 形态明示（M01 sprint 反馈 2026-05-07）
+
+- **形态**：random urlsafe 明文（`secrets.token_urlsafe(48)`，48 字节 ≈ 64 字符 base64url），**不是 JWT**
+- **存储**：`refresh_tokens.token_hash` 列存 `sha256(raw)` hex，明文 token 发给客户端后服务端不再保留
+- **发现-比对**：`/auth/refresh` 收到客户端 raw token → server 算 sha256 → DB lookup
+- **优势**：不透明 token 防 JWT 类型混淆攻击（A4 测试：refresh_token 误放进 `Authorization: Bearer` 头会 JWT decode 失败 → 自然 401，无需 type=access claim 检查）
+- **TTL**：`refresh_tokens.expires_at`（30 天默认，可由 `settings.refresh_token_ttl_days` 配置）
+
 #### 4. Access token 失效后的续杯策略
 
 前端（浏览器）拿到 401 后**唯一**的续杯路径 = 调 `POST /auth/refresh` 走 P3。禁止前端在 401 后自动调 P1 用旧 JWT 重试。
@@ -229,6 +252,11 @@ def resolve_from_internal(
 | 刷新令牌被盗告警（未来扩展）| 内部触发 | 同上 |
 
 `token_invalidated_at` 是 `users` 表字段（Prism 已有）。Access token 校验时比较 JWT 的 `iat` 与 `token_invalidated_at`，iat 早则拒绝。
+
+**同秒边界规约**（M01 sprint 反馈 2026-05-07）：JWT `iat` 是秒级整数，`token_invalidated_at` 是 PostgreSQL 微秒级 timestamp。比较时把 `token_invalidated_at` 转 int 秒后用 `iat <= invalidated_at_int` 判定（**同秒按"已失效"**，安全侧倾）。含义：
+- 客户端在 T0 秒内拿到的 access token 与 T0 秒内被触发的失效事件相遇时，token 立即无效
+- **副作用**：用户改密码 / admin 禁用账号路径若同时签发新 token（如改密码端点想"无缝换 token"），新 token 必须在 T0+1 秒后签发，否则会被同秒规则拦下
+- 本期 `PATCH /auth/me` 改密码后**不签发新 token**（客户端必须重登录）；该决策与同秒规则共同生效
 
 **检查**：CI 静态扫描 M01 Service 层"凡是写 `user.status = 'disabled'` 的代码必须同步调 `revoke_all_user_tokens`"。
 

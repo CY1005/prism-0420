@@ -550,10 +550,16 @@ stateDiagram-v2
 |---------|------|-----------|
 | `disabled → [*] hard delete` | 本期无 hard delete 端点；禁用账号保留历史以维持 activity_log / auth_audit_log FK 完整性 | `INVALID_STATUS_TRANSITION` |
 | `disabled → pending` | 业务无此流程：禁用的账号要么恢复 active 要么 hard delete（本期不启用）；且 pending 是预留态非本期写入路径 | `INVALID_STATUS_TRANSITION` |
+| `active → pending` | pending 是预留态（R4-3a），本期任何 → pending 写入路径都拒（admin PATCH 也包括在内） | `INVALID_STATUS_TRANSITION` |
 
 **说明**：`pending → *` 相关禁止已并入登记表"本期 service 行为"列（pending 任何写入抛 InvalidTransitionError），不在本表重复（R4-3a 衔接条款：非常规态不参与 R4-2 N 计算）。
 
-**说明**：`active → active` / `disabled → disabled` 等自回不是状态转换（PATCH 时 version 仍 +1 但 status 不变）——在 Service 层视为合法但无变更，不计入 R4-2 禁止转换。
+**说明**：`active → active` / `disabled → disabled` 等自回不是状态转换（status 字段不变）。Service 层语义（M01 sprint 反馈 2026-05-07 显式化）：
+
+- `PATCH /auth/me` 提交 `name` 与现值相同且无 `new_password` → service 层视为"无真实变更"，**不 bump version、不写 audit、直接返回当前 user**（避免空请求噪音）
+- `PATCH /auth/users/{id}` 提交 `role` / `status` 与现值相同且仅此一项 → service 层同样不 bump、不写 audit
+- 至少一个字段实际改变 → version+1 + 写对应 audit 事件（即使其他字段无变化）
+- 入参完全为空（PATCH /auth/me 既无 `name` 也无 `new_password`）→ 422（design §7 Pydantic 校验 + service 兜底 ValidationError）
 
 ### `refresh_tokens` 无状态（R4-1 显式声明）
 
@@ -946,6 +952,28 @@ fi
 ### 实现位置
 
 Service 层 `auth_service.py`，每个业务方法调 `AuthAuditService.log(action_type, user_id, metadata)`（M01 内部 service，不依赖 M15）。`user.login_failed` / `user.locked` 在 authenticate_user 失败路径内部独立写（不放业务事务，失败路径也要留痕）。
+
+### 多事件原子组顺序约定（M01 sprint 反馈 2026-05-07 显式化）
+
+某些业务路径触发**多个事件**，事务内写入顺序按"业务因果链"排列，**reader 工具不依赖顺序**（按 `created_at` 排序），但 sprint 内统一约定如下以利 reviewer 对照：
+
+| 路径 | 事件写入顺序 |
+|------|-------------|
+| `PATCH /auth/me` 改密码（无 name 改）| `user.password_change` → `user.all_tokens_revoked` |
+| `PATCH /auth/me` 改密码 + 改 name | `user.password_change` → `user.all_tokens_revoked` → `user.profile_update` |
+| `PATCH /auth/users/{id}` 改 role + 改 status | `user.admin_update_role` → `user.admin_update_status` |
+| `PATCH /auth/users/{id}` 改 status=disabled（含撤销 token）| `user.admin_update_status` → `user.all_tokens_revoked` |
+
+**原则**：先写"业务主事件"（password_change / admin_update_*），后写"副作用事件"（all_tokens_revoked / profile_update）。事务原子，任一失败全回滚——顺序仅影响 audit 表内 `created_at` 微秒级排序，不影响业务正确性。
+
+### P2 入站请求的 audit 写入策略（M01 sprint 反馈 2026-05-07）
+
+ADR-004 P2 路径（X-Internal-Token + HMAC）入站成功的请求 **本期不写 auth_audit_log**。理由：
+1. P2 是 server-server 信任凭证（Next.js Server Action → FastAPI），写 audit 等于把 server-side trace 进 user 维度审计，污染 reader UI
+2. 真正需要审计的是 P2 后续触发的业务事件（admin_update_role 等），那些已经各自写 audit
+3. tests.md A22 重放测试断言"重放成功 200"——本期**不**断言 audit 行数（之前 design 草案"每次记录 1 行"是 reviewer 笔误，本次回写校正）
+
+**未来扩展锚点**：若合规要求"所有 P2 入站审计追溯"，新增 `user.internal_access` action_type（CHECK 约束扩 1 项 + Alembic 1 步），不改业务路径。
 
 ### 查询能力（给 admin 看）
 

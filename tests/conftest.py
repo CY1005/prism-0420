@@ -182,3 +182,60 @@ async def make_user(db_session):
         return user
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def isolated_db(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """独立连接 + 顶层事务的 session（不走 savepoint）。
+
+    专给"必须验证 commit/rollback 真实路径"的测试用（如 C9 事务原子性）。
+    退出时手工清理 users / refresh_tokens / auth_audit_log（M01 测试创建的所有数据）。
+    """
+    from sqlalchemy import text as _text
+
+    async with engine.connect() as conn:
+        factory = async_sessionmaker(bind=conn, expire_on_commit=False, class_=AsyncSession)
+        session = factory()
+        try:
+            yield session
+        finally:
+            await session.close()
+            # 清掉本测试创建的行（按 FK 顺序）
+            for table in (
+                "auth_audit_log",
+                "refresh_tokens",
+                "password_reset_tokens",
+                "invite_codes",
+                "auth_identities",
+                "email_change_requests",
+                "users",
+            ):
+                await conn.execute(_text(f"DELETE FROM {table}"))
+            await conn.commit()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def isolated_app(isolated_db):
+    """复用 isolated_db 的 FastAPI app（覆盖 get_db）。"""
+    from api.core.db import get_db
+    from api.main import app
+
+    async def _override_get_db():
+        yield isolated_db
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield app
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def isolated_client(isolated_app):
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=isolated_app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        yield client

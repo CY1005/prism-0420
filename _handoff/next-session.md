@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-07
+last_updated: 2026-05-07 (post-M01-merge)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,19 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-07）
+## 0. 状态快照（更新于 2026-05-07 post-M01）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 0%（**当前位置——M01 探针未启动**）
+- **Phase 2.1 业务模块**：⏳ 5%（**M01 已实施完毕 ready for闸门 3，下一站 M02**）
+- **2026-05-07 M01 sprint 闭环**（commits c1e3acc → 2704d0f + design 回写 commit pending）：
+  - 5 子片全 PASS：read-only auth / PATCH me / admin endpoints / ADR-004 P2 全 / CI 守护
+  - 测试 113 PASS + C9 isolated 转 PASS（共 117+ PASS / 0 xfail）
+  - design / ADR 回写（M01 实施反馈）：
+    - ADR-004 §3 #5 同秒边界 + §3.5 P2 信任链 + §3.6 P3 形态
+    - M01 §4 R4-2 加 active→pending 禁 + 同值豁免说明
+    - M01 §10 多事件原子组顺序约定 + P2 入站不写 audit 策略
+  - ci-lint.sh 加 L12 守护（M01 不调 M15 activity_log_service）
+  - design/audit/m01-pilot-template-validation.md（PT1-PT3 living tracker）
 - **2026-05-07 session 产出**（P5 4 🔴 + F-9 收口；commits 2e93de9 + b24f049）：
   - R4-3a 非常规态登记规约落地（02-modules/README.md）：5 类 + 严格档 + 6 字段态表 + 3 字段边表
   - M01/M16/M17/M18 四模块 mermaid 按 R4-3a 回扫（pending / cancelled / partial_failed / failed 拆出登记表）
@@ -32,7 +41,25 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt A — M01 探针实施 sprint（**推荐起手；Phase 2.1 真正开工**）
+### Prompt 0 — 闸门 3 检查 + M02 启动（**当前推荐**）
+
+```
+继续 prism-0420，过闸门 3（M01 PR merge ready 检查）+ 启动 M02 sprint。
+
+任务：
+1. 闸门 3 检查（design/00-phase-gate.md 闸门 3 checklist）：
+   - M01 5 子片 commits 已 push（c1e3acc → 2704d0f + design 回写 commit）
+   - 测试矩阵 117+ PASS / 0 xfail / lint 全过 / pre-commit hooks 全过
+   - design 反馈已回写 ADR-004 + M01 §4 §10
+   - PT1-PT3 tracker 在 design/audit/m01-pilot-template-validation.md
+2. 若闸门 3 通过，按 prompt A（重写自 M01 模板）启动 M02。
+
+红线：
+- M02 sprint 内必须给 PT1-PT3 第 1 次回写（M02 是否复用 M01 范式）
+- M02 涉及 user 跨 project 关系，凭据路径声明段必须引 ADR-004（PT2 校准）
+```
+
+### Prompt A' — M01 sprint 已完成（保留作为 M02 起手模板参考）
 
 ```
 继续 prism-0420，启动 M01 用户系统探针实施 sprint。
@@ -128,6 +155,19 @@ M14 baseline-patch tail。
 - ❌ ~~Prompt: Phase 2.0 决策类（quality-spec + engineering-spec §13）~~ → ✅ 2026-05-05 commit b91c8d5
 - ❌ ~~Prompt: Phase 2.0 代码地基（5 helper + Makefile + queue scaffold）~~ → ✅ 已落地，B1-B10 全 ✅
 - ❌ ~~Prompt B: P5 audit 🔴 4 finding 收口~~ → ✅ 2026-05-07 commits 2e93de9 + b24f049（含 F-9 R4-3a 模板修订一并落地）
+- ❌ ~~Prompt A: M01 探针实施 sprint~~ → ✅ 2026-05-07 commits c1e3acc → 2704d0f（5 子片）+ design 回写 commit
+  - 117+ tests PASS / 0 xfail / 22=22 R13-1 / L12 守护通过
+  - design / ADR 回写 6 处（同秒边界 / P2 信任链 / refresh 形态 / active→pending / 同值豁免 / 多事件顺序）
+  - 17 ErrorCode 新增 + 7 表 schema 落地 + ADR-004 P1+P2+P3 全打通
+
+## 2.1 M01 sprint 后置债（不阻断 M02 启动，M02 sprint 内或后续顺手清掉）
+
+| # | 项 | 优先级 | 触发场景 |
+|---|----|------|---------|
+| D1 | M03/M04/... 模块开工时验证 PT1-PT3（design/audit/m01-pilot-template-validation.md）| 🟢 | 每模块 sprint 闸门 2.5 reconcile 时 |
+| D2 | tests.md A22 注释"每次记录 1 行"已被 design §10 校正为本期不写——必要时补 strikethrough | 🟢 | M01 PR review 期或下次扫 tests.md 时 |
+| D3 | bcrypt 5.x deprecation warning（passlib `__about__` 缺失）| 🟢 | 升级 passlib 或换 bcrypt 直调（已是直调，仅 warning 噪音）|
+| D4 | feedback_three_agent_pipeline 在本 sprint 用 main agent self-audit 替代——M02 起恢复 | 🟡 | M02 sprint 启动时 |
 
 ## 3. 维护规则
 

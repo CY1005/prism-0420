@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 
-import pytest
 from sqlalchemy import select
 
 from api.auth.jwt_utils import encode_jwt
@@ -212,23 +211,38 @@ async def test_patch_me_empty_body_returns_400(auth_client, make_user):
 # ────────────────── C9 事务原子性 ──────────────────
 
 
-@pytest.mark.xfail(
-    reason=(
-        "C9 atomicity 测试需独立连接 fixture：当前 conftest 的 savepoint 模式"
-        "+ 服务层 db.commit()/rollback() 互动后会进入 MissingGreenlet 状态。"
-        "子片 5 引入专属 'isolated_db' fixture 实证后转 PASS。"
-    ),
-    strict=False,
-)
 async def test_patch_me_password_change_revoke_failure_rolls_back_all(
-    auth_client, make_user, db_session, monkeypatch
+    isolated_client, isolated_db, monkeypatch
 ):
-    """C9：mock revoke_all_for_user 抛异常 → 事务回滚，audit 不写、refresh_token 不删。"""
-    user = await make_user(email="c9@example.com", password="oldsecret123")
+    """C9（子片 5 isolated_db fixture 转 PASS）：
 
-    login = await auth_client.post(
-        "/auth/login", json={"email": "c9@example.com", "password": "oldsecret123"}
+    mock revoke_all_for_user 抛异常 → 事务回滚，users.password_hash 不变 +
+    token_invalidated_at 不变 + version 不 bump + refresh_tokens 不删 +
+    auth_audit_log password_change/all_tokens_revoked 都不写。
+    """
+    from api.auth.password import hash_password, verify_password
+    from api.models.user import User
+
+    user = User(
+        email="c9-iso@example.com",
+        name="C9",
+        password_hash=hash_password("oldsecret123"),
+        role="user",
+        status="active",
+        failed_login_count=0,
+        version=1,
     )
+    isolated_db.add(user)
+    await isolated_db.commit()
+    await isolated_db.refresh(user)
+    user_id = user.id
+    original_hash = user.password_hash
+
+    login = await isolated_client.post(
+        "/auth/login",
+        json={"email": "c9-iso@example.com", "password": "oldsecret123"},
+    )
+    assert login.status_code == 200
     refresh_raw = login.json()["refresh_token"]
 
     from api.services.auth_service import get_auth_service
@@ -240,31 +254,37 @@ async def test_patch_me_password_change_revoke_failure_rolls_back_all(
 
     monkeypatch.setattr(svc.tokens, "revoke_all_for_user", _boom)
 
-    r = await auth_client.patch(
+    r = await isolated_client.patch(
         "/auth/me",
         json={
             "expected_version": 1,
             "old_password": "oldsecret123",
             "new_password": "newsecret456",
         },
-        headers=_bearer(user.id),
+        headers=_bearer(user_id),
     )
     assert r.status_code == 500
 
-    await db_session.rollback()
+    # 真实 rollback 后重读
+    isolated_db.expire_all()
+    fresh = (await isolated_db.execute(select(User).where(User.id == user_id))).scalar_one()
+    assert fresh.password_hash == original_hash
+    assert fresh.token_invalidated_at is None
+    assert fresh.version == 1
+    assert verify_password("oldsecret123", fresh.password_hash)
 
     rt = (
-        await db_session.execute(
+        await isolated_db.execute(
             select(RefreshToken).where(RefreshToken.token_hash == _h(refresh_raw))
         )
     ).scalar_one_or_none()
-    assert rt is not None  # token 未撤销
+    assert rt is not None
 
     audit_rows = (
         (
-            await db_session.execute(
+            await isolated_db.execute(
                 select(AuthAuditLog).where(
-                    AuthAuditLog.user_id == user.id,
+                    AuthAuditLog.user_id == user_id,
                     AuthAuditLog.action_type.in_(
                         ["user.password_change", "user.all_tokens_revoked"]
                     ),
