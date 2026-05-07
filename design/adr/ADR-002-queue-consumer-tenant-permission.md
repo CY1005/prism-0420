@@ -75,7 +75,7 @@ SYSTEM_USER_UUID: UUID = UUID("00000000-0000-0000-0000-000000000000")
 | 场景 | payload.user_id |
 |------|-----------------|
 | 用户操作触发（HTTP / WS）| 真实用户 UUID |
-| cron 周期任务（M16 zombie / M18 backfill）| `SYSTEM_USER_UUID` |
+| cron 周期任务（M16 zombie cleanup / M16 weekly metrics / M17 dead_letter cleanup / M18 backfill / M18 backfill_recovery / M18 zombie / M18 failures monitor / M18 task_cleanup / M18 failure_cleanup）| `SYSTEM_USER_UUID` |
 | 系统级回调（model upgrade trigger）| `SYSTEM_USER_UUID` |
 
 **消费者侧 §1.2 校验链规约**：
@@ -90,7 +90,25 @@ SYSTEM_USER_UUID: UUID = UUID("00000000-0000-0000-0000-000000000000")
 - 前端 next-intl 文案在 `user_id == SYSTEM_USER_UUID` 时显示"系统"（i18n key: `activity.actor.system`）
 - M15 § DAO 层查询 `WHERE user_id = ?` 时若过滤值为 `SYSTEM_USER_UUID` 同样可查询系统操作日志
 
-**触发方**：M16 cron `cleanup_zombie_snapshots` / M18 cron `embedding_backfill` / M18 `embedding_model_upgrade_triggered` payload 必须显式构造 `payload.user_id = SYSTEM_USER_UUID`。
+**触发方完整清单**（payload.user_id = SYSTEM_USER_UUID）：
+
+| 模块 | cron / 触发 | 形态 | 频率 |
+|------|------------|------|------|
+| M16 | `cleanup_zombie_snapshots` | 直接 SQL UPDATE（非 Queue）| 每 5min |
+| M16 | weekly metrics cron | Queue task | 每周 |
+| M17 | `import_cleanup_dead_letter` | Queue task | 每日 |
+| M18 | `embedding_backfill` | Queue task | 每日 |
+| M18 | `embedding_backfill_recovery` | arq cron | 每小时 |
+| M18 | embedding zombie cron | 直接 SQL UPDATE | 每 5min |
+| M18 | embedding failures monitor | Queue task | 每小时 |
+| M18 | embedding task_cleanup | 直接 SQL DELETE | 每日 |
+| M18 | embedding failure_cleanup | 直接 SQL DELETE | 每日 |
+| M18 | `embedding_model_upgrade_triggered` | 系统回调 | 手动 |
+
+**说明**：
+- Queue 形态（payload 形式）：构造 `payload.user_id = SYSTEM_USER_UUID` 显式传入
+- 直接 SQL 形态（非 Queue）：补写 activity_log 时 `user_id` 字段直接落 `SYSTEM_USER_UUID` 常量
+- 两种形态共同点：embedding_failures / activity_log / 任何 user_id 列写入都用 `SYSTEM_USER_UUID`，禁止用 task creator 的 user_id（违反"系统操作"语义）或 NULL（违反"禁止用 is None 判断系统任务"）
 
 **追溯**：解 [`design/audit/full-reconcile-pass.md`](../audit/full-reconcile-pass.md) S-C2（cron 触发任务 user_id 未规约）；与 [`08-namespaces.md`](../00-architecture/08-namespaces.md) §3.1 Q3 一致。
 

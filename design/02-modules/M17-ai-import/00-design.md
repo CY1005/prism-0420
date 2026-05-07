@@ -737,6 +737,25 @@ async def import_extract(ctx, raw_payload: dict):
 - **死信处理**：通知用户（WebSocket + email TBD）+ 30 天保留后自动清理（cron）
 - **整任务失败**：已写入数据保留 + status=`partial_failed`，用户可点"重试"从失败步骤继续
 
+### cron 任务 user_id 边界（ADR-002 §1.1）
+
+`import_cleanup_dead_letter` cron daily 是 Queue task，受 ADR-002 §1.1 约束：
+
+```python
+# api/queue/tasks/import_cleanup_dead_letter.py（示例骨架）
+from api.queue.base import SYSTEM_USER_UUID, TaskPayload
+
+async def schedule_dead_letter_cleanup():
+    payload = TaskPayload(
+        user_id=SYSTEM_USER_UUID,         # ★ 必须，cron 触发非用户操作
+        project_id=None,                  # 跨 tenant 清理
+        idempotency_key=f"import_cleanup_dl_{date.today()}",
+    )
+    await queue.enqueue("import_cleanup_dead_letter", payload)
+```
+
+清理操作本身只 DELETE expired `import_tasks` 行，不写 activity_log（已 failed 任务 30 天后物理删除是 housekeeping 而非业务事件）；若未来加 audit 行为（如"清理了 N 条死信"周报），写入时 `activity_log.user_id` 必须落 `SYSTEM_USER_UUID`。参 ADR-002 §1.1 触发方完整清单（M17 import_cleanup_dead_letter）。
+
 ---
 
 ## 13. ErrorCode 新增清单

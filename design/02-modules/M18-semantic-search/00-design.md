@@ -858,6 +858,10 @@ M18 引用 [`README R10-2 例外`](../README.md#§10-activity_log-事件)（M01 
 
 baseline-patch-m18.md README 修订段一并改。
 
+### embedding_failures 表的 cron user_id 边界（ADR-002 §1.1）
+
+R10-2 例外允许 embedding 失败写自有 `embedding_failures` 表不进 M15 activity_log。但 ADR-002 §1.1 SYSTEM_USER_UUID 规约**仍适用**：若 `embedding_failures` 表有/未来加 `user_id` 列，cron / worker 写入时该字段必须落 `SYSTEM_USER_UUID`（from `api.queue.base`），与 R10-2 例外不冲突——R10-2 是"写哪张表"的例外，ADR-002 §1.1 是"user_id 字段填什么"的规约，二者正交。详见 §12D 字段⑦末段 cron user_id 边界子段。
+
 ### 跨表查询预案
 
 若未来出现"查某 project 全 embedding 失败 + 搜索行为"场景，可建 PG view 或 UNION ALL（参 M01 §10 末段）。**本期不做**。
@@ -1083,6 +1087,30 @@ class Embedding:
 | **backfill recovery**（fix v3 决策 2=A 真做 re-enqueue；fix v4.1 verify R5' 命名澄清：本行涵盖两个触发器——arq cron + FastAPI lifespan startup，统称"recovery 任务"非纯 cron）| **arq cron 每小时一次 + FastAPI startup 钩子调一次** | embedding_tasks | 检测 `status='pending' AND enqueued_by='backfill' AND created_at < NOW - 1h` 的残留 task | 不删，**真调 `await arq_pool.enqueue_job` 重新入队**（用 `_job_id=backfill_recovery:{task.id}` 1h 内幂等去重，防止 cron 与 startup 并发触发的重复入队风暴）|
 
 **为什么不合并**：每个 cron 频率、扫描对象、删除策略不同，合并会失去观测性（CY 排查问题时需知道"是哪个 cron 把数据删了"）。
+
+**cron 任务 user_id 边界（ADR-002 §1.1）**：
+
+上表所有 cron 任务（zombie / monitor / task cleanup / failure cleanup / orphan cleanup / model_version cleanup / search_eval cleanup / backfill recovery）以及 §6 中提到的 `embedding_backfill` (daily) / `embedding_model_upgrade_triggered` 系统级回调，无论是 Queue 形态（payload）还是直接 SQL 形态：
+
+```python
+# Queue 形态示例（embedding_backfill / backfill_recovery 等）
+from api.queue.base import SYSTEM_USER_UUID
+payload = EmbedSinglePayload(
+    user_id=SYSTEM_USER_UUID,         # ★ cron 触发非用户操作
+    project_id=...,
+    target_type=..., target_id=...,
+    provider=..., model_name=..., model_version=...,
+    enqueued_by="backfill",           # 或 "model_upgrade"
+)
+
+# 直接 SQL 形态示例（zombie / cleanup cron 等）
+# UPDATE embedding_tasks SET status='failed', error_code='EMBEDDING_ZOMBIE' WHERE ...
+# 此类 cron 不写 activity_log（embedding 失败属系统行为，R10-2 例外，写自有 embedding_failures 表）
+```
+
+**embedding_failures 表的 user_id 字段**（R10-2 例外推论）：embedding 失败由 worker 后台计算行为产生（系统行为），按 ADR-002 §1.1 规约，`embedding_failures.user_id`（若存在该字段）必须落 `SYSTEM_USER_UUID`，不允许填 task creator user_id 或 NULL。本期 `embedding_failures` schema（§3）暂未含 user_id 列；若 Phase 2 加该列做"哪个用户触发的 embedding 失败"分桶分析，必须按本规约约束。
+
+参 ADR-002 §1.1 触发方完整清单（M18: backfill / backfill_recovery / zombie / failures monitor / task_cleanup / failure_cleanup / model_upgrade_triggered）。
 
 ### Backfill 中断恢复机制（fix v2 verify L4 修复 - 配套 tc_recovery_01）
 

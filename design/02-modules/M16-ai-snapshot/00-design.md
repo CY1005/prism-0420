@@ -719,7 +719,8 @@ class AISnapshotTaskDAO:
         self, db: Session, *, running_threshold_min: int = 11, pending_threshold_min: int = 2
     ) -> list[UUID]:
         """zombie cron 用：单条 CAS UPDATE 直接转 failed + 返回 id 清单（audit B3+M4+m6 修复——避免读-改-写两步竞态 + 覆盖 pending 兜底）
-        ⚠️ 内部 commit，禁止在 Service 事务上下文调用（仅供 cron 顶层）；zombie 转换的 activity_log 写入由 cron 入口在拿到 RETURNING ids 后批量补写"""
+        ⚠️ 内部 commit，禁止在 Service 事务上下文调用（仅供 cron 顶层）；zombie 转换的 activity_log 写入由 cron 入口在拿到 RETURNING ids 后批量补写
+        ⚠️ ADR-002 §1.1 cron user_id 边界：cron 入口批量补写 activity_log 时 `user_id` 字段必须落 `SYSTEM_USER_UUID`（from `api.queue.base`），禁止用 task creator 的 user_id（违反"系统操作"语义）或 NULL（违反"禁止用 is None 判断系统任务"）"""
         from sqlalchemy import text
         result = db.execute(
             text("""
@@ -796,6 +797,12 @@ class AISnapshotTaskDAO:
 
 - 任务事件：`ai_snapshot_service.py` 内 `with self.db.begin():` 块内 ActivityService.log()，与 task 状态 UPDATE 同事务
 - dimension_record 事件：M04 `create_dimension_record(extra_activity_metadata={source: "ai_snapshot", task_id: <id>})` 自写
+
+### cron 触发的 activity_log user_id 边界（ADR-002 §1.1）
+
+zombie cron 兜底转 `failed`（pending → failed / running → failed）以及周报 cron 写 metrics 时，`activity_log.user_id` 字段**必须**落 `SYSTEM_USER_UUID`（from `api.queue.base`），**禁止**用 task creator 的 user_id（违反"系统操作"语义）或 NULL（违反"禁止用 is None 判断系统任务"）。
+
+参 ADR-002 §1.1 触发方完整清单（M16 cleanup_zombie_snapshots / M16 weekly metrics）。前端 next-intl `activity.actor.system` i18n key 在 `user_id == SYSTEM_USER_UUID` 时显示"系统"。
 
 ### estimated_cost_usd 字段（audit M3 修复——反悔触发器需要的指标）
 
@@ -1056,6 +1063,7 @@ class AISnapshotTask(Base, TimestampMixin):
   - `status='pending' AND created_at < NOW - 2min` → 转 `failed/SNAPSHOT_ZOMBIE`（pending 兜底，audit m1+m6——`add_task` 失败 / OOM 时孤儿 pending 也被抓）
   - 用户感知失败延迟最坏 ≤ 5min cron 间隔 + 11min 阈值 = 16min
 - **expires_at 设值时机**：仅在终态转换时设 `NOW + 30d`（含 zombie cron 路径）；pending/running 任务不设 expires_at（防过早清理活跃任务）—— pending 兜底由 zombie cron 转 failed 后顺带设 expires_at，进入 30d 清理流程
+- **cron user_id 边界（ADR-002 §1.1）**：zombie cron 在拿到 `cas_zombie_transition` RETURNING ids 后批量补写 `activity_log`，每条 `user_id` 字段必须落 `SYSTEM_USER_UUID`（from `api.queue.base`）；周报 cron 写 metrics 同理；**禁止**用 task creator 的 user_id 或 NULL（详见 §10 cron user_id 边界段）
 
 **未来后台模块照抄要点**：
 - 每个后台任务表必须有 expires_at + cron 清理（防表无限膨胀）
