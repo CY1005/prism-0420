@@ -185,6 +185,30 @@ async def make_user(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_project(db_session, make_user):
+    """工厂 fixture：建 (user, project) 对。R1-B C1 修：消除 test_m03_*.py 三处重复。
+
+    返回 async callable: `user, proj = await make_project(name_suffix="-A")`。
+    """
+    from uuid import uuid4
+
+    from api.models.project import Project
+
+    async def _make(
+        *,
+        name_suffix: str = "",
+        owner: object | None = None,
+    ):
+        user = owner if owner is not None else await make_user()
+        proj = Project(name=f"P-{uuid4().hex[:6]}{name_suffix}", owner_id=user.id)
+        db_session.add(proj)
+        await db_session.flush()
+        return user, proj
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def isolated_db(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """独立连接 + 顶层事务的 session（不走 savepoint）。
 

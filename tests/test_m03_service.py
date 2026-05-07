@@ -25,29 +25,7 @@ from api.services.node_service import (
 )
 
 # ─────────────── helpers ───────────────
-
-
-async def _make_user_and_project(db_session, *, name_suffix: str = ""):
-    from api.auth.password import hash_password
-    from api.models.project import Project
-    from api.models.user import User
-
-    user = User(
-        email=f"u-{uuid4().hex[:8]}@example.com",
-        name="X",
-        password_hash=hash_password("Password123!"),
-        role="user",
-        status="active",
-        failed_login_count=0,
-        version=1,
-    )
-    db_session.add(user)
-    await db_session.flush()
-
-    proj = Project(name=f"P-{uuid4().hex[:6]}{name_suffix}", owner_id=user.id)
-    db_session.add(proj)
-    await db_session.flush()
-    return user, proj
+# R1-B C1 修：_make_user_and_project 已抽到 conftest.py:make_project fixture。
 
 
 @pytest.fixture
@@ -65,8 +43,8 @@ def _clean_child_services():
 # ─────────────── M03-Svc-T1 create_node 路径计算 ───────────────
 
 
-async def test_svc_create_root_path_format(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_create_root_path_format(db_session, svc, make_project):
+    user, proj = await make_project()
     node = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     assert node.path == f"/{node.id}/"
     assert node.depth == 0
@@ -75,8 +53,8 @@ async def test_svc_create_root_path_format(db_session, svc):
     assert node.type == NodeType.FOLDER.value
 
 
-async def test_svc_create_child_path_format(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_create_child_path_format(db_session, svc, make_project):
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -89,8 +67,8 @@ async def test_svc_create_child_path_format(db_session, svc):
     assert child.depth == 1
 
 
-async def test_svc_create_sort_order_auto_increment(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_create_sort_order_auto_increment(db_session, svc, make_project):
+    user, proj = await make_project()
     a = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="a")
     b = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="b")
     c = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="c")
@@ -99,8 +77,8 @@ async def test_svc_create_sort_order_auto_increment(db_session, svc):
     assert c.sort_order == 2
 
 
-async def test_svc_create_parent_not_found(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_create_parent_not_found(db_session, svc, make_project):
+    user, proj = await make_project()
     with pytest.raises(NodeParentNotFoundError):
         await svc.create_node(
             db_session,
@@ -111,10 +89,10 @@ async def test_svc_create_parent_not_found(db_session, svc):
         )
 
 
-async def test_svc_create_parent_cross_tenant_blocks(db_session, svc):
+async def test_svc_create_parent_cross_tenant_blocks(db_session, svc, make_project):
     """parent_id 来自其他项目应抛 NodeParentNotFoundError（不暴露跨租户）。"""
-    user, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
 
     parentA = await svc.create_node(
         db_session, project_id=projA.id, actor_user_id=user.id, name="A-root"
@@ -132,8 +110,8 @@ async def test_svc_create_parent_cross_tenant_blocks(db_session, svc):
 # ─────────────── M03-Svc-T2 update_node ───────────────
 
 
-async def test_svc_update_changes_name(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_update_changes_name(db_session, svc, make_project):
+    user, proj = await make_project()
     n = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="old")
     updated = await svc.update_node(
         db_session,
@@ -145,8 +123,8 @@ async def test_svc_update_changes_name(db_session, svc):
     assert updated.name == "new"
 
 
-async def test_svc_update_type_immutable_raises(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_update_type_immutable_raises(db_session, svc, make_project):
+    user, proj = await make_project()
     n = await svc.create_node(
         db_session,
         project_id=proj.id,
@@ -164,8 +142,35 @@ async def test_svc_update_type_immutable_raises(db_session, svc):
         )
 
 
-async def test_svc_update_node_not_found(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_update_no_change_does_not_touch_updated_by(
+    db_session, svc, make_project, monkeypatch
+):
+    """R1-A P-A-01 修锁定：update_node 无变化 → 不写 updated_by, 不写 activity_log."""
+    user, proj = await make_project()
+    n = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="x")
+    original_updated_by = n.updated_by
+
+    captured: list[dict] = []
+
+    async def fake_write_event(**kwargs):
+        captured.append(kwargs)
+
+    monkeypatch.setattr("api.services.node_service.write_event", fake_write_event)
+
+    # 同名 + 同 description → 实际无变化
+    result = await svc.update_node(
+        db_session,
+        project_id=proj.id,
+        node_id=n.id,
+        actor_user_id=uuid4(),  # 故意传不同 actor，验证不被 setattr
+        name="x",  # 同 name
+    )
+    assert result.updated_by == original_updated_by
+    assert not [ev for ev in captured if ev.get("action_type") == "update"]
+
+
+async def test_svc_update_node_not_found(db_session, svc, make_project):
+    user, proj = await make_project()
     with pytest.raises(NodeNotFoundError):
         await svc.update_node(
             db_session,
@@ -179,9 +184,11 @@ async def test_svc_update_node_not_found(db_session, svc):
 # ─────────────── M03-Svc-T3 delete_node R-X2 + R10-1 ───────────────
 
 
-async def test_svc_delete_subtree_cascades_and_writes_per_node_events(db_session, svc, monkeypatch):
+async def test_svc_delete_subtree_cascades_and_writes_per_node_events(
+    db_session, svc, make_project, monkeypatch
+):
     """R10-1 batch3：每节点独立 delete 事件 + DB CASCADE 删子树。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -226,9 +233,9 @@ async def test_svc_delete_subtree_cascades_and_writes_per_node_events(db_session
     assert delete_targets == {str(root.id), str(child.id), str(grandchild.id)}
 
 
-async def test_svc_delete_calls_registered_child_services(db_session, svc):
+async def test_svc_delete_calls_registered_child_services(db_session, svc, make_project):
     """R-X2: 子树每节点都调注册的 child_services（M04/M06/M07 sprint 期注入）。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -257,8 +264,8 @@ async def test_svc_delete_calls_registered_child_services(db_session, svc):
     assert {str(root.id), str(child.id)} == target_ids_called
 
 
-async def test_svc_delete_node_not_found(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_delete_node_not_found(db_session, svc, make_project):
+    user, proj = await make_project()
     with pytest.raises(NodeNotFoundError):
         await svc.delete_node(
             db_session,
@@ -271,8 +278,8 @@ async def test_svc_delete_node_not_found(db_session, svc):
 # ─────────────── M03-Svc-T4 reorder_siblings ───────────────
 
 
-async def test_svc_reorder_updates_sort_order(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_reorder_updates_sort_order(db_session, svc, make_project):
+    user, proj = await make_project()
     a = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="a")
     b = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="b")
 
@@ -288,9 +295,34 @@ async def test_svc_reorder_updates_sort_order(db_session, svc):
     assert by_id[b.id].sort_order == 0
 
 
-async def test_svc_reorder_rejects_cross_parent(db_session, svc):
+async def test_svc_reorder_skips_unchanged_sort_order(db_session, svc, make_project, monkeypatch):
+    """R1-A P-A-02 修锁定：sort_order 未变的节点不写 reorder 事件."""
+    user, proj = await make_project()
+    a = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="a")
+    b = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="b")
+
+    captured: list[dict] = []
+
+    async def fake_write_event(**kwargs):
+        captured.append(kwargs)
+
+    monkeypatch.setattr("api.services.node_service.write_event", fake_write_event)
+
+    # a 已 sort_order=0, b 已 sort_order=1 → 请求保持 a=0,b=1 → 0 个 reorder 事件
+    await svc.reorder_siblings(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        parent_id=None,
+        items=[(a.id, 0), (b.id, 1)],
+    )
+    reorder_evs = [ev for ev in captured if ev.get("action_type") == "reorder"]
+    assert reorder_evs == [], "未变 sort_order 不应写 reorder 事件"
+
+
+async def test_svc_reorder_rejects_cross_parent(db_session, svc, make_project):
     """E6: items 含非同 parent 节点 → NODE_REORDER_INVALID。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root1 = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="r1")
     root2 = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="r2")
     c1 = await svc.create_node(
@@ -320,8 +352,8 @@ async def test_svc_reorder_rejects_cross_parent(db_session, svc):
 # ─────────────── M03-Svc-T5 move_subtree G5 ───────────────
 
 
-async def test_svc_move_subtree_updates_path_and_depth(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_move_subtree_updates_path_and_depth(db_session, svc, make_project):
+    user, proj = await make_project()
     rootA = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="A")
     sub = await svc.create_node(
         db_session,
@@ -357,9 +389,9 @@ async def test_svc_move_subtree_updates_path_and_depth(db_session, svc):
     assert leaf.depth == 2
 
 
-async def test_svc_move_to_descendant_raises_cycle(db_session, svc):
+async def test_svc_move_to_descendant_raises_cycle(db_session, svc, make_project):
     """E8: move 到自己的子孙 → NODE_MOVE_CYCLE_DETECTED。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -378,9 +410,9 @@ async def test_svc_move_to_descendant_raises_cycle(db_session, svc):
         )
 
 
-async def test_svc_move_to_same_parent_is_noop(db_session, svc):
+async def test_svc_move_to_same_parent_is_noop(db_session, svc, make_project):
     """E9: 移到当前同一父节点 → NOOP（path/depth 不变，不报错）。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -400,9 +432,9 @@ async def test_svc_move_to_same_parent_is_noop(db_session, svc):
     assert moved.path == old_path
 
 
-async def test_svc_move_to_root_level(db_session, svc):
+async def test_svc_move_to_root_level(db_session, svc, make_project):
     """G8: 移到根层级（new_parent_id=None）。"""
-    user, proj = await _make_user_and_project(db_session)
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     child = await svc.create_node(
         db_session,
@@ -425,8 +457,8 @@ async def test_svc_move_to_root_level(db_session, svc):
 # ─────────────── M03-Svc-T6 breadcrumb ───────────────
 
 
-async def test_svc_breadcrumb_returns_chain_from_root(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_breadcrumb_returns_chain_from_root(db_session, svc, make_project):
+    user, proj = await make_project()
     root = await svc.create_node(db_session, project_id=proj.id, actor_user_id=user.id, name="root")
     sub = await svc.create_node(
         db_session,
@@ -449,8 +481,8 @@ async def test_svc_breadcrumb_returns_chain_from_root(db_session, svc):
 # ─────────────── M03-Svc-T7 batch_create_in_transaction (M11/M17 接口) ───────────────
 
 
-async def test_svc_batch_create_topo_sorted(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_batch_create_topo_sorted(db_session, svc, make_project):
+    user, proj = await make_project()
     nodes = await svc.batch_create_in_transaction(
         db_session,
         project_id=proj.id,
@@ -468,8 +500,8 @@ async def test_svc_batch_create_topo_sorted(db_session, svc):
     assert nodes[2].depth == 2
 
 
-async def test_svc_batch_create_unknown_parent_temp_id_raises(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_batch_create_unknown_parent_temp_id_raises(db_session, svc, make_project):
+    user, proj = await make_project()
     with pytest.raises(NodeParentNotFoundError):
         await svc.batch_create_in_transaction(
             db_session,
@@ -484,15 +516,15 @@ async def test_svc_batch_create_unknown_parent_temp_id_raises(db_session, svc):
 # ─────────────── M03-Svc-T8 get_node 错误路径 ───────────────
 
 
-async def test_svc_get_node_not_found_raises(db_session, svc):
-    user, proj = await _make_user_and_project(db_session)
+async def test_svc_get_node_not_found_raises(db_session, svc, make_project):
+    user, proj = await make_project()
     with pytest.raises(NodeNotFoundError):
         await svc.get_node(db_session, uuid4(), proj.id)
 
 
-async def test_svc_get_node_cross_tenant_raises_not_found(db_session, svc):
-    user, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_svc_get_node_cross_tenant_raises_not_found(db_session, svc, make_project):
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     nA = await svc.create_node(db_session, project_id=projA.id, actor_user_id=user.id, name="A")
     with pytest.raises(NodeNotFoundError):
         await svc.get_node(db_session, nA.id, projB.id)

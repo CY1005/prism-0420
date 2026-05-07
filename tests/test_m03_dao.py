@@ -14,29 +14,7 @@ from api.dao.node_dao import NodeDAO
 from api.services.node_service import NodeService
 
 # ─────────────── helpers ───────────────
-
-
-async def _make_user_and_project(db_session, *, name_suffix: str = ""):
-    from api.auth.password import hash_password
-    from api.models.project import Project
-    from api.models.user import User
-
-    user = User(
-        email=f"u-{uuid4().hex[:8]}@example.com",
-        name="X",
-        password_hash=hash_password("Password123!"),
-        role="user",
-        status="active",
-        failed_login_count=0,
-        version=1,
-    )
-    db_session.add(user)
-    await db_session.flush()
-
-    proj = Project(name=f"P-{uuid4().hex[:6]}{name_suffix}", owner_id=user.id)
-    db_session.add(proj)
-    await db_session.flush()
-    return user, proj
+# R1-B C1 修：_make_user_and_project 已抽到 conftest.py:make_project fixture。
 
 
 async def _make_node(db_session, project_id, *, parent=None, name="n", **extra):
@@ -72,8 +50,8 @@ def dao():
     return NodeDAO()
 
 
-async def test_dao_list_by_project_orders_by_depth_then_sort_order(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_list_by_project_orders_by_depth_then_sort_order(db_session, dao, make_project):
+    _, proj = await make_project()
     root = await _make_node(db_session, proj.id, name="root")
     c1 = await _make_node(db_session, proj.id, parent=root, name="c1", sort_order=1)
     c0 = await _make_node(db_session, proj.id, parent=root, name="c0", sort_order=0)
@@ -84,9 +62,9 @@ async def test_dao_list_by_project_orders_by_depth_then_sort_order(db_session, d
     assert ids == [root.id, c0.id, c1.id]
 
 
-async def test_dao_list_by_project_isolates_tenants(db_session, dao):
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_dao_list_by_project_isolates_tenants(db_session, dao, make_project):
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     nA = await _make_node(db_session, projA.id, name="A")
     await _make_node(db_session, projB.id, name="B")
 
@@ -97,17 +75,17 @@ async def test_dao_list_by_project_isolates_tenants(db_session, dao):
 # ─────────────── M03-DAO-T2 get_by_id tenant 过滤 ───────────────
 
 
-async def test_dao_get_by_id_returns_node_in_tenant(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_get_by_id_returns_node_in_tenant(db_session, dao, make_project):
+    _, proj = await make_project()
     n = await _make_node(db_session, proj.id, name="x")
     found = await dao.get_by_id(db_session, n.id, proj.id)
     assert found is not None
     assert found.id == n.id
 
 
-async def test_dao_get_by_id_blocks_cross_tenant(db_session, dao):
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_dao_get_by_id_blocks_cross_tenant(db_session, dao, make_project):
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     nA = await _make_node(db_session, projA.id, name="A")
     found = await dao.get_by_id(db_session, nA.id, projB.id)
     assert found is None, "tenant 过滤：B 项目不应能查到 A 项目节点"
@@ -116,8 +94,8 @@ async def test_dao_get_by_id_blocks_cross_tenant(db_session, dao):
 # ─────────────── M03-DAO-T3 list_children ───────────────
 
 
-async def test_dao_list_children_root_level(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_list_children_root_level(db_session, dao, make_project):
+    _, proj = await make_project()
     r1 = await _make_node(db_session, proj.id, name="r1", sort_order=0)
     r2 = await _make_node(db_session, proj.id, name="r2", sort_order=1)
     # 子节点不应出现在 root list
@@ -128,8 +106,8 @@ async def test_dao_list_children_root_level(db_session, dao):
     assert ids == [r1.id, r2.id]
 
 
-async def test_dao_list_children_specific_parent(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_list_children_specific_parent(db_session, dao, make_project):
+    _, proj = await make_project()
     root = await _make_node(db_session, proj.id, name="root")
     c0 = await _make_node(db_session, proj.id, parent=root, name="c0", sort_order=0)
     c1 = await _make_node(db_session, proj.id, parent=root, name="c1", sort_order=1)
@@ -141,8 +119,8 @@ async def test_dao_list_children_specific_parent(db_session, dao):
 # ─────────────── M03-DAO-T4 list_subtree path LIKE ───────────────
 
 
-async def test_dao_list_subtree_includes_self_and_descendants(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_list_subtree_includes_self_and_descendants(db_session, dao, make_project):
+    _, proj = await make_project()
     root = await _make_node(db_session, proj.id, name="root")
     c1 = await _make_node(db_session, proj.id, parent=root, name="c1")
     gc = await _make_node(db_session, proj.id, parent=c1, name="gc")
@@ -154,15 +132,15 @@ async def test_dao_list_subtree_includes_self_and_descendants(db_session, dao):
     assert sibling.id not in ids
 
 
-async def test_dao_list_subtree_anchor_not_found_returns_empty(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_list_subtree_anchor_not_found_returns_empty(db_session, dao, make_project):
+    _, proj = await make_project()
     rows = await dao.list_subtree(db_session, uuid4(), proj.id)
     assert list(rows) == []
 
 
-async def test_dao_list_subtree_blocks_cross_tenant(db_session, dao):
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_dao_list_subtree_blocks_cross_tenant(db_session, dao, make_project):
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     nA = await _make_node(db_session, projA.id, name="A")
     rows = await dao.list_subtree(db_session, nA.id, projB.id)
     assert list(rows) == [], "tenant 过滤：B 项目查 A 节点子树应空"
@@ -171,24 +149,24 @@ async def test_dao_list_subtree_blocks_cross_tenant(db_session, dao):
 # ─────────────── M03-DAO-T5 max_sort_order ───────────────
 
 
-async def test_dao_max_sort_order_root_level(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_max_sort_order_root_level(db_session, dao, make_project):
+    _, proj = await make_project()
     await _make_node(db_session, proj.id, name="r0", sort_order=0)
     await _make_node(db_session, proj.id, name="r5", sort_order=5)
     await _make_node(db_session, proj.id, name="r2", sort_order=2)
     assert await dao.max_sort_order(db_session, None, proj.id) == 5
 
 
-async def test_dao_max_sort_order_empty_returns_none(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_max_sort_order_empty_returns_none(db_session, dao, make_project):
+    _, proj = await make_project()
     assert await dao.max_sort_order(db_session, None, proj.id) is None
 
 
 # ─────────────── M03-DAO-T6 bulk_update_sort_order ───────────────
 
 
-async def test_dao_bulk_update_sort_order_updates_only_specified(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_bulk_update_sort_order_updates_only_specified(db_session, dao, make_project):
+    _, proj = await make_project()
     a = await _make_node(db_session, proj.id, name="a", sort_order=0)
     b = await _make_node(db_session, proj.id, name="b", sort_order=1)
     c = await _make_node(db_session, proj.id, name="c", sort_order=2)
@@ -204,9 +182,9 @@ async def test_dao_bulk_update_sort_order_updates_only_specified(db_session, dao
     assert c.sort_order == 20
 
 
-async def test_dao_bulk_update_sort_order_blocks_cross_parent(db_session, dao):
+async def test_dao_bulk_update_sort_order_blocks_cross_parent(db_session, dao, make_project):
     """重排只能在同 parent_id 范围内（即使 ID 列表跨 parent 也不更新）。"""
-    _, proj = await _make_user_and_project(db_session)
+    _, proj = await make_project()
     root1 = await _make_node(db_session, proj.id, name="root1")
     root2 = await _make_node(db_session, proj.id, name="root2")
     c1 = await _make_node(db_session, proj.id, parent=root1, name="c1", sort_order=0)
@@ -225,9 +203,9 @@ async def test_dao_bulk_update_sort_order_blocks_cross_parent(db_session, dao):
 # ─────────────── M03-DAO-T7 update_paths_in_subtree ───────────────
 
 
-async def test_dao_update_paths_in_subtree_replaces_prefix_and_depth(db_session, dao):
+async def test_dao_update_paths_in_subtree_replaces_prefix_and_depth(db_session, dao, make_project):
     """move_subtree 语义验证：prefix REPLACE + depth delta（G5）。"""
-    _, proj = await _make_user_and_project(db_session)
+    _, proj = await make_project()
     # /A/, /A/B/, /A/B/C/   →  move B 到 newRoot：/A/ 不变，/A/B/ → /newRoot/B/
     A = await _make_node(db_session, proj.id, name="A")  # depth=0 path="/A_id/"
     B = await _make_node(db_session, proj.id, parent=A, name="B")  # depth=1
@@ -251,9 +229,9 @@ async def test_dao_update_paths_in_subtree_replaces_prefix_and_depth(db_session,
     assert A.path.startswith("/")  # A 不动
 
 
-async def test_dao_update_paths_in_subtree_isolates_tenants(db_session, dao):
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_dao_update_paths_in_subtree_isolates_tenants(db_session, dao, make_project):
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     await _make_node(db_session, projA.id, name="X")
     b = await _make_node(db_session, projB.id, name="X")  # 同 prefix 形态
 
@@ -266,23 +244,23 @@ async def test_dao_update_paths_in_subtree_isolates_tenants(db_session, dao):
 # ─────────────── M03-DAO-T8 create / update_fields / delete_one ───────────────
 
 
-async def test_dao_create_persists_node(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_create_persists_node(db_session, dao, make_project):
+    _, proj = await make_project()
     n = await dao.create(db_session, project_id=proj.id, name="created")
     assert n.id is not None
     assert n.project_id == proj.id
 
 
-async def test_dao_update_fields_persists(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_update_fields_persists(db_session, dao, make_project):
+    _, proj = await make_project()
     n = await _make_node(db_session, proj.id, name="old")
     updated = await dao.update_fields(db_session, n, name="new", description="desc")
     assert updated.name == "new"
     assert updated.description == "desc"
 
 
-async def test_dao_delete_one_returns_rowcount(db_session, dao):
-    _, proj = await _make_user_and_project(db_session)
+async def test_dao_delete_one_returns_rowcount(db_session, dao, make_project):
+    _, proj = await make_project()
     n = await _make_node(db_session, proj.id, name="del")
     rc = await dao.delete_one(db_session, n.id, proj.id)
     assert rc == 1
@@ -290,9 +268,9 @@ async def test_dao_delete_one_returns_rowcount(db_session, dao):
     assert rc2 == 0
 
 
-async def test_dao_delete_one_blocks_cross_tenant(db_session, dao):
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+async def test_dao_delete_one_blocks_cross_tenant(db_session, dao, make_project):
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     nA = await _make_node(db_session, projA.id, name="A")
     rc = await dao.delete_one(db_session, nA.id, projB.id)
     assert rc == 0, "B 项目不应能删 A 项目节点"
@@ -301,8 +279,8 @@ async def test_dao_delete_one_blocks_cross_tenant(db_session, dao):
 # ─────────────── M03-Service-T9 get_for_embedding (A 路径 design §6.X A4) ───────────────
 
 
-async def test_service_get_for_embedding_returns_name_plus_description(db_session):
-    _, proj = await _make_user_and_project(db_session)
+async def test_service_get_for_embedding_returns_name_plus_description(db_session, make_project):
+    _, proj = await make_project()
     from api.models.node import Node
 
     n = Node(
@@ -319,9 +297,9 @@ async def test_service_get_for_embedding_returns_name_plus_description(db_sessio
 
 
 async def test_service_get_for_embedding_returns_name_only_when_no_description(
-    db_session,
+    db_session, make_project
 ):
-    _, proj = await _make_user_and_project(db_session)
+    _, proj = await make_project()
     from api.models.node import Node
 
     n = Node(project_id=proj.id, name="纯名字", description=None)
@@ -333,17 +311,17 @@ async def test_service_get_for_embedding_returns_name_only_when_no_description(
     assert result == "纯名字"
 
 
-async def test_service_get_for_embedding_returns_none_when_not_found(db_session):
-    _, proj = await _make_user_and_project(db_session)
+async def test_service_get_for_embedding_returns_none_when_not_found(db_session, make_project):
+    _, proj = await make_project()
     svc = NodeService()
     result = await svc.get_for_embedding(db_session, uuid4(), proj.id)
     assert result is None, "节点不存在 → None（M18 worker noop 信号）"
 
 
-async def test_service_get_for_embedding_blocks_cross_tenant(db_session):
+async def test_service_get_for_embedding_blocks_cross_tenant(db_session, make_project):
     """tenant 过滤：跨项目查询返回 None（防 M18 worker 误嵌入跨租户节点）。"""
-    _, projA = await _make_user_and_project(db_session, name_suffix="-A")
-    _, projB = await _make_user_and_project(db_session, name_suffix="-B")
+    _, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
     from api.models.node import Node
 
     n = Node(project_id=projA.id, name="A 节点")

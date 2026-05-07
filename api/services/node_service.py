@@ -49,6 +49,12 @@ class NodeChildrenServiceProtocol(Protocol):
       - target_type="issue"      → M07 IssueService.orphan_by_node_id（SET NULL，FK 语义）
     各 service 自写 activity_log（防 DB CASCADE 绕过 R-X2）。
     M03 sprint 期注册表为空 → noop（M04/M06/M07 表此期不存在，无下游数据需清）。
+
+    **异常契约 (R1-C P1-01 修)**：concrete impl **必须**让所有异常向上传播，
+    不得在内部 catch-all 吞掉错误。M03 delete_node 事务正确性依赖此契约——
+    若下游 service 静默吞错，子树清理会半途而废但 DB CASCADE 兜底删 nodes，
+    导致 dimension_records/competitors/issues 残留孤儿数据 + activity_log 缺事件。
+    被允许的 catch：仅当 impl 已显式记录错误为独立事件并继续抛 AppError 时（M15 sprint 落地后）。
     """
 
     async def __call__(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> None: ...
@@ -226,12 +232,12 @@ class NodeService:
         if description is not None and description != node.description:
             node.description = description
             changed.append("description")
-        node.updated_by = actor_user_id
 
+        # R1-A P-A-01 修：无字段变化时早返回不触 updated_by/updated_at（防"幽灵写"）
         if not changed:
-            await db.flush()
             return node
 
+        node.updated_by = actor_user_id
         await db.flush()
         await db.refresh(node, attribute_names=["updated_at"])
         await write_event(
@@ -330,6 +336,10 @@ class NodeService:
         await self.dao.bulk_update_sort_order(db, project_id, parent_id, items)
 
         for nid, new_so in items:
+            # R1-A P-A-02 修：sort_order 实际未变 → 不写 reorder 事件
+            # （design §10 R10-1 字面是"被修改"，本期收紧为"实际变化"）
+            if old_orders.get(nid) == new_so:
+                continue
             await write_event(
                 db=db,
                 actor_user_id=actor_user_id,
