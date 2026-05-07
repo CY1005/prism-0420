@@ -36,3 +36,18 @@ class ErrorCode(StrEnum):
     INVALID_STATUS_TRANSITION = "invalid_status_transition"
     VERSION_CONFLICT = "version_conflict"
     REGISTRATION_DISABLED = "registration_disabled"
+
+    # M02 项目管理 (design §13)
+    PROJECT_NOT_FOUND = "project_not_found"
+    PROJECT_ALREADY_ARCHIVED = "project_already_archived"
+    PROJECT_ALREADY_ACTIVE = "project_already_active"
+    PROJECT_DELETE_NOT_SUPPORTED = "project_delete_not_supported"
+    PROJECT_NAME_DUPLICATE = "project_name_duplicate"
+    MEMBER_NOT_FOUND = "member_not_found"
+    MEMBER_ALREADY_EXISTS = "member_already_exists"
+    MEMBER_CANNOT_REMOVE_OWNER = "member_cannot_remove_owner"
+    MEMBER_ROLE_INVALID = "member_role_invalid"
+    DIMENSION_CONFIG_INVALID = "dimension_config_invalid"
+    AI_KEY_ENCRYPT_FAILED = "ai_key_encrypt_failed"
+    # F2.3 M20 baseline-patch (move-team scaffold caller 子片 4 推迟 / R-X5 子选项实证标记位置=code 注释)
+    PROJECT_ARCHIVED = "project_archived"

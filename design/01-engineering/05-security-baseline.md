@@ -90,6 +90,19 @@ LOG_LEVEL=DEBUG
 | **传输层** | HTTPS（Phase 2.3 上线时配 nginx + Let's Encrypt）|
 | **DB 连接** | TLS（生产环境强制 sslmode=require）|
 | **AI API Key 存储** | AES-256-GCM 加密（M02 ai_api_key_enc 字段已 design）|
+
+### 4.1 AES-256-GCM helper 实装（M02 sprint 子片 3 落地，2026-05-07）
+
+按本文 §7.1 B' 部分提前 + design/02-modules/M02-project/00-design.md §3.Z early adopter 触发：
+
+- **位置**：`api/auth/crypto.py`（横切层；horizontal=是 / owner=M02 early adopter / 多模块复用候选 M13/M16/M17）
+- **接口**：`encrypt(plaintext: str) -> str` / `decrypt(ciphertext_b64: str) -> str` / `generate_key_b64() -> str`
+- **格式**：`base64(nonce[12B] || ciphertext+tag[≥16B])`
+- **密钥**：`settings.encryption_key`（env `ENCRYPTION_KEY`，base64 of 32 bytes；dev default 已配，**生产部署必须覆盖**）
+- **异常**：`CryptoKeyError`（密钥缺失/格式错/长度错）/ `CryptoDecryptError`（密文损坏/错密钥/InvalidTag）
+- **测试**：`tests/test_m02_crypto.py` 14 PASS（encrypt/decrypt 往返 + 错密钥 + 错密文 + 短密文 + base64 + Unicode + 4KB 长文 + nonce 随机性）
+- **本期不实装**（保留到 §8.0 上线前必补清单）：密钥轮转 / HSM/KMS 接入 / 多密钥 fallback / per-tenant key
+
 | **JWT 签名** | HS256 + 长 secret（≥32 字符随机）|
 | **password 存储** | bcrypt（M01 own）|
 

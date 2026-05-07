@@ -29,5 +29,9 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str | None = Field(default=None)
     bootstrap_admin_name: str = Field(default="Platform Admin")
 
+    # M02 — AES-256-GCM 密钥 (base64 of 32 bytes); 默认 dev-only key (32B, b64 = 44 chars)
+    # 生产部署必须覆盖；密钥轮转 / HSM 留 §8.0 必补清单
+    encryption_key: str = Field(default="ZGV2LW9ubHktYWVzLTMyYnl0ZS1lbmNyeXB0aW9uLWs=")
+
 
 settings = Settings()
