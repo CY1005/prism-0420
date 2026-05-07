@@ -21,6 +21,7 @@ last_reviewed_at: 2026-05-07
 
 | 模块 | 复用情形 | 实施时回写状态 |
 |------|---------|--------------|
+| M02 项目管理 | 4 表 (projects/members/dim_configs/dim_types) 全实装,无预留模式 | ❌ 不复用 (2026-05-07): M02 是 tenant 锚点,所有字段必须可用; SearchConfig+rrf_k+similarity_threshold 是"现在建未来用"部分模式但属横切扩展非"预留 schema" |
 | M11 节点版本 | 是否预建 `node_versions` 表但本期只读？ | ⏳ M11 实施时核对 |
 | M16/M17/M18 cron | 预留 cron config 表 vs 本期硬编码？ | ⏳ M16 实施时核对 |
 | M07 dimension 配置 | 预留 dimension type 枚举扩展位 vs 本期固定？ | ⏳ M07 实施时核对 |

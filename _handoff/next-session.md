@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-07 (post-M02-design-system-upgrade)
+last_updated: 2026-05-07 (post-M02-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-07 post-M02-design-system-upgrade）
+## 0. 状态快照（更新于 2026-05-07 post-M02-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 10%（M01 完成；M02 design 已含实施期处理段 + R3-6 启动数据 + early adopter §7 引用，**ready for M02 sprint 实施代码**）
+- **Phase 2.1 业务模块**：⏳ 15%（M01 + M02 完成；下一站 M03 模块树）
+- **2026-05-07 M02 sprint 完成**（5 子片 + 2 review 闭环）：
+  - commits: `c6b97d6` 子片1 models + `a42dc81` 子片2 DAO + `10f2f54` 子片3 service+AES + `c9b0618` 子片4 router (12 endpoints) + R1 修 `e5651bf` (8 项) + R2 修 `e7b1b7f` (6 P1)
+  - **205 PASS / 0 fail / ruff clean / ci-lint R13-1 34=34 + L12 + S5d-改进**
+  - **L1+L2+L3 review 节奏首次实证** (commit `19acff6`): 闸门 3.4 L1 总则 + M02 §14.5 L2 sprint review 计划 + L3 子选项实证回写到 audit
+  - **5 步分层分析法首次落地** (`feedback_problem_layered_analysis` memory): 用于 review 触发粒度冲突 + 4 实证子选项决策
+  - **4 R-X5 实证子选项全决** (`design/audit/m02-pilot-template-validation.md`):
+    - C 路径 team_id: DAO 完全允许
+    - A 路径 SearchConfig owner: M02 own raw types
+    - B 路径 move-team: 不实装 router → OpenAPI 不含
+    - R13-1 ErrorCode 标记位置: code 注释 (不入 ci-lint 附加规则)
+  - **AES helper 落地** (api/auth/crypto.py 横切层 + 14 test PASS + 05-security-baseline §4.1 回写)
+  - **后置债** (M03 sprint 顺手清):
+    - check_project_access vs require_owner 重复 JOIN (性能优化)
+    - batch_update N 条 UPSERT 应用 PostgreSQL ON CONFLICT
+    - ProjectMember.joined_at vs created_at 冗余讨论 (design 字面如此)
+    - update_project exclude_none=True PATCH 语义 + setattr 白名单
+- **2026-05-07 M02 design v2 升级** (commit `b0dd21b` / `0b72332` / `19acff6`):
 - **2026-05-07 后续 session 产出**（M02 sprint 启动 reconcile pass 元反思 → 设计体系升级 + 11 处 baseline-patch 回扫 + 修复存量）：
   - **5 个体系盲区 + 2 体系级新原则**（详见 `design/audit/time-dimension-blindspot-2026-05-07.md`）
   - **8 条新规则落地**：

@@ -55,15 +55,17 @@ references:
       reason: "邀请成员时查找被邀请人信息（users 是全局表，ADR-003 规则 3 横切表直查豁免）；check_project_access 校验 project_members"
   consumes_action_types: []
   produces_action_types:
-    - project_created
-    - project_updated
-    - project_archived
-    - project_deleted
-    - project_member_invited
-    - project_member_role_updated
-    - project_member_removed
-    - project_dimension_config_updated
-    - project_ai_provider_updated
+    # R1 P1-A 修 (2026-05-07): frontmatter 与 §10 表自相矛盾 — 选 §10 表派
+    # (M02 service + router 实施已用 §10 表命名; M14 baseline-patch CRUD split 适用 verb 形式
+    #  但 M02 §10 维持 verb 单词派,M15 ActionType enum 实装时需统一对齐 §10)
+    - create               # design §10 行 769
+    - update               # §10 行 770
+    - archive              # §10 行 771
+    - invite_member        # §10 行 772
+    - update_member_role   # §10 行 773
+    - remove_member        # §10 行 774
+    - update_dimension_config  # §10 行 775
+    - update_ai_provider   # §10 行 779
 ---
 
 # M02 项目管理 - 详细设计
@@ -950,6 +952,26 @@ class ProjectArchivedError(AppError):
 - [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
 - [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
 - [ ] CY 全文复审通过 → status 转 accepted
+
+---
+
+## sprint 实施期回写 (R1+R2 review 沉淀, 2026-05-07)
+
+### R1 P1/P2 design 回写 (sprint 实施 vs design 字面差异显式化)
+
+| # | design 字面 | sprint 实施 | 选择理由 | commit |
+|---|---|---|---|---|
+| 1 | §13 `MemberRoleInvalidError(AppError)` / `DimensionConfigInvalidError(AppError)` | 实施改 extends `ValidationError` | 语义更对 (status 422 + 与 OldPasswordMismatchError/PasswordTooWeakError 一致); design 字面写 AppError 是粗略 | `10f2f54` |
+| 2 | §3 `Mapped[ProjectStatus]` (G1 三重防护第三重) | 实施 `Mapped[str]` + StrEnum.value default | 与 M01 user.py role/status 范式一致 (M01 也是 String + StrEnum + CHECK + Mapped[str]); 三重防护第三重以 StrEnum.value 在写路径 + DB CHECK 兜底 | `c6b97d6` |
+| 3 | §3 `ProjectMember.joined_at + created_at` 两字段 | 实施保留两字段 (按 design 字面) | 冗余但符合 design; follow-up: M02 sprint 末或 M03 sprint 启动时讨论是否删 created_at | `c6b97d6` |
+| 4 | frontmatter `produces_action_types` 用 verb 形式 (project_created/project_member_invited 等) | 实施跟 §10 表 verb 单词派 (create/invite_member 等) | §10 表是 service write_event 实际 caller; M14 baseline-patch CRUD split 仅适用 entity 前缀型, M02 §10 维持单词派 | `e7b1b7f` (本 commit frontmatter 已对齐 §10) |
+
+### R2 P2 punt follow-up (子片 5 后视情况修)
+
+- check_project_access vs require_owner 重复 JOIN (性能优化,可让 router 把 ProjectAccess 传给 service 跳过二次查询)
+- batch_update N 条 UPSERT 应用 PostgreSQL `INSERT ... ON CONFLICT ... DO UPDATE` 一次完成
+- update_project `exclude_none=True` 是否改 `exclude_unset=True` (PATCH 语义讨论)
+- update_project `setattr` 加白名单 (防前端漂移传 status/owner_id 绕过 archive_project)
 
 ---
 
