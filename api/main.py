@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from api.auth import tenant_filter
 from api.core.config import settings
 from api.core.db import SessionLocal, engine
 from api.core.logging import configure_logging, log
 from api.core.redis import get_redis
+from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
 from api.routers import auth as auth_router
+from api.routers import project_router
 from api.services.auth_service import get_auth_service
 
 configure_logging()
@@ -37,7 +40,9 @@ def _validate_startup_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_startup_config()
-    log.info("app.startup", version="0.1.0")
+    # M02 子片 2: 注入 TenantContext concrete impl (覆盖 B2.4 scaffold Protocol)
+    tenant_filter.set_tenant_context(M02TenantContext())
+    log.info("app.startup", version="0.1.0", tenant_context="M02 (project_members)")
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
         try:
             async with SessionLocal() as db:
@@ -60,6 +65,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="prism-0420", version="0.1.0", lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(auth_router.router)
+app.include_router(project_router.router)
 
 
 @app.get("/health")

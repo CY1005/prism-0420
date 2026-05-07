@@ -94,6 +94,8 @@ class ProjectService:
                 metadata={"template_type": template_type, "name": name},
             )
             await db.flush()
+            # server_default=func.now() 字段需 refresh 才能从 DB 读回 (Pydantic from_attributes 会触发)
+            await db.refresh(proj, attribute_names=["created_at", "updated_at"])
             return proj
         except IntegrityError as e:
             await db.rollback()
@@ -136,6 +138,7 @@ class ProjectService:
                 setattr(proj, key, val)
                 changed_fields.append(key)
         await db.flush()
+        await db.refresh(proj, attribute_names=["updated_at"])
         await write_event(
             db=db,
             actor_user_id=actor_user_id,
@@ -157,6 +160,7 @@ class ProjectService:
             raise ProjectAlreadyArchivedError(project_id=str(project_id))
         proj.status = ProjectStatus.ARCHIVED.value
         await db.flush()
+        await db.refresh(proj, attribute_names=["updated_at"])
         await write_event(
             db=db,
             actor_user_id=actor_user_id,
@@ -188,6 +192,7 @@ class ProjectService:
             except (CryptoKeyError, ValueError) as e:
                 raise AiKeyEncryptFailedError() from e
         await db.flush()
+        await db.refresh(proj, attribute_names=["updated_at"])
         await write_event(
             db=db,
             actor_user_id=actor_user_id,

@@ -203,9 +203,13 @@ def test_s5c_no_reserved_model_imported_in_services_or_routers():
     assert result.returncode == 1, f"reserved model leaked into services/routers:\n{result.stdout}"
 
 
-def test_s5d_no_router_directly_imports_user_or_refresh_token_except_auth():
-    """除 routers/auth.py 外的 router 文件禁止直查 User/RefreshToken。"""
-    pattern = r"from api\.models\.user import (User|RefreshToken)"
+def test_s5d_no_router_directly_calls_user_dao_or_auth_service_except_auth():
+    """S5d (M02 子片 4 修): 守护精确化 — 除 routers/auth.py 外的 router 禁直调 user_dao / auth_service。
+
+    原规则 grep `from api.models.user import (User|RefreshToken)` 误命中 M02 router 合法
+    type hint (current_user 返回 User);改为 grep dao/service 业务 import,允许 model type hint.
+    """
+    pattern = r"from api\.(dao\.user_dao|services\.auth_service) import"
     result = subprocess.run(
         ["grep", "-rE", pattern, "api/routers/"],
         cwd=REPO_ROOT,
@@ -213,7 +217,10 @@ def test_s5d_no_router_directly_imports_user_or_refresh_token_except_auth():
         text=True,
     )
     leaks = [line for line in result.stdout.splitlines() if "api/routers/auth.py" not in line]
-    assert not leaks, f"non-auth router leaks user model imports:\n{leaks}"
+    assert not leaks, (
+        f"non-auth router directly imports M01 dao/service (走 routers/auth.current_user 复用):\n"
+        f"{leaks}"
+    )
 
 
 def test_s5e_ci_lint_script_is_runnable_and_passes():
