@@ -153,6 +153,43 @@ complexity: low                         # 必填：low / medium / high（来自 
   - 每个终态单独一条：`completed → 任意 状态`、`failed → 任意 状态`、`cancelled → 任意 状态` 必须分开写
   - 禁止把"并发控制 version 冲突"、"删后 404"等非状态转换混入（应放在节 5 竞态分析或节 13 ErrorCode）
 - **R4-3**：mermaid stateDiagram-v2 必须画
+- **R4-3a**：非常规态 / 非常规边登记规约（M01 pending 矛盾沉淀；K8s Pod phase 实践参照）
+
+  状态机若含以下任一类型，**禁止在 mermaid 中画出**，必须在 mermaid 之外**单独"非常规态登记表"**呈现（防"同一边一处允许一处禁止"）：
+
+  | 类型 | 判别 |
+  |------|------|
+  | 预留态（reserved）| schema CheckConstraint 含但本期 service 不可达，依赖未来功能启用 |
+  | 半终态（pseudo-terminal）| 可循环回早期态的"看似终态" |
+  | 短暂态（transient）| cron / 系统流程会强制转出，正常存活窗口 < 5min |
+  | 降级态（degraded）| 系统过载/异常时进入的应急态 |
+  | 迁移过渡态（migration）| 版本/schema 迁移期间存在，迁移完毕即消失 |
+
+  若含**条件可达边**（仅在特定流程同事务内可达，不在常规 user-driven service 路径），独立"非常规边登记表"，mermaid **可以画**但必须用 `note` 标注同事务条件。
+
+  与 R4-2 衔接：R4-2 的 N（终态数+1）公式**只覆盖 mermaid 中出现的态**——非常规态不参与 N 计算，其禁止/允许语义在本登记表"本期 service 行为"列内表达。
+
+  **非常规态登记表模板**（6 字段必填）：
+
+  | 态名 | 类型 | 启用条件 | 本期 service 行为 | 字段来源 | since |
+  |------|------|---------|------------------|---------|-------|
+  | pending | reserved | Q1 开放注册启用 | 拒登录返回 ACCOUNT_PENDING；任何写入抛 InvalidTransitionError | `users.status` | reserved since v1（M01 初版）|
+
+  字段定义：
+  - **字段来源**：填持久化字段名（`users.status`）；display-only 态填 `display-only`，**不允许空**
+  - **since**：填 `reserved since v<X>` / `transient since v<X>` / `pseudo-terminal since v<X>`，**不允许填"未来"或空**
+
+  **非常规边登记表模板**（3 字段必填）：
+
+  | from → to | 触发流程 | 本期可达 |
+  |----------|---------|---------|
+  | owner → admin | transfer ownership 同事务（with db.begin()） | 是（仅 transfer 路径） |
+
+  **反例对照**（M01 4-25 冲刺产出，已 patch）：
+
+  M01 mermaid 含 `[*] → pending` / `pending → disabled (预留)` 同时禁止表又列 `pending → disabled` 禁止——同一边一处允许一处禁止，实装不知按哪条走。R4-3a 强制把 pending 拆出登记表后 mermaid 只剩本期可达态，矛盾消失。
+
+  **根因**：mermaid 用"未来全图"思维画，禁止表用"本期硬约束"思维写，两个时间视角混进同一份文档。R4-3a 用"主表只画本期可达"+"非常规态独立登记"切开两个时间视角。
 
 ### §5 多人架构 4 维必答
 - **R5-1**：5 项清单逐项标（即使 N/A 也要显式说明）+ **4 维表格禁止 ⚠️ 占位**（batch2 audit 沉淀）

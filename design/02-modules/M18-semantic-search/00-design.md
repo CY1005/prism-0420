@@ -495,25 +495,32 @@ class SearchEvaluationLog(Base, TimestampMixin):
 
 ## 4. 状态机
 
-### embedding_task 状态机（5 状态）
+### embedding_task 状态机（4 本期可达态 + 1 短暂态）
 
 ```mermaid
 stateDiagram-v2
     [*] --> pending: enqueue（incremental / backfill / model_upgrade）
     pending --> running: worker 拉起
     running --> succeeded: embedding 写入成功
-    running --> failed: 重试耗尽（3 次）
     running --> pending: 单次失败重试
-    failed --> dead_letter: cron 30s 后转死信（与 §12C 通知策略不同——M18 不通知用户）
     succeeded --> [*]: 30 天后 cron 物理删除
     dead_letter --> [*]: 90 天后 cron 物理删除
 ```
 
-**禁止转换**（N=4：终态 succeeded/failed/dead_letter + 兜底）：
+**说明**：mermaid 仅含本期可达态（pending / running / succeeded / dead_letter）。`failed` 是短暂态（cron 30s 后强制转 `dead_letter`），见下方非常规态登记表（R4-3a）。
+
+#### 非常规态登记表（R4-3a）
+
+| 态名 | 类型 | 启用条件 | 本期 service 行为 | 字段来源 | since |
+|------|------|---------|------------------|---------|-------|
+| failed | transient | 入边触发条件：`running` 阶段重试耗尽（3 次）。**正常存活窗口 ≤ 30s**——cron 30s 后强制转 `dead_letter` | **短暂态行为**：worker 写入 `failed` 同时落 `embedding_failures` 一条记录；30s 后 dead_letter cron 强制转 `dead_letter`；service 层强制 `failed → succeeded` 抛 `EMBEDDING_TASK_TERMINAL_VIOLATION`；**不通知用户**（embedding 是派生数据，搜不到刚写的会自然 fallback 到关键词路径） | `embedding_tasks.status` | transient since v1（M18 初版）|
+
+**说明**：短暂态在 mermaid 中**不画**，所有相关转换（入边 + cron 强制出边 + service 守护）合并到登记表"本期 service 行为"列内表达，避免与正常态混淆"看似终态实则 30s 内必转出"。
+
+**禁止转换**（N=2：mermaid 中事实终态仅 succeeded + dead_letter，N+1≥3，列 3 条；R4-3a 衔接：`failed` 相关禁止已并入登记表，不在本表重复）：
 1. `succeeded → 任意 状态`：原因 = 终态不可变 / 对应 ErrorCode `EMBEDDING_TASK_TERMINAL_VIOLATION`
-2. `failed → succeeded`：原因 = 失败已落 embedding_failures，重新成功要走新 task / 对应 ErrorCode `EMBEDDING_TASK_TERMINAL_VIOLATION`
-3. `dead_letter → 任意 状态`：原因 = 死信终态 / 对应 ErrorCode `EMBEDDING_TASK_TERMINAL_VIOLATION`
-4. `pending → succeeded` 跳过 running：原因 = 必须经过 worker / 对应 ErrorCode `EMBEDDING_TASK_INVALID_TRANSITION`
+2. `dead_letter → 任意 状态`：原因 = 死信终态 / 对应 ErrorCode `EMBEDDING_TASK_TERMINAL_VIOLATION`
+3. `pending → succeeded` 跳过 running：原因 = 必须经过 worker / 对应 ErrorCode `EMBEDDING_TASK_INVALID_TRANSITION`
 
 ### embedding 行级状态（隐式）
 

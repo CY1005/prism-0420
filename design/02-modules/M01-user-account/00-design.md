@@ -527,27 +527,31 @@ class EmailChangeRequest(Base):
 ```mermaid
 stateDiagram-v2
     [*] --> active: Admin 创建（默认）
-    [*] --> pending: 开放注册（预留，未启用）
     active --> disabled: Admin PATCH status=disabled
     disabled --> active: Admin PATCH status=active
-    pending --> active: Admin 审核通过（预留）
-    pending --> disabled: Admin 拒绝（预留）
-    active --> [*]: （hard delete，不启用）
 ```
 
 **说明**：
 - `active` 可登录 / 可续杯 / 路由 Depends 放行
 - `disabled` 无法登录、续杯即撤销、已登录 session 触发 `token_invalidated_at` 立即失效
-- `pending` 本期**不使用**（Q1 未启用），预留值；若出现 pending 用户，Service 层一律拒绝登录（返回"账号待审核"错误）
+- 本期 mermaid **仅含本期可达态**（active / disabled）；`pending` 是预留态见下方非常规态登记表（R4-3a）；hard delete 端点本期不启用——同样不进 mermaid。
 
-### 禁止转换清单（R4-2，N = 终态数 + 1；本模块视 `disabled` 为实际终态 + 预留 hard-delete 终态，N ≥ 3，列 4 条）
+#### 非常规态登记表（R4-3a）
+
+| 态名 | 类型 | 启用条件 | 本期 service 行为 | 字段来源 | since |
+|------|------|---------|------------------|---------|-------|
+| pending | reserved | Q1 开放注册启用（admin 审核流） | 任何写入 pending 的尝试 service 层抛 `InvalidTransitionError`；schema CheckConstraint 仍含；登录路径若读到 pending（异常情况）一律拒登录返回 `ACCOUNT_PENDING` 403 | `users.status` 持久化字段 | reserved since v1（M01 初版）|
+
+**说明**：pending 启用后（Q1 开放注册）从 `[*]` 进入，可转 `active`（审核通过）或 `disabled`（审核拒绝），届时 mermaid + 禁止表统一回填。
+
+### 禁止转换清单（R4-2，N = 终态数 + 1；本模块 mermaid 中只有 `disabled` 一个事实终态，N ≥ 2，列 2 条）
 
 | 禁止转换 | 原因 | ErrorCode |
 |---------|------|-----------|
-| `disabled → pending` | 业务无此流程：禁用的账号要么恢复 active 要么 hard delete（本期不启用）| `INVALID_STATUS_TRANSITION` |
-| `pending → disabled` | 拒审等价于硬删除（本期 pending 未启用 → 硬拒）| `INVALID_STATUS_TRANSITION` |
 | `disabled → [*] hard delete` | 本期无 hard delete 端点；禁用账号保留历史以维持 activity_log / auth_audit_log FK 完整性 | `INVALID_STATUS_TRANSITION` |
-| `pending → [*] hard delete` | 同上（pending 仍持有其他模块 FK 引用的可能）| `INVALID_STATUS_TRANSITION` |
+| `disabled → pending` | 业务无此流程：禁用的账号要么恢复 active 要么 hard delete（本期不启用）；且 pending 是预留态非本期写入路径 | `INVALID_STATUS_TRANSITION` |
+
+**说明**：`pending → *` 相关禁止已并入登记表"本期 service 行为"列（pending 任何写入抛 InvalidTransitionError），不在本表重复（R4-3a 衔接条款：非常规态不参与 R4-2 N 计算）。
 
 **说明**：`active → active` / `disabled → disabled` 等自回不是状态转换（PATCH 时 version 仍 +1 但 status 不变）——在 Service 层视为合法但无变更，不计入 R4-2 禁止转换。
 

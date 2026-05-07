@@ -318,7 +318,7 @@ erDiagram
 
 ## 4. 状态机
 
-### 决策：11 状态机（CY ack: 异步 pilot 必须显式状态）
+### 决策：10 本期可达态 + 1 半终态（CY ack: 异步 pilot 必须显式状态）
 
 ```mermaid
 stateDiagram-v2
@@ -330,13 +330,10 @@ stateDiagram-v2
     awaiting_review --> ai_step3 : 用户确认 review
     ai_step3 --> importing : 步骤 3 成功
     importing --> completed : 批量入库成功
-    importing --> partial_failed : 部分入库失败
 
     extracting --> failed : 解压失败 / git clone 失败
     ai_step1 --> failed : 重试 3 次都失败
-    ai_step2 --> partial_failed : 部分文件失败但可继续
     ai_step3 --> failed : 关联去重失败
-    partial_failed --> ai_step3 : 用户重试
 
     pending --> cancelled : 用户取消
     extracting --> cancelled : 用户取消
@@ -349,8 +346,17 @@ stateDiagram-v2
     cancelled --> [*] : 24h 后自动删除
     completed --> [*] : 完成
     failed --> [*] : 30 天后清理
-    partial_failed --> [*] : 30 天后清理
 ```
+
+**说明**：mermaid 仅含本期可达态。`partial_failed` 是半终态（可循环回 `ai_step3`），见下方非常规态登记表（R4-3a）。
+
+#### 非常规态登记表（R4-3a）
+
+| 态名 | 类型 | 启用条件 | 本期 service 行为 | 字段来源 | since |
+|------|------|---------|------------------|---------|-------|
+| partial_failed | pseudo-terminal | 入边触发条件：① `importing` 阶段部分 item 入库失败 ② `ai_step2` 阶段部分文件失败但其余可继续 | **半终态行为**：用户可触发"重试"循环回 `ai_step3`（`partial_failed → ai_step3`，仅这一条出边合法）；30 天未重试则 cron 清理（`partial_failed → [*]`）；service 层强制 `partial_failed → 除 ai_step3 / cancelled 外` 抛 `ImportInvalidStateTransitionError` | `import_tasks.status` | pseudo-terminal since v1（M17 初版）|
+
+**说明**：半终态在 mermaid 中**不画**，所有循环路径（入边 + 重试出边 + cancelled 出边 + 30 天清理）合并到登记表"本期 service 行为"列内表达，避免与正常态混淆"看似终态实则可循环"。
 
 ### 允许的关键转换
 
@@ -363,8 +369,9 @@ stateDiagram-v2
 | `awaiting_review` | `ai_step3` | 用户在 UI 确认 review 结果 | 触发关联+去重+差异标注 Queue |
 | `ai_step3` | `importing` | 关联完成 | 批量写 nodes/dimensions/competitors/issues |
 | `importing` | `completed` | 全部 item 入库成功 | activity_log + WebSocket 推 done |
-| `importing` | `partial_failed` | 部分 item 失败 | activity_log + WebSocket 推 partial |
 | 任意非终态 | `cancelled` | 用户点取消 | **回滚已写入数据** + 删暂存 + activity_log |
+
+**注**：`importing → partial_failed` / `ai_step2 → partial_failed` / `partial_failed → ai_step3` 等半终态相关转换并入非常规态登记表（R4-3a 衔接条款），不在本表重复。
 
 ### 禁止的转换（audit B4 修复——补全所有非法路径）
 
@@ -373,8 +380,6 @@ stateDiagram-v2
 | `cancelled / completed / failed → 任意` | Service 层抛 `ImportTaskFinalizedError`（终态不可变） |
 | `pending / extracting / ai_step1 / ai_step2 → ai_step3`（跳过 awaiting_review）| Service 层校验 status 顺序，抛 `ImportInvalidStateTransitionError` |
 | `awaiting_review → importing`（跳过 ai_step3）| Service 层校验，抛 `ImportInvalidStateTransitionError` |
-| `partial_failed → completed`（必须先 ai_step3 重试） | Service 层校验，抛 `ImportInvalidStateTransitionError` |
-| `partial_failed → 除 ai_step3 / cancelled 外的状态` | Service 层校验，抛 `ImportInvalidStateTransitionError` |
 | 任意 → `pending`（pending 仅在创建时）| Service 层不提供 reset 接口 |
 | `failed → any`（failed 是终态，重试需新建 task）| Service 层抛 `ImportTaskFinalizedError` |
 

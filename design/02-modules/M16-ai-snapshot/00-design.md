@@ -354,7 +354,7 @@ CY Q4 ack C 决定独立轻量表，下方为反悔成本留痕：
 
 ## 4. 状态机
 
-### 决策：5 状态机（pending → running → succeeded / failed，cancelled 预留）
+### 决策：4 本期态 + 1 预留态（pending → running → succeeded / failed；cancelled 预留——见非常规态登记表 R4-3a）
 
 ```mermaid
 stateDiagram-v2
@@ -362,14 +362,21 @@ stateDiagram-v2
     pending --> running : BackgroundTasks 拉起 + 调 AI provider
     running --> succeeded : AI 返回 + parse review_data 成功
     running --> failed : AI 抛异常 / 超时 / 配额超限 / parse 失败
-    pending --> cancelled : (预留，本期不实装取消端点)
-    running --> cancelled : (预留，本期不实装取消端点)
 
     succeeded --> [*] : 用户 review + save 完成（task 表保留 30 天后清理）
     succeeded --> [*] : 用户不 save（task 表保留 30 天后清理；快照"未沉淀"）
     failed --> [*] : 30 天后清理（用户可手动重发起新 task）
-    cancelled --> [*] : 30 天后清理（预留）
 ```
+
+**说明**：mermaid 仅含本期可达态（pending / running / succeeded / failed）；`cancelled` 是预留态见下方非常规态登记表（R4-3a）。
+
+#### 非常规态登记表（R4-3a）
+
+| 态名 | 类型 | 启用条件 | 本期 service 行为 | 字段来源 | since |
+|------|------|---------|------------------|---------|-------|
+| cancelled | reserved | 后台 task 队列堆积清理需求出现，补 `POST /snapshot-tasks/{id}/cancel` 端点 | 无 service 路径写入；schema CheckConstraint 仍含 `cancelled`；任何写入尝试 service 层抛 `SnapshotInvalidStateTransitionError` | `ai_snapshot_tasks.status` | reserved since v1（M16 初版）|
+
+**说明**：cancelled 启用后入边为 `pending → cancelled` / `running → cancelled`，出边为 `cancelled → [*]`（30 天清理），届时 mermaid + 禁止表统一回填。
 
 ### 允许的关键转换
 
@@ -384,7 +391,7 @@ stateDiagram-v2
 
 | 禁止 | 防护 |
 |------|------|
-| `succeeded → 任意 / failed → 任意 / cancelled → 任意` | Service 层抛 `SnapshotTaskFinalizedError`（终态不可变；用户重发起 = 新 task） |
+| `succeeded → 任意 / failed → 任意` | Service 层抛 `SnapshotTaskFinalizedError`（终态不可变；用户重发起 = 新 task）。`cancelled` 终态守护并入登记表"本期 service 行为"列（R4-3a 衔接条款：非常规态不参与 R4-2 N 计算） |
 | `pending → succeeded`（跳过 running）| Service 层校验 status 顺序，抛 `SnapshotInvalidStateTransitionError` |
 | `running → pending` / `任意 → pending`（pending 仅创建时） | 同上 |
 
