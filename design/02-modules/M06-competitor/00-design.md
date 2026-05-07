@@ -264,7 +264,7 @@ erDiagram
 
 **对外契约（R-X3，batch3 基线补丁补充）**：
 - `batch_create_in_transaction(db: Session, competitors: list[CompetitorCreateData], project_id: UUID) -> list[Competitor]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 competitor 写独立 `create` activity_log 事件（R10-1）
-- `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 级联删除调用；删除该 node 下所有 competitor_refs；接受外部 db session；每条被删 competitor_ref 写独立 `delete` activity_log 事件（R10-1）；返回被删记录数
+- `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID, actor_user_id: UUID) -> None`——M03 级联删除调用；删除该 node 下所有 competitor_refs；接受外部 db session；每条被删 competitor_ref 写独立 `delete` activity_log 事件（R10-1，含 actor_user_id）。**M04 sprint R-X5 升级 / 2026-05-07**：原 3 参缺 actor_user_id，经 5 步分层分析法定位为 L1 跨模块契约缺口，升级为 4 参 + 返回 None（与 M04 同款）
 
 ---
 

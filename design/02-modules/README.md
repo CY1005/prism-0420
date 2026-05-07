@@ -334,19 +334,27 @@ complexity: low                         # 必填：low / medium / high（来自 
   - 下游模块的 `delete_by_xxx` / `batch_create_in_transaction` 等被跨模块调用的 Service 方法**必须接受外部 `db: Session` 参数**，不得自己 `self.db.begin()` 另开事务
   - 上游发起方（如 M03 删节点）用 `with self.db.begin():` 包住整个流程，所有下游调用共享该 session
   - 反例：M03 删节点时 M08 `delete_by_node_id` 自己开新事务——若 M08 成功但 M03 失败回滚，M08 的删除和 activity_log 已提交，产生"关联没了但节点还在"的半删状态
-  - **Service 接口签名规范**：
+  - **Service 接口签名规范**（**M04 sprint R-X5 升级 / 2026-05-07**：4 参含 `actor_user_id` 满足 R10-1 batch3 per-record activity_log 写入需要）：
     ```python
-    # ✅ 接受外部 session
-    def delete_by_node_id(self, db: Session, node_id: UUID, project_id: UUID) -> int:
-        # 不调 self.db.begin()，直接用入参 db
+    # ✅ 接受外部 session + actor_user_id
+    async def delete_by_node_id(
+        self, db: AsyncSession, node_id: UUID, project_id: UUID, actor_user_id: UUID
+    ) -> None:
+        # 不调 self.db.begin()，直接用入参 db；
+        # actor_user_id 用于每条受影响记录的 activity_log write_event
         ...
 
-    # ❌ 反例：自开事务
-    def delete_by_node_id(self, node_id: UUID, project_id: UUID) -> int:
-        with self.db.begin():    # 违反 R-X3
+    # ❌ 反例 1：自开事务
+    async def delete_by_node_id(self, node_id: UUID, project_id: UUID) -> int:
+        async with self.db.begin():    # 违反 R-X3
             ...
+
+    # ❌ 反例 2：缺 actor_user_id（M04 sprint 前的旧 3 参签名）
+    async def delete_by_node_id(self, db, node_id, project_id):
+        # 无法写 R10-1 batch3 per-record activity_log（write_event 强制 actor_user_id）
+        ...
     ```
-  - 适用：所有"可能被跨模块调用"的 Service 方法（M03/M04/M06/M07/M08/M11/M17 的 batch/delete_by 方法等）
+  - 适用：所有"可能被跨模块调用"的 Service 方法（M03/M04/M06/M07/M08/M11/M17 的 batch/delete_by/orphan_by 方法等）
 - **R-X4**（新增，batch3 audit 沉淀）：**聚合读模块必须引 ADR-003**——新增聚合读模块（无自有表 / 跨多模块读）的 §3 必须显式声明适用 [`ADR-003`](../adr/ADR-003-cross-module-read-strategy.md) 的哪条规则（规则 1 上游 Service 接口 / 规则 2 只读 import 豁免 / 规则 3 横切表豁免），禁止默认走"DAO 直 JOIN 业务表"（候选 C 已否决）
 - **R-X6**（新增，2026-05-07 时间维度盲区沉淀；归纳 scaffold S2/S5 先例为通用规则）：**横切关注 helper 必建在横切层 + 注释含 4 字段强制模板**
 

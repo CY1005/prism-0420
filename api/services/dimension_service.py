@@ -30,17 +30,20 @@ M11/M17 batch_create_in_transaction / M03 delete_by_node_id 接受外部 db sess
 from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dao.dimension_dao import DimensionDAO
+from api.dao.node_dao import NodeDAO
 from api.errors.exceptions import (
     ConflictError,
     DimensionDuplicateError,
     DimensionNotFoundError,
+    DimensionTypeDisabledError,
     DimensionTypeNotFoundError,
 )
 from api.models.dimension_record import DimensionRecord
-from api.models.project import DimensionType
+from api.models.project import DimensionType, ProjectDimensionConfig
 from api.services.activity_log_service import write_event
 
 
@@ -54,8 +57,53 @@ class DimensionService:
       - get_for_embedding（M18 baseline-patch 被动接口；A5 A 路径）
     """
 
-    def __init__(self, dao: DimensionDAO | None = None) -> None:
+    def __init__(
+        self,
+        dao: DimensionDAO | None = None,
+        node_dao: NodeDAO | None = None,
+    ) -> None:
         self.dao = dao or DimensionDAO()
+        self.node_dao = node_dao or NodeDAO()
+
+    # ─── 内部校验（design §8 三层防御第三层 + R8-1） ───
+
+    async def _check_node_belongs_to_project(
+        self, db: AsyncSession, node_id: UUID, project_id: UUID
+    ) -> None:
+        """R1-C C3.1 立修：design §8 R8-1 三层防御第三层。
+
+        防御 cross-tenant node_id 攻击：恶意 caller 传他项目的 node_id + 自己 project_id，
+        DB UNIQUE / FK 不会拦（FK 只校验 nodes.id 存在），但 service 层必须显式校验 node 归属。
+        不属于则抛 ``DimensionNotFoundError`` 不暴露 forbidden 信息（design §8 字面）。
+        """
+        node = await self.node_dao.get_by_id(db, node_id, project_id)
+        if node is None:
+            raise DimensionNotFoundError(node_id=str(node_id), reason="node_not_in_project")
+
+    async def _check_dimension_type_enabled(
+        self, db: AsyncSession, project_id: UUID, dimension_type_id: int
+    ) -> None:
+        """R1-C C3.2 立修：design §1/§13 维度类型项目级启用校验。
+
+        语义决策（M04 sprint R-X5 子选项实证 / pdc-existence-strict）：
+          - pdc 不存在 → 视为禁用（design §1 项目维度配置驱动）
+          - pdc.enabled=False → 视为禁用
+          - 两者都抛 ``DimensionTypeDisabledError``
+        替代选项（B 宽松 / C 区分错误码）登记到 audit/m04-pilot-template-validation.md
+        子选项实证段，CY review R1 立修时可调整。
+        """
+        result = await db.execute(
+            select(ProjectDimensionConfig).where(
+                ProjectDimensionConfig.project_id == project_id,
+                ProjectDimensionConfig.dimension_type_id == dimension_type_id,
+            )
+        )
+        pdc = result.scalar_one_or_none()
+        if pdc is None or not pdc.enabled:
+            raise DimensionTypeDisabledError(
+                dimension_type_id=dimension_type_id,
+                reason="not_configured" if pdc is None else "disabled",
+            )
 
     # ─── 读 ───
 
@@ -126,11 +174,17 @@ class DimensionService:
         content: dict[str, Any],
         actor_user_id: UUID,
     ) -> DimensionRecord:
-        """事务: 校验 type 存在 + tenant 一致性 + INSERT + activity_log。"""
+        """事务: 校验 node 归属 + type 存在 + type 启用 + 唯一性 + INSERT + activity_log。"""
+        # R1-C C3.1: node 归属校验（三层防御第三层）
+        await self._check_node_belongs_to_project(db, node_id, project_id)
+
         # type 存在校验
         dt = await db.get(DimensionType, dimension_type_id)
         if dt is None:
             raise DimensionTypeNotFoundError(dimension_type_id=dimension_type_id)
+
+        # R1-C C3.2: type 在 project 内启用校验
+        await self._check_dimension_type_enabled(db, project_id, dimension_type_id)
 
         # 唯一约束保护（DB UNIQUE 兜底，service 层友好提示）
         existing = await self.dao.get_one(db, node_id, project_id, dimension_type_id)
@@ -181,6 +235,9 @@ class DimensionService:
 
         rows=0 → 区分"记录不存在"（404）vs"version 冲突"（409）。
         """
+        # R1-C C3.1: node 归属校验
+        await self._check_node_belongs_to_project(db, node_id, project_id)
+
         existing = await self.dao.get_one(db, node_id, project_id, dimension_type_id)
         if existing is None:
             raise DimensionNotFoundError(node_id=str(node_id), dimension_type_id=dimension_type_id)
@@ -234,6 +291,9 @@ class DimensionService:
 
         记录不存在 → 404（router 转 204 是 caller 决策——本层抛真错）。
         """
+        # R1-C C3.1: node 归属校验
+        await self._check_node_belongs_to_project(db, node_id, project_id)
+
         existing = await self.dao.get_one(db, node_id, project_id, dimension_type_id)
         if existing is None:
             raise DimensionNotFoundError(node_id=str(node_id), dimension_type_id=dimension_type_id)

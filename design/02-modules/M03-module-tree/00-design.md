@@ -330,7 +330,7 @@ AND project_id = :project_id
 | **Component** | `web/src/components/business/module-tree.tsx`<br>`web/src/components/business/tree-node.tsx`<br>`web/src/components/business/breadcrumb.tsx` | 树渲染 / 右键菜单 / 拖拽 UI / 面包屑渲染 |
 | **Server Action** | `web/src/actions/node.ts` | session 校验 / zod 入参校验 / fetch FastAPI |
 | **Router** | `api/routers/node_router.py` | 路由定义 / `Depends(check_project_access)` / Pydantic schema |
-| **Service** | `api/services/node_service.py` | 业务规则 / path 字段计算 / 拖拽排序事务 / 写 activity_log<br>**对外契约（R-X3）**：`batch_create_in_transaction(db: Session, project_id, nodes_data)` 供 M11/M17 调用（接受外部 db session，不自开事务；每条 node 写独立 `create` activity_log 事件 R10-1）<br>`delete_node` 内调 M04/M06 `delete_by_node_id(db, ...)` + M07 `orphan_by_node_id(db, ...)` 共享外部 session<br>**M18 baseline-patch（2026-04-26）新增**：① `get_for_embedding(db, node_id, project_id) -> str \| None` 走 ADR-003 规则 1，返回 `name + "\n" + description` 拼接（None = 已删，worker noop）；② `create_node` / `update_node`（仅当 name/description 改）commit 后尾调 `embedding_service.enqueue(target_type="node", target_id=node.id, project_id, user_id, enqueued_by="incremental")`；③ `delete_node` commit 后异步 `embedding_service.enqueue_delete(target_type="node", target_id=node_id, project_id)`，失败 SilentFailure（非 AppError 子类，不被通用 try/except 捕获）+ 写 embedding_failures EMBEDDING_DELETE_FAILED + cleanup cron 兜底（CY 决策 5） |
+| **Service** | `api/services/node_service.py` | 业务规则 / path 字段计算 / 拖拽排序事务 / 写 activity_log<br>**对外契约（R-X3）**：`batch_create_in_transaction(db: Session, project_id, nodes_data)` 供 M11/M17 调用（接受外部 db session，不自开事务；每条 node 写独立 `create` activity_log 事件 R10-1）<br>`delete_node` 内调 M04/M06 `delete_by_node_id(db, node_id, project_id, actor_user_id)` + M07 `orphan_by_node_id(db, node_id, project_id, actor_user_id)` 共享外部 session（**M04 sprint R-X5 实证升级 / 2026-05-07**：原 3 参签名缺 `actor_user_id` 但 design §10 R10-1 batch3 要求 child service 写 per-record activity_log → write_event 强制 actor_user_id；经 5 步分层分析法定位为 L1 跨模块契约层缺口，升级为 4 参）<br>**M18 baseline-patch（2026-04-26）新增**：① `get_for_embedding(db, node_id, project_id) -> str \| None` 走 ADR-003 规则 1，返回 `name + "\n" + description` 拼接（None = 已删，worker noop）；② `create_node` / `update_node`（仅当 name/description 改）commit 后尾调 `embedding_service.enqueue(target_type="node", target_id=node.id, project_id, user_id, enqueued_by="incremental")`；③ `delete_node` commit 后异步 `embedding_service.enqueue_delete(target_type="node", target_id=node_id, project_id)`，失败 SilentFailure（非 AppError 子类，不被通用 try/except 捕获）+ 写 embedding_failures EMBEDDING_DELETE_FAILED + cleanup cron 兜底（CY 决策 5） |
 | **DAO** | `api/dao/node_dao.py` | SQL 构建 + 强制 tenant 过滤 + 子树查询（path LIKE）|
 | **Model** | `api/models/node.py` | SQLAlchemy 模型（schema 真相源）—— Node / NodeType |
 | **Schema** | `api/schemas/node_schema.py` | Pydantic 请求 / 响应 |
@@ -499,9 +499,9 @@ class BreadcrumbResponse(BaseModel):
 
 **特殊规则**：
 - **删除节点（R-X2）**：`NodeService.delete_node(node_id, project_id)` 执行顺序：
-  1. 调 `M04.DimensionService.delete_by_node_id(db, node_id, project_id)` — 写 M04 activity_log（真删）
-  2. 调 `M06.CompetitorService.delete_by_node_id(db, node_id, project_id)` — 写 M06 activity_log（真删）
-  3. 调 `M07.IssueService.orphan_by_node_id(db, node_id, project_id)` — 写 M07 activity_log（**游离而非删除**：SET node_id=NULL，与 FK ON DELETE SET NULL 语义一致）
+  1. 调 `M04.DimensionService.delete_by_node_id(db, node_id, project_id, actor_user_id)` — 写 M04 activity_log（真删；M04 sprint R-X5 升级 4 参）
+  2. 调 `M06.CompetitorService.delete_by_node_id(db, node_id, project_id, actor_user_id)` — 写 M06 activity_log（真删）
+  3. 调 `M07.IssueService.orphan_by_node_id(db, node_id, project_id, actor_user_id)` — 写 M07 activity_log（**游离而非删除**：SET node_id=NULL，与 FK ON DELETE SET NULL 语义一致）
   4. `DELETE FROM nodes WHERE id = :node_id`（DB CASCADE 兜底删除子树）
   - 理由：DB ON DELETE CASCADE 不触发下游 activity_log；Service 层显式调用才能保证所有变更都有 activity_log 记录（R-X2）
 - **move_subtree（G5）**：`NodeService.move_subtree(node_id, new_parent_id)` 实现见 §3 path 计算策略

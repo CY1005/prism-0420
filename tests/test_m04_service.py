@@ -41,6 +41,28 @@ async def _seed_dim_type(db_session, key: str = "t") -> int:
     return dt.id
 
 
+async def _enable_dim_type(db_session, project_id, dimension_type_id, enabled=True) -> None:
+    """R1-C C3.2 立修配套：建 ProjectDimensionConfig 行（默认 enabled=True）。"""
+    from api.models.project import ProjectDimensionConfig
+
+    db_session.add(
+        ProjectDimensionConfig(
+            project_id=project_id,
+            dimension_type_id=dimension_type_id,
+            enabled=enabled,
+            sort_order=0,
+        )
+    )
+    await db_session.flush()
+
+
+async def _seed_and_enable(db_session, project_id, key: str = "t") -> int:
+    """R1-C 立修后所有 create 测试的标准 setup：seed type + enable for project。"""
+    type_id = await _seed_dim_type(db_session, key)
+    await _enable_dim_type(db_session, project_id, type_id)
+    return type_id
+
+
 @pytest.fixture
 def svc():
     return DimensionService()
@@ -54,7 +76,7 @@ async def test_svc_create_persists_and_writes_activity_log(
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "tc")
+    type_id = await _seed_and_enable(db_session, proj.id, "tc")
 
     captured: list[dict] = []
 
@@ -102,7 +124,7 @@ async def test_svc_create_rejects_unknown_type(db_session, svc, make_project, ma
 async def test_svc_create_rejects_duplicate_node_type(db_session, svc, make_project, make_node):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "tdup")
+    type_id = await _seed_and_enable(db_session, proj.id, "tdup")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -130,7 +152,7 @@ async def test_svc_update_increments_version_and_logs(
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "tu")
+    type_id = await _seed_and_enable(db_session, proj.id, "tu")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -168,7 +190,7 @@ async def test_svc_update_increments_version_and_logs(
 async def test_svc_update_conflict_raises(db_session, svc, make_project, make_node):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "tu_c")
+    type_id = await _seed_and_enable(db_session, proj.id, "tu_c")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -192,7 +214,7 @@ async def test_svc_update_conflict_raises(db_session, svc, make_project, make_no
 async def test_svc_update_not_found_raises(db_session, svc, make_project, make_node):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "tu_nf")
+    type_id = await _seed_and_enable(db_session, proj.id, "tu_nf")
     with pytest.raises(DimensionNotFoundError):
         await svc.update_with_lock(
             db_session,
@@ -215,7 +237,7 @@ async def test_svc_delete_removes_record_and_logs(
 
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "td")
+    type_id = await _seed_and_enable(db_session, proj.id, "td")
     rec = await svc.create(
         db_session,
         project_id=proj.id,
@@ -249,7 +271,7 @@ async def test_svc_delete_removes_record_and_logs(
 async def test_svc_delete_not_found_raises(db_session, svc, make_project, make_node):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "td_nf")
+    type_id = await _seed_and_enable(db_session, proj.id, "td_nf")
     with pytest.raises(DimensionNotFoundError):
         await svc.delete(
             db_session,
@@ -268,8 +290,8 @@ async def test_svc_delete_by_node_id_deletes_all_records(
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    t1 = await _seed_dim_type(db_session, "rx2_1")
-    t2 = await _seed_dim_type(db_session, "rx2_2")
+    t1 = await _seed_and_enable(db_session, proj.id, "rx2_1")
+    t2 = await _seed_and_enable(db_session, proj.id, "rx2_2")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -325,7 +347,7 @@ async def test_svc_delete_by_node_id_full_chain_via_node_service(
     user, proj = await make_project()
     parent = await make_node(proj.id, name="P")
     child = await make_node(proj.id, parent=parent, name="C")
-    type_id = await _seed_dim_type(db_session, "rx2_chain")
+    type_id = await _seed_and_enable(db_session, proj.id, "rx2_chain")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -368,7 +390,7 @@ async def test_svc_delete_by_node_id_propagates_exceptions(
     """
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "rx2_err")
+    type_id = await _seed_and_enable(db_session, proj.id, "rx2_err")
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -396,7 +418,7 @@ async def test_svc_get_for_embedding_concatenates_string_values(
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, "te")
+    type_id = await _seed_and_enable(db_session, proj.id, "te")
     rec = await svc.create(
         db_session,
         project_id=proj.id,
@@ -420,7 +442,7 @@ async def test_svc_get_for_embedding_blocks_cross_tenant(db_session, svc, make_p
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    type_id = await _seed_dim_type(db_session, "te_x")
+    type_id = await _seed_and_enable(db_session, projA.id, "te_x")
     rec = await svc.create(
         db_session,
         project_id=projA.id,
@@ -439,8 +461,8 @@ async def test_svc_get_for_embedding_blocks_cross_tenant(db_session, svc, make_p
 async def test_svc_completion_calculates_rate(db_session, svc, make_project, make_node):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    t1 = await _seed_dim_type(db_session, "cp1")
-    await _seed_dim_type(db_session, "cp2")  # 第二条仅为存在性
+    t1 = await _seed_and_enable(db_session, proj.id, "cp1")
+    await _seed_and_enable(db_session, proj.id, "cp2")  # 第二条仅为存在性
     await svc.create(
         db_session,
         project_id=proj.id,
@@ -465,6 +487,103 @@ async def test_svc_completion_zero_enabled_returns_zero_rate(
     node = await make_node(proj.id, name="A")
     result = await svc.completion(db_session, project_id=proj.id, node_id=node.id, enabled_count=0)
     assert result["completion_rate"] == 0.0
+
+
+# ─────────────── M04-SVC-T7 R1-C C3.1 立修：node 归属校验（C9.2 配套） ───────────────
+
+
+async def test_svc_create_blocks_cross_tenant_node_id(db_session, svc, make_project, make_node):
+    """design §8 R8-1 三层防御第三层：恶意 caller 传他项目的 node_id + 自己 project_id 应拒。"""
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+    type_id = await _seed_and_enable(db_session, projB.id, "x_node")
+
+    with pytest.raises(DimensionNotFoundError):
+        await svc.create(
+            db_session,
+            project_id=projB.id,
+            node_id=nA.id,
+            dimension_type_id=type_id,
+            content={},
+            actor_user_id=user.id,
+        )
+
+
+async def test_svc_update_blocks_cross_tenant_node_id(db_session, svc, make_project, make_node):
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+    type_id = await _seed_and_enable(db_session, projB.id, "x_upd")
+
+    with pytest.raises(DimensionNotFoundError):
+        await svc.update_with_lock(
+            db_session,
+            project_id=projB.id,
+            node_id=nA.id,
+            dimension_type_id=type_id,
+            content={},
+            expected_version=1,
+            actor_user_id=user.id,
+        )
+
+
+async def test_svc_delete_blocks_cross_tenant_node_id(db_session, svc, make_project, make_node):
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+    type_id = await _seed_and_enable(db_session, projB.id, "x_del")
+
+    with pytest.raises(DimensionNotFoundError):
+        await svc.delete(
+            db_session,
+            project_id=projB.id,
+            node_id=nA.id,
+            dimension_type_id=type_id,
+            actor_user_id=user.id,
+        )
+
+
+# ─────────────── M04-SVC-T8 R1-C C3.2 立修：DimensionTypeDisabledError（C9.1 配套） ───────────────
+
+
+async def test_svc_create_rejects_unconfigured_type(db_session, svc, make_project, make_node):
+    """pdc 不存在 → 视为 disabled（pdc-existence-strict 子选项 / sprint R-X5 实证）。"""
+    from api.errors.exceptions import DimensionTypeDisabledError
+
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    type_id = await _seed_dim_type(db_session, "tdis_unconfigured")
+
+    with pytest.raises(DimensionTypeDisabledError):
+        await svc.create(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            dimension_type_id=type_id,
+            content={},
+            actor_user_id=user.id,
+        )
+
+
+async def test_svc_create_rejects_disabled_type(db_session, svc, make_project, make_node):
+    """pdc.enabled=False → DimensionTypeDisabledError。"""
+    from api.errors.exceptions import DimensionTypeDisabledError
+
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    type_id = await _seed_dim_type(db_session, "tdis_off")
+    await _enable_dim_type(db_session, proj.id, type_id, enabled=False)
+
+    with pytest.raises(DimensionTypeDisabledError):
+        await svc.create(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            dimension_type_id=type_id,
+            content={},
+            actor_user_id=user.id,
+        )
 
 
 # helper for monkeypatch lambda return
