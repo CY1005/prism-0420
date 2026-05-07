@@ -244,6 +244,50 @@ async def make_node(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_dim_type(db_session):
+    """工厂 fixture：建 dimension_types 行（可选同时建 ProjectDimensionConfig）。
+
+    M05 sprint 抽出（M04 punt R1-B B1.1，2026-05-07）：消除 4 处 _seed_dim_type
+    内联重复（test_m04_models / test_m04_service / test_m04_dao / test_m04_routers）。
+
+    用法：
+      type_id = await make_dim_type(key="t1")  # 仅建 type
+      type_id = await make_dim_type(key="g1", project_id=pid)  # 建 type + PDC enabled
+      type_id = await make_dim_type(key="off", project_id=pid, enabled=False)  # PDC disabled
+    """
+    from api.models.project import DimensionType, ProjectDimensionConfig
+
+    async def _make(
+        *,
+        key: str = "t",
+        name: str | None = None,
+        project_id=None,
+        enabled: bool = True,
+        sort_order: int = 0,
+        icon: str | None = None,
+    ) -> int:
+        dt_kwargs: dict = {"key": key, "name": name if name is not None else f"DT-{key}"}
+        if icon is not None:
+            dt_kwargs["icon"] = icon
+        dt = DimensionType(**dt_kwargs)
+        db_session.add(dt)
+        await db_session.flush()
+        if project_id is not None:
+            db_session.add(
+                ProjectDimensionConfig(
+                    project_id=project_id,
+                    dimension_type_id=dt.id,
+                    enabled=enabled,
+                    sort_order=sort_order,
+                )
+            )
+            await db_session.flush()
+        return dt.id
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def isolated_db(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """独立连接 + 顶层事务的 session（不走 savepoint）。
 

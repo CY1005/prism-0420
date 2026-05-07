@@ -507,6 +507,24 @@ class VersionSnapshotInvalidError(ValidationError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-07 立 / M02+M03+M04 三数据点稳定后 M05 复用默认范式）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md) L1 总则要求落本 sprint review 计划。
+> M05 sprint 拆 5 子片，按 M02+M03+M04 三数据点稳定结论（详见 `../../audit/m02-pilot-template-validation.md` + `m03-pilot-template-validation.md` + `m04-pilot-template-validation.md`）推 2 次 review：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（VersionService + is_current 互斥事务 + activity_log 落地） | 子片 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| 三数据点稳定：schema 子片 Spec 信号弱必须合并 service 才能审业务；DAO+service 合并跑横向 reuse + 纵向 quality + 动态 efficiency 三维信号最强 |
+| **R2** | 子片 4 完成（6 endpoints + check_project_access + set_current endpoint） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**，三数据点已验证足够，节省 subagent 调用）| endpoint 层是契约漂移 + 静默吞错 + 权限三层 + tenant 隔离 checklist 高命中区，单跑保留独立性 |
+
+**子片 5 不单跑**：纯 tests + ci-lint + R-X5 实证子选项 / PT1-PT3 文档回写，无新业务代码——按触发器例外条款（≥80% SKIP）。
+
+**schema 子片禁单跑**（三数据点稳定结论）：version_record schema 单独 Spec 信号弱，必须合并到 service 后审。
+
+**L3 实证回写承诺**：sprint 结束时把"实际跑下来 R1/R2 命中 vs SKIP 比例" + 闸门 2.5 三栏 reconcile（A 栏 9 项 / B 栏 0 项 / C 栏 5 项；首次 B 栏 0 项实证）+ L1 第四数据点回写到新建文件 `../../audit/m05-pilot-template-validation.md`。
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 1：职责边界 in/out scope 完整（引 US-B1.5 / US-C1.4）

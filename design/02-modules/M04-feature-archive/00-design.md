@@ -271,7 +271,7 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE dimension_records.project_id = ?`（候选 B 冗余字段）；Service 层创建时校验 `node.project_id == 入参 project_id` |
-| **多表事务** | ✅ 必须 | Service 层 `with db.begin():` 包：① upsert dimension_records ② log activity_log；任一失败回滚。**batch3 基线补丁**：被跨模块调用的 `batch_create_in_transaction` / `delete_by_node_id` 接受外部 db session，不自开事务（R-X3，见 §6 对外契约） |
+| **多表事务** | ✅ 必须 | 按入口形态分两类（M05 sprint reconcile 消歧 R1-A A4 punt 2026-05-07）：<br>**(1) 主流程入口**（Router 触发的 create/update/delete/set_current）：Service 层 `with db.begin():` 包 ① upsert dimension_records ② log activity_log；任一失败回滚。<br>**(2) R-X3 对外契约入口**（被跨模块调用的 `batch_create_in_transaction(db: Session, ...)` / `delete_by_node_id(db, node_id, project_id, actor_user_id)` / `batch_get_by_nodes` / `get_latest` / `create_dimension_record` / `get_for_embedding`）：接受外部 db session，**不自开事务**，由调用方 orchestrator（M11/M17/M03 delete_node/M12/M13/M18）控制事务边界。<br>详见 §6 对外契约段。 |
 | **异步处理** | ❌ N/A | M04 全同步——维度编辑是用户即时交互，无后台任务、无 Queue、无流式 |
 | **并发控制** | ✅ 乐观锁 | `dimension_records.version` 字段；UPDATE 带 `WHERE version=expected`；rows=0 → `ConflictError`（前端 toast"有人刚改过，请刷新重试"） |
 

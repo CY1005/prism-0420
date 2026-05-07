@@ -10,26 +10,18 @@ from sqlalchemy.exc import IntegrityError
 
 from api.models.dimension_record import DimensionRecord
 
-# ─────────────── helpers ───────────────
-
-
-async def _seed_dim_type(db_session, key: str = "tech_stack", name: str = "技术栈") -> int:
-    """建一条 dimension_types 行并返回 id（M02 seed 默认 'default' 之外）。"""
-    from api.models.project import DimensionType
-
-    dt = DimensionType(key=key, name=name)
-    db_session.add(dt)
-    await db_session.flush()
-    return dt.id
+# helpers: make_dim_type fixture in conftest (M05 sprint 抽出，M04 punt R1-B B1.1)
 
 
 # ─────────────── M04-MODEL-T1 持久化基础 ───────────────
 
 
-async def test_dim_record_persists_with_defaults(db_session, make_project, make_node):
+async def test_dim_record_persists_with_defaults(
+    db_session, make_project, make_node, make_dim_type
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, key="t1")
+    type_id = await make_dim_type(key="t1")
 
     rec = DimensionRecord(
         node_id=node.id,
@@ -52,10 +44,12 @@ async def test_dim_record_persists_with_defaults(db_session, make_project, make_
 # ─────────────── M04-MODEL-T2 唯一约束 (node_id, dimension_type_id) ───────────────
 
 
-async def test_dim_record_unique_node_type_violates(db_session, make_project, make_node):
+async def test_dim_record_unique_node_type_violates(
+    db_session, make_project, make_node, make_dim_type
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, key="t_uq")
+    type_id = await make_dim_type(key="t_uq")
 
     db_session.add(
         DimensionRecord(
@@ -86,13 +80,15 @@ async def test_dim_record_unique_node_type_violates(db_session, make_project, ma
 # ─────────────── M04-MODEL-T3 cascade on node delete ───────────────
 
 
-async def test_dim_record_cascades_when_node_deleted(db_session, make_project, make_node):
+async def test_dim_record_cascades_when_node_deleted(
+    db_session, make_project, make_node, make_dim_type
+):
     """node FK ondelete=CASCADE：删除 node 应级联删 dimension_records。"""
     from sqlalchemy import select
 
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, key="t_cas")
+    type_id = await make_dim_type(key="t_cas")
 
     rec = DimensionRecord(
         node_id=node.id,
@@ -116,13 +112,15 @@ async def test_dim_record_cascades_when_node_deleted(db_session, make_project, m
 # ─────────────── M04-MODEL-T4 cascade on project delete ───────────────
 
 
-async def test_dim_record_cascades_when_project_deleted(db_session, make_project, make_node):
+async def test_dim_record_cascades_when_project_deleted(
+    db_session, make_project, make_node, make_dim_type
+):
     """project FK ondelete=CASCADE：删除 project 应级联删 dimension_records。"""
     from sqlalchemy import select
 
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id = await _seed_dim_type(db_session, key="t_cas_p")
+    type_id = await make_dim_type(key="t_cas_p")
 
     rec = DimensionRecord(
         node_id=node.id,
@@ -146,12 +144,14 @@ async def test_dim_record_cascades_when_project_deleted(db_session, make_project
 # ─────────────── M04-MODEL-T5 Node back_populates 双向链 ───────────────
 
 
-async def test_node_dimension_records_relationship_loads(db_session, make_project, make_node):
+async def test_node_dimension_records_relationship_loads(
+    db_session, make_project, make_node, make_dim_type
+):
     """design §3 ER：Node ⇄ DimensionRecord 双向 relationship。"""
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    type_id_1 = await _seed_dim_type(db_session, key="b1")
-    type_id_2 = await _seed_dim_type(db_session, key="b2")
+    type_id_1 = await make_dim_type(key="b1")
+    type_id_2 = await make_dim_type(key="b2")
 
     db_session.add_all(
         [
