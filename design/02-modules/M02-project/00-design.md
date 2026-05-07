@@ -898,6 +898,23 @@ class ProjectArchivedError(AppError):
 
 详见独立文件：[`tests.md`](./tests.md)
 
+### 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-07 立）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md#闸门-34--review-触发粒度规则l1-总则2026-05-07-立) L1 总则要求落本 sprint review 计划。
+> M02 sprint 拆 5 子片，按"子片性质 × checklist 命中率"推 2 次 review：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（service + AES helper 落地） | 子片 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维 | 子片 1 (schema) 单跑 ≥80% SKIP（Prism 特有 22 条仅 Migration 模式 G #24-26 + 架构 4 维 #27-30 命中，6/22≈27%）；子片 2 (DAO) 纯 SQL 翻译 + tenant 过滤命中 1-2 条；service 子片业务逻辑出现后一次性合并跑信号最强 |
+| **R2** | 子片 4 完成（11 endpoints + check_project_access） | 子片 4 单跑 | spec + quality + simplify 三维 | endpoint 层是 Prism 契约漂移 (维度 2 #17-20) + 静默吞错 (#21-23) + 权限三层 + tenant 隔离 (#4-5) 等 checklist 高命中区（≥10/22 条命中），单跑保留独立性 |
+
+**子片 5 不单跑**：纯 tests + ci-lint + 4 实证子选项 / PT1-PT3 文档回写，无新业务代码——按触发器例外条款（≥80% SKIP）。
+
+**承接 bypass log #1 配套承诺**：R1 + R2 共 2 次完整三 Agent + simplify，满足 sprint ≥1 次硬承诺。
+
+**L3 实证回写承诺**：sprint 结束时把"实际跑下来 R1/R2 命中 vs SKIP 比例"回写到 `../../audit/m02-pilot-template-validation.md` 新增章节，作为 L3 数据驱动 M03/M04 sprint review 计划——若 R1 合并方案 schema 子片实际 0 finding，下次 M03 schema 子片可同款合并；若 R1 在 schema 部分捞出非 SKIP finding，撤回合并策略改为「schema 子片单跑」。
+
+
 主文档大纲：
 - **golden path**：创建项目 / 邀请成员事务 / 列出项目 / 更新配置 / 归档 / 角色变更
 - **边界**：项目名空 / 超长 / hierarchy_labels 格式错误 / AI Key 加密

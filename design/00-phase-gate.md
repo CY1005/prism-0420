@@ -152,6 +152,44 @@ S5）。M17 启动前必须 ✅：
 
 ---
 
+### 闸门 3.4 — Review 触发粒度规则（L1 总则，2026-05-07 立）
+
+> **背景**：bypass log #1 配套承诺「M02 sprint 必须真跑三 Agent + simplify」是 **sprint 级**
+> 承诺；simplify-checklist「≥50 行 OR ≥2 文件」是 **文件规模** 触发器；CY M02 启动 prompt
+> 红线「每完成一类 endpoint 跑一次」是 **endpoint 级** 触发——三套口径粒度不同，
+> M02 子片 1（纯 schema/无业务逻辑）首次撞上此缺口。
+>
+> 按 [`audit/time-dimension-blindspot-2026-05-07.md`](./audit/time-dimension-blindspot-2026-05-07.md)
+> §9 教训 4 L1/L2/L3 节奏 + §10 元教训 1（类 1 实证驱动）补 L1 总则缺位。
+
+**L1 总则**：
+
+1. **sprint 必跑 ≥1 次**：每个业务模块 sprint 内必须至少跑 1 次完整 spec-reviewer +
+   code-quality-reviewer + simplify-checklist 三维（满足 bypass log #1 配套承诺，
+   不允许任一模块 sprint 0 次跑）
+2. **触发器**：≥50 行 OR ≥2 文件改动触发（来自
+   [`simplify-checklist.md`](../../ai-quality-engineering/10-项目/Prism/01-实现/simplify-checklist.md) 「何时跑」）
+3. **触发例外（可合并到下游子片）**：当本子片 ≥80% checklist 条目天然 SKIP
+   （如纯 schema/migration 子片对 simplify Prism 特有 22 条中 frontend/Server Action/
+   契约漂移类几乎全不命中），可合并到下游业务子片（service/router）一次性跑——
+   合并必须在 L2 sprint review 计划段提前声明，sprint 中临时合并 = bypass log 第 2 条
+
+**L2 sprint 级声明**：每业务模块 design 必有「Sprint Review 拆分计划」段
+（位置：§14.5 或末尾），声明本 sprint「拆 N 次 review，每次覆盖哪些子片，
+合并子片的 SKIP 比例理由」。**闸门 2.5 reconcile pass 必须验证该段存在**
+（缺失 → reconcile pass 不通过）。
+
+**L3 子选项（R-X5 风格留空待实证）**：
+- "schema/migration 子片是否单独跑" — sprint 实证后回写
+  `audit/m{XX}-pilot-template-validation.md` 加新章节
+- "合并粒度边界（最多合并几个子片）"
+- "已稳定基线扩展型 sprint 是否触发例外（如纯 baseline-patch 回扫）"
+
+**违反**：跳过 L2 声明 / sprint 0 次跑 / 临时合并未提前声明 → 写
+`design/99-comparison/phase-gate-bypass-log.md` 第 2 行 → 触发对闸门规则本身的 review。
+
+---
+
 ## 闸门 4：后端 → 前端继承
 
 启动 **Phase 2.2 前端继承 Prism** 之前：
