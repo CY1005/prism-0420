@@ -45,6 +45,8 @@ _ROLE_RANK = {
     MemberRole.OWNER.value: 3,
 }
 
+_VALID_ROLES = frozenset(_ROLE_RANK.keys())
+
 
 @dataclass(frozen=True)
 class ProjectAccess:
@@ -58,8 +60,15 @@ class ProjectAccess:
 def check_project_access(
     role: str = "viewer",
 ) -> Callable[..., Coroutine[Any, Any, ProjectAccess]]:
-    """FastAPI Depends 工厂,生成校验闭包."""
-    required_rank = _ROLE_RANK.get(role, 1)
+    """FastAPI Depends 工厂,生成校验闭包.
+
+    R2 P1 修: 未知 role (typo) 立刻 raise — 避免静默退化为 viewer 检查.
+    """
+    if role not in _VALID_ROLES:
+        raise ValueError(
+            f"check_project_access: unknown role {role!r}; must be one of {sorted(_VALID_ROLES)}"
+        )
+    required_rank = _ROLE_RANK[role]
 
     async def _dep(
         project_id: UUID = Path(..., alias="project_id"),

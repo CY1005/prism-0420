@@ -59,8 +59,32 @@ def _project_response(proj) -> ProjectResponse:
     return ProjectResponse.model_validate(proj, from_attributes=True)
 
 
-def _member_response(m) -> MemberResponse:
-    return MemberResponse.model_validate(m, from_attributes=True)
+def _member_response(m, user) -> MemberResponse:
+    """R2 P1 修: design §7 含 user_name/user_email join 字段."""
+    return MemberResponse(
+        id=m.id,
+        project_id=m.project_id,
+        user_id=m.user_id,
+        user_name=user.name,
+        user_email=user.email,
+        role=m.role,
+        invited_by=m.invited_by,
+        joined_at=m.joined_at,
+        created_at=m.created_at,
+    )
+
+
+def _dim_config_response(cfg, dim_type) -> DimensionConfigResponse:
+    """R2 P1 修: design §7 含 dimension_type_key/name join 字段."""
+    return DimensionConfigResponse(
+        id=cfg.id,
+        project_id=cfg.project_id,
+        dimension_type_id=cfg.dimension_type_id,
+        dimension_type_key=dim_type.key,
+        dimension_type_name=dim_type.name,
+        enabled=cfg.enabled,
+        sort_order=cfg.sort_order,
+    )
 
 
 # ─── Project CRUD ────────────────────────────────────
@@ -159,9 +183,10 @@ async def list_members(
     access: ProjectAccess = Depends(check_project_access(role="viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> MemberListResponse:
+    """R2 P1 修: 一次 join users 拿 user_name + user_email."""
     msvc = MemberService()
-    rows = await msvc.list_members(db, project_id=access.project.id, actor_user_id=access.user.id)
-    return MemberListResponse(items=[_member_response(m) for m in rows])
+    rows = await msvc.members.list_by_project_with_user(db, access.project.id)
+    return MemberListResponse(items=[_member_response(m, u) for m, u in rows])
 
 
 @router.post(
@@ -181,7 +206,8 @@ async def invite_member(
         role=payload.role,
     )
     await db.commit()
-    return _member_response(m)
+    invited_user = await msvc.users.get_by_id(db, m.user_id)
+    return _member_response(m, invited_user)
 
 
 @router.put("/{project_id}/members/{user_id}", response_model=MemberResponse)
@@ -200,7 +226,8 @@ async def update_member_role(
         new_role=payload.role,
     )
     await db.commit()
-    return _member_response(m)
+    target_user = await msvc.users.get_by_id(db, m.user_id)
+    return _member_response(m, target_user)
 
 
 @router.delete("/{project_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -227,18 +254,10 @@ async def list_dimension_configs(
     access: ProjectAccess = Depends(check_project_access(role="viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> DimensionConfigListResponse:
+    """R2 P1 修: 一次 join dimension_types 拿 key/name (design §7 行 668-669)."""
     svc = ProjectService()
-    rows = await svc.dim_configs.list_by_project(db, access.project.id)
-    items = [
-        DimensionConfigResponse(
-            id=r.id,
-            project_id=r.project_id,
-            dimension_type_id=r.dimension_type_id,
-            enabled=r.enabled,
-            sort_order=r.sort_order,
-        )
-        for r in rows
-    ]
+    rows = await svc.dim_configs.list_by_project_with_type(db, access.project.id)
+    items = [_dim_config_response(cfg, dt) for cfg, dt in rows]
     return DimensionConfigListResponse(items=items)
 
 
@@ -248,20 +267,21 @@ async def batch_update_dimension_configs(
     access: ProjectAccess = Depends(check_project_access(role="owner")),
     db: AsyncSession = Depends(get_db),
 ) -> DimensionConfigListResponse:
-    """R10-1 batch3 基线补丁: 每个 config 写独立 activity_log 事件 (R1-A P0→R2 修)."""
+    """R10-1 batch3 + R2 P1 修: 每个 config 独立 activity_log + dim_type 一次 IN 校验 (代替 N+1)."""
     svc = ProjectService()
     pid = access.project.id
     actor = access.user.id
 
-    # 简化策略: 全删后插入 (上层 PUT 替换语义); 每个 INSERT 独立 audit 事件
     existing = await svc.dim_configs.list_by_project(db, pid)
     existing_map = {r.dimension_type_id: r for r in existing}
     incoming_ids = {item.dimension_type_id for item in payload.configs}
 
-    # 校验所有 dimension_type_id 都存在
+    # R2 P1 修: 一次 IN 查校验所有 dimension_type_id (代替 N+1)
+    type_map = await svc.dim_types.list_by_ids(
+        db, [item.dimension_type_id for item in payload.configs]
+    )
     for item in payload.configs:
-        dt = await svc.dim_types.get_by_id(db, item.dimension_type_id)
-        if dt is None:
+        if item.dimension_type_id not in type_map:
             raise DimensionConfigInvalidError(
                 dimension_type_id=item.dimension_type_id, reason="unknown_dimension_type"
             )
@@ -324,16 +344,10 @@ async def batch_update_dimension_configs(
                 )
             written.append(prev)
 
-    # 删除缺失的 (R10-1: 删除也写独立事件; 简化为 update_dimension_config disabled 语义可换)
+    # R2 P1 修: delete 走 DAO (router 不直调 db.execute, design §6 分层禁令)
     for prev_id, prev in existing_map.items():
         if prev_id not in incoming_ids:
-            from sqlalchemy import delete as _del
-
-            from api.models.project import ProjectDimensionConfig
-
-            await db.execute(
-                _del(ProjectDimensionConfig).where(ProjectDimensionConfig.id == prev.id)
-            )
+            await svc.dim_configs.delete_one(db, prev.id)
             await write_event(
                 db=db,
                 actor_user_id=actor,
@@ -355,14 +369,5 @@ async def batch_update_dimension_configs(
 
     await db.commit()
 
-    items = [
-        DimensionConfigResponse(
-            id=r.id,
-            project_id=r.project_id,
-            dimension_type_id=r.dimension_type_id,
-            enabled=r.enabled,
-            sort_order=r.sort_order,
-        )
-        for r in written
-    ]
+    items = [_dim_config_response(cfg, type_map[cfg.dimension_type_id]) for cfg in written]
     return DimensionConfigListResponse(items=items)

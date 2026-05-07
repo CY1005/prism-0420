@@ -25,6 +25,7 @@ from api.dao.project_dao import (
     ProjectDimensionConfigDAO,
     ProjectMemberDAO,
 )
+from api.dao.user_dao import UserDAO
 from api.errors.exceptions import (
     AiKeyEncryptFailedError,
     MemberAlreadyExistsError,
@@ -35,6 +36,7 @@ from api.errors.exceptions import (
     ProjectArchivedError,
     ProjectNameDuplicateError,
     ProjectNotFoundError,
+    UserNotFoundError,
 )
 from api.models.project import (
     MemberRole,
@@ -248,6 +250,7 @@ class ProjectService:
 class MemberService:
     def __init__(self, project_service: ProjectService | None = None) -> None:
         self.members = ProjectMemberDAO()
+        self.users = UserDAO()
         # R1 P2-A: 共享 ProjectService 实例 (避免重复构造 4 个 DAO)
         self.projects_svc = project_service or ProjectService()
 
@@ -268,6 +271,10 @@ class MemberService:
         role: MemberRole | str = MemberRole.VIEWER,
     ) -> ProjectMember:
         await self.projects_svc.require_owner(db, project_id, actor_user_id)
+        # R2 P1 修: 预校验 user 存在 (否则 FK IntegrityError 会被吞成 MEMBER_ALREADY_EXISTS)
+        invited_user = await self.users.get_by_id(db, invited_user_id)
+        if invited_user is None:
+            raise UserNotFoundError(user_id=str(invited_user_id))
         role_value = role.value if isinstance(role, MemberRole) else role
         try:
             m = await self.members.create(

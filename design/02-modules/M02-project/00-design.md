@@ -378,6 +378,7 @@ class DimensionType(Base):
 - **理由**：M02 sprint 期写 `team_id` UUID nullable 列但**不启用 FK constraint**；M20 sprint 期 `ALTER ADD CONSTRAINT FK ondelete=RESTRICT`
 - **alembic 步骤数**：M02 sprint 1 步（CREATE TABLE projects 含 team_id UUID nullable 无 FK）+ M20 sprint 1 步（ALTER ADD CONSTRAINT）
 - **触发回写**：M20 sprint 启动时本段更新为"FK 已启用 + commit hash"
+- **🟢 M02 sprint 实证落地**（2026-05-07，commits c6b97d6 子片1 + a42dc81 子片2 + 10f2f54 子片3 + c9b0618 子片4）：schema 已落 (UUID nullable 无 FK)；C 路径子选项实证决=**DAO 完全允许** (登记 `design/audit/m02-pilot-template-validation.md` R-X5 子选项 1)
 - **C 路径必登记 — 测试盲区**：M02-M19 sprint 期下游模块（M03/M04/M06/M07 等）测不了"team_id 非空"路径（团队 project 上的功能），仅能测 `team_id=None` 的个人 project；M20 sprint 期补回归
 - **C 路径必登记 — M20 回写 checklist**：① data migration 清理（若 M02-M20 期间有不合法 team_id 写入，先 SET NULL 或修正）② ALTER ADD CONSTRAINT FK ③ 团队 project 回归测试（覆盖下游 M03-M19 跨 team 路径）④ 回写本段 status="已落地"
 - **🟡 子选项待 M02 sprint 实证**：中间态期间 `team_id` 写入策略（API 不暴露 / Schema 暴露但 service 拒绝 / DAO 完全允许）—— sprint 写代码时按 R-X5 子选项立规红线 case-by-case，登记到 `design/audit/m02-pilot-template-validation.md`
@@ -389,6 +390,7 @@ class DimensionType(Base):
 - **理由**：M02 sprint 期 schema 加 2 列 + 2 check + ProjectService.get_search_config 方法实装；M02-M18 期 ~3-4 周无 caller 但功能完备
 - **alembic 步骤数**：1 步成形（M02 CREATE TABLE 含 2 列 + check）
 - **触发回写**：M18 sprint 启动时本段更新为"M18 SearchService.hybrid_search 已接入 + commit hash"
+- **🟢 M02 sprint 实证落地**（2026-05-07，commit 10f2f54 子片3）：schema 加 rrf_k+similarity_threshold + 2 CHECK；ProjectService.get_search_config 实装 + test 覆盖 default 路径；A 路径子选项实证决=**M02 own raw types** (SearchConfig dataclass 在 `api/schemas/project_schema.py`)
 - **A 路径必声明**：unit test 仅覆盖 `get_search_config` default 路径返回（rrf_k=60 / similarity_threshold=0.3）；生产路径（M18 hybrid_search 调）回归测试推迟到 M18 sprint 期补
 - **🟡 子选项待 M02 sprint 实证**：`SearchConfig` 类型定义放哪（M02 own raw types / 共享 horizontal `api/schemas/shared.py`）—— 受分层依赖方向约束（M02 不能 import M18），sprint 写代码时实证
 
@@ -403,6 +405,7 @@ A3 拆 2 项独立处理：
 - **理由**：M02 sprint 期 ErrorCode 入 codes.py + AppError 子类入 exceptions.py；R13-1 守护 22→23 parity 通过
 - **alembic 步骤数**：0
 - **触发回写**：M20 sprint move-team endpoint 实装时建 raise caller + 加 raise 测试，回写本段
+- **🟢 M02 sprint 实证落地**（2026-05-07，commit 10f2f54 子片3）：ProjectArchivedError 子类入 exceptions.py + ErrorCode PROJECT_ARCHIVED 入 codes.py；R13-1 22+12=34 parity 通过；R13-1 子选项实证决=**code 注释** (ProjectArchivedError docstring 标记未实装期, 不入 ci-lint.sh 附加规则)
 - **A 路径必声明**：M02 sprint 期 `ProjectArchivedError` 无 raise caller；ci-lint.sh R13-1 仅查 parity 不查 caller，不阻塞但留**未实装期 ErrorCode**——本子段即声明位置
 - **🟡 子选项待 M02 sprint 实证**：标记位置（code 注释 / design §13 表加列 / ci-lint.sh 加附加规则）—— sprint 写代码时实证
 
@@ -413,6 +416,7 @@ A3 拆 2 项独立处理：
 - **理由**：M02 sprint 期 router 不实装 move-team；scaffold 留 TODO 注释（S2 4 字段强制模板）；M20 sprint 期建路由 + 接通 `ProjectArchivedError` raise
 - **alembic 步骤数**：0
 - **触发回写**：M20 sprint move-team router 实装时回写本段 + design §7 endpoint 表对应行标"已落地 + commit hash"
+- **🟢 M02 sprint 实证落地**（2026-05-07，commit c9b0618 子片4）：scaffold TODO 注释 4 字段已落 `api/routers/project_router.py:16-23`；test `test_b_path_move_team_endpoint_not_registered` 实证 FastAPI 返 404；B 路径子选项实证决=**不实装 router → OpenAPI 不含**
 - **B 路径必动作 — TODO 注释 4 字段**：
 
   ```python
@@ -458,7 +462,7 @@ A3 拆 2 项独立处理：
   - 密钥读 env `ENCRYPTION_KEY`（settings.py 加 1 字段）
   - 单元测试覆盖：encrypt/decrypt 往返 / 错密钥 raise / 错 ciphertext raise
 - **回写动作**：05-security-baseline §4 数据加密表加最小段（"AES-256-GCM helper 在 `api/auth/crypto.py`，密钥从 env `ENCRYPTION_KEY` 读"~5-10 行）；§8.0 必补清单保留"密钥轮转 / HSM / 多密钥 fallback"
-- **回写 commit hash**：_M02 sprint 实装时填_
+- **回写 commit hash**：commit `10f2f54` 子片3 (api/auth/crypto.py + 14 test PASS + design 05-security-baseline §4.1 最小段已回写)
 
 ---
 

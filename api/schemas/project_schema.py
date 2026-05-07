@@ -87,9 +87,12 @@ class MemberResponse(BaseModel):
     id: UUID
     project_id: UUID
     user_id: UUID
+    user_name: str  # join from users (R2 P1: design §7 行 642)
+    user_email: str  # join from users (R2 P1: design §7 行 643)
     role: MemberRoleEnum
     invited_by: UUID | None
     joined_at: datetime
+    created_at: datetime  # R2 P1: design §7 行 647
 
 
 class MemberListResponse(BaseModel):
@@ -113,6 +116,8 @@ class DimensionConfigResponse(BaseModel):
     id: int
     project_id: UUID
     dimension_type_id: int
+    dimension_type_key: str  # join from dimension_types (R2 P1: design §7 行 668)
+    dimension_type_name: str  # join from dimension_types (R2 P1: design §7 行 669)
     enabled: bool
     sort_order: int
 

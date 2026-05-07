@@ -23,6 +23,7 @@ from api.models.project import (
     ProjectMember,
     ProjectStatus,
 )
+from api.models.user import User
 
 
 class ProjectDAO:
@@ -77,6 +78,18 @@ class ProjectMemberDAO:
         )
         return result.scalars().all()
 
+    async def list_by_project_with_user(
+        self, db: AsyncSession, project_id: UUID
+    ) -> list[tuple[ProjectMember, User]]:
+        """R2 P1: design §7 MemberResponse 含 user_name/user_email — 一次 join 查."""
+        result = await db.execute(
+            select(ProjectMember, User)
+            .join(User, ProjectMember.user_id == User.id)
+            .where(ProjectMember.project_id == project_id)
+            .order_by(ProjectMember.created_at.asc())
+        )
+        return list(result.all())
+
     async def get_member(
         self, db: AsyncSession, project_id: UUID, user_id: UUID
     ) -> ProjectMember | None:
@@ -128,6 +141,26 @@ class ProjectDimensionConfigDAO:
         )
         return result.scalars().all()
 
+    async def list_by_project_with_type(
+        self, db: AsyncSession, project_id: UUID
+    ) -> list[tuple[ProjectDimensionConfig, DimensionType]]:
+        """R2 P1: design §7 DimensionConfigResponse 含 dimension_type_key/name — 一次 join 查."""
+        result = await db.execute(
+            select(ProjectDimensionConfig, DimensionType)
+            .join(DimensionType, ProjectDimensionConfig.dimension_type_id == DimensionType.id)
+            .where(ProjectDimensionConfig.project_id == project_id)
+            .order_by(ProjectDimensionConfig.sort_order.asc())
+        )
+        return list(result.all())
+
+    async def delete_one(self, db: AsyncSession, config_id: int) -> int:
+        """R2 P1 修: router 不直调 db.execute(delete), 走 DAO."""
+        result = await db.execute(
+            delete(ProjectDimensionConfig).where(ProjectDimensionConfig.id == config_id)
+        )
+        await db.flush()
+        return result.rowcount or 0
+
     async def create(
         self,
         db: AsyncSession,
@@ -156,6 +189,13 @@ class DimensionTypeDAO:
     async def get_by_id(self, db: AsyncSession, type_id: int) -> DimensionType | None:
         result = await db.execute(select(DimensionType).where(DimensionType.id == type_id))
         return result.scalar_one_or_none()
+
+    async def list_by_ids(self, db: AsyncSession, type_ids: list[int]) -> dict[int, DimensionType]:
+        """R2 P1 修: batch dim_type 校验 N+1 → 一次 IN 查."""
+        if not type_ids:
+            return {}
+        result = await db.execute(select(DimensionType).where(DimensionType.id.in_(type_ids)))
+        return {dt.id: dt for dt in result.scalars().all()}
 
 
 # ─────────────── M02 concrete TenantContext impl ───────────────
