@@ -51,11 +51,19 @@ def _record_response(rec: DimensionRecord) -> DimensionResponse:
 
 
 async def _list_enabled_types(db: AsyncSession, project_id: UUID) -> list[DimensionTypeRef]:
-    """档案页装配：拉取项目启用的维度类型 + 排序。"""
+    """档案页装配：拉取项目启用的维度类型 + 排序。
+
+    R2 立修 B6.x：strict 仅返回 ``enabled=True`` 的行（与 design §7 出参
+    "项目启用的维度（含未填的）" 字面一致 + 字段名 enabled_dimension_types 语义自洽）。
+    禁用配置由 M02 项目维度配置 endpoint own，不通过本 endpoint 暴露。
+    """
     stmt = (
         select(ProjectDimensionConfig, DimensionType)
         .join(DimensionType, DimensionType.id == ProjectDimensionConfig.dimension_type_id)
-        .where(ProjectDimensionConfig.project_id == project_id)
+        .where(
+            ProjectDimensionConfig.project_id == project_id,
+            ProjectDimensionConfig.enabled.is_(True),
+        )
         .order_by(ProjectDimensionConfig.sort_order.asc(), DimensionType.id.asc())
     )
     rows = (await db.execute(stmt)).all()
@@ -115,10 +123,21 @@ async def completion(
     access: ProjectAccess = Depends(check_project_access(role="viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> CompletionResponse:
-    """完善度：filled / enabled rate。"""
+    """完善度：filled / enabled rate。
+
+    R2 P2 punt B2/B4 修：用 SELECT COUNT(*) 单查替代 JOIN+全字段拉取（B6.x 立修后
+    _list_enabled_types 已 enabled 过滤；但 completion 仅需 count，免装配 Pydantic）。
+    """
+    from sqlalchemy import func
+
+    count_result = await db.execute(
+        select(func.count(ProjectDimensionConfig.id)).where(
+            ProjectDimensionConfig.project_id == access.project.id,
+            ProjectDimensionConfig.enabled.is_(True),
+        )
+    )
+    enabled_count = int(count_result.scalar_one() or 0)
     svc = DimensionService()
-    types = await _list_enabled_types(db, access.project.id)
-    enabled_count = sum(1 for t in types if t.enabled)
     result = await svc.completion(
         db,
         project_id=access.project.id,

@@ -374,3 +374,28 @@ async def test_get_one_invalid_uuid_returns_422(auth_client, make_user):
         f"/api/projects/{pid}/nodes/not-a-uuid/dimensions/1", headers=_bearer(user.id)
     )
     assert r.status_code == 422
+
+
+# ─────────────── R2 立修配套：B6.x enabled_dimension_types 含义自洽 ───────────────
+
+
+async def test_list_dimensions_excludes_disabled_types(auth_client, make_user, seed_dim_type):
+    """R2 P1 立修 B6.x：``enabled_dimension_types`` 字段必须仅含 enabled=True 的 pdc。
+
+    禁用配置不应通过 M04 list endpoint 暴露（design §7 字面 + 字段名语义自洽）。
+    """
+    user = await make_user(email="m04-listoff@example.com")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="A")
+    await seed_dim_type(project_id=pid, key="enabled_t")
+    await seed_dim_type(project_id=pid, key="disabled_t", enabled=False)
+
+    r = await auth_client.get(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions", headers=_bearer(user.id)
+    )
+    assert r.status_code == 200
+    keys = [t["key"] for t in r.json()["enabled_dimension_types"]]
+    assert "enabled_t" in keys
+    assert "disabled_t" not in keys, "禁用的 pdc 配置不应出现在 enabled_dimension_types 中"
+    # 同时验证返回的 type 全部 enabled=True
+    assert all(t["enabled"] is True for t in r.json()["enabled_dimension_types"])
