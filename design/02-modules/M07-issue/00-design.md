@@ -222,6 +222,7 @@ stateDiagram-v2
     [*] --> open : 创建 issue
     open --> in_progress : 认领（assign + 开始）
     open --> resolved : 直接解决（跳过认领）
+    in_progress --> open : 取消认领（释放回 issue 池）
     in_progress --> resolved : 标记解决
     resolved --> closed : 最终关闭
     closed --> [*]
@@ -233,6 +234,7 @@ stateDiagram-v2
 |---------|---------|---------|--------|
 | `open` | `in_progress` | 认领（assign + 开始）| `assigned_to` 必须填写；activity_log `status_change` |
 | `open` | `resolved` | 直接解决（跳过认领）| 写 `resolved_at`；activity_log `status_change` |
+| `in_progress` | `open` | 取消认领（释放回 issue 池；P5 audit F-3）| `assigned_to` 重置为 NULL；activity_log `issue.unassigned`（target_type=issue, metadata={previous_assignee_id, reason?}）；权限：仅 assignee 本人或 admin |
 | `in_progress` | `resolved` | 标记解决 | 写 `resolved_at`；activity_log `status_change` |
 | `resolved` | `closed` | 最终关闭 | activity_log `status_change` |
 

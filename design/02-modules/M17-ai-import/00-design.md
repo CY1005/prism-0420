@@ -383,6 +383,33 @@ stateDiagram-v2
 | 任意 → `pending`（pending 仅在创建时）| Service 层不提供 reset 接口 |
 | `failed → any`（failed 是终态，重试需新建 task）| Service 层抛 `ImportTaskFinalizedError` |
 
+### `importing` 阶段事务粒度（P5 audit F-5）
+
+**决策**：importing 阶段 = **整任务 single transaction**（不是 per-step tx）。
+
+```python
+# api/services/import_service.py（示意）
+async def execute_importing(self, task_id: UUID):
+    with self.db.begin():                                  # ★ 单事务包整个 importing
+        node_service.batch_create_in_transaction(self.db, ...)        # M03 共享 db session
+        dimension_service.batch_create_in_transaction(self.db, ...)  # M04 同上
+        competitor_service.batch_create_in_transaction(self.db, ...) # M06 同上
+        issue_service.batch_create_in_transaction(self.db, ...)      # M07 同上
+        self._mark_task_completed(task_id)
+        self._write_activity_log(task_id, "import.completed")
+        # commit 在 with 块退出时一起触发；任一步异常 → 全量 ROLLBACK
+```
+
+**`importing → cancelled` 副作用**：
+- 用户在 importing 中点取消 → service 层 raise CancelledError 退出 with 块 → SQLAlchemy 自动 ROLLBACK 所有未 commit 的 INSERT
+- **无需级联 DELETE**——因为整个 importing 事务是 atomic，要么全 commit 要么全无
+- task 状态 update 为 cancelled 走独立小事务（在 ROLLBACK 主事务后）
+
+**为什么选单事务**（与 R-X1 自洽）：
+- R-X1 "M17 不直 INSERT M03/M04/M06/M07 表"——共享 db session 是该规约的实现路径
+- per-step tx 会让 cancelled 时面对"step 2 已 commit、step 3 失败"的中间态，需要补级联 DELETE 路径，与 R-X1 冲突（谁负责删？M17 不写就要回到 M17 直 DELETE）
+- import 任务规模 = 单文件解析后的 N 条业务行，不会大到锁 WAL 失控（典型 N < 10000，单事务可控）；若未来出现超大 import，触发器 = 拆 import 端点为多个子任务（每个子任务自己是单事务）而非破坏单事务范式
+
 ---
 
 ## 5. 多人架构 4 维必答 ★ pilot 异步覆盖

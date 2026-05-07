@@ -380,6 +380,19 @@ stateDiagram-v2
 
 **决策（G2 + G7-M02-R1-02）**：归档为不可逆终态（archived = 软删除不可逆），不支持恢复。
 
+**归档不级联子模块状态**（P5 audit F-2 显式声明）：M02 archive 仅改 `projects.status='archived'`，**不级联**任何子模块的状态机：
+
+- M07 `issues.status` 保持原值（open / in_progress / resolved / closed 都不变）——归档项目下的未关闭 issue 仍是 open
+- M05 `version_records.is_current` 保持原值——不重置 current 标记
+- M03 `nodes` / M04 `dimension_records` / M06 `competitors` 等无状态机的子表保持原数据
+
+**设计意图**：归档 = "只读历史快照"，子模块数据冻结在归档当刻的状态供回溯；恢复需求未启用，故无需级联。
+
+**实施约束**：
+- M02 archive 不调任何子模块 service 的状态变更方法
+- 子模块 service 在写入前读 `projects.status` 做防御（如 M03 NodeService.create 拒 archived project）；防御依据是 §3 部分唯一索引 `WHERE status='active'` + service 层显式 status 检查
+- 跨模块读 archived project 的子表数据 = 合法（归档不删除数据，只是停止写入）
+
 **禁止转换清单**（R4-2：N = 终态数 + 1 = 2，每条格式：状态A → 状态B：原因 + ErrorCode）：
 
 | 禁止转换 | 原因 + ErrorCode |
