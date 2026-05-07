@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-07 (post-M03-sprint-complete)
+last_updated: 2026-05-07 (post-M04-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-07 post-M03-sprint-complete）
+## 0. 状态快照（更新于 2026-05-07 post-M04-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 20%（M01 + M02 + M03 完成；下一站 M04 维度记录）
+- **Phase 2.1 业务模块**：⏳ 25%（M01 + M02 + M03 + M04 完成；下一站 M05 版本时间线）
+- **2026-05-07 M04 sprint 完成**（7 commit + R1+R2 闭环 / L1+L2+L3 节奏第三次实证 / 5 R-X5 子选项 + 新决 NodeChildrenServiceProtocol 4 参升级）：
+  - commits: `4c3c413` 子片 1 model+migration+helpers.py + `3aea93b` 子片 2 DAO + `6fd4808` 子片 3 Service+R-X2 真注入+Protocol 升级 + `0ca7e5b` R1 修(4 P1) + `de239c2` 子片 4 Router + `5a97824` R2 修(1 P1) + `c4037a7` 子片 5 design+audit
+  - **347 PASS / 0 fail / ruff 净 / R13-1 46=46 + L12 守护通过**
+  - **L1+L2+L3 节奏第三次实证 (M02 首 / M03 二 / M04 三; 三数据点稳定)**: R1=3 subagent + R2=1 合并 Opus + schema/子片 5 不单跑
+  - **R1 命中**: 3 subagent 共 4 P1 立修 + 10 P2 punt; R1-A Opus 抓 design 5 处 Protocol 回写漏; R1-C Sonnet 抓 service 三层防御 + DimensionTypeDisabledError 全缺口
+  - **R2 命中**: 1 合并 Opus 1 P1 立修(B6.x enabled_dimension_types 字段名/SQL 不一致)，是 R1 三 subagent 没抓到的"命名 vs SQL vs design 文字"三处一致性新角度
+  - **R-X5 子选项 5 项实证**:
+    - 1) A5 enqueue B 推迟 + get_for_embedding A 现在建 (M03 同款复用)
+    - 2) **NodeChildrenServiceProtocol 4 参升级 (M04 sprint 新决)** — 5 步分层分析法 L1 跨模块契约层定位; 5 处 design 真相源回写 (M03 §6/§8 + M06 §6 + M07 §6 + README R-X3)
+    - 3) pdc-existence-strict (R1-C C3.2 立修触发新决): pdc 不存在或 enabled=False 都抛 DimensionTypeDisabledError
+    - 4) _ck_clause 提取 (B1 闸门 2.5 CY 拍 A; M03 R1-B C2 punt 闭环) → migrations/helpers.py + m01/m02/m03 import 回写
+    - 5) make_node fixture 位置 (B2 闸门 2.5 自我修正 → A 栏): tests/conftest.py 加 fixture + M03 内联迁移
+  - **新发现 (子片 5 audit 元教训 2 条)**:
+    - 1) Protocol 签名升级触发的 L1 跨模块契约层识别（feedback_problem_layered_analysis 实质性"防本模块绕"拦截价值首次产出）
+    - 2) 闸门 2.5 reconcile 自我修正信号（CY "按之前流程定不下来吗" 反馈触发）
+
+- **2026-05-07 M03 sprint 完成**（5 子片 + R1+R2 闭环 / L1+L2+L3 节奏第二次实证 / 4 R-X5 子选项复用 + 1 新决）：
 - **2026-05-07 M03 sprint 完成**（5 子片 + R1+R2 闭环 / L1+L2+L3 节奏第二次实证 / 4 R-X5 子选项复用 + 1 新决）：
   - commits: `800e632` §14.5 prep + `d174e90` 子片 1 models + `4887f7c` 子片 2 DAO + get_for_embedding + `4e48cb9` 子片 3 Service + `ce73570` R1 修 + 子片 4 schema + `4a1a615` 子片 4 Router + `656e05c` R2 修 + 子片 5 design 回写
   - **285 PASS / 0 fail / ruff 净 / ci-lint R13-1 41=41 + L12 守护通过**
@@ -89,7 +106,54 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M04 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M05 sprint 实施代码启动（**当前推荐**）
+
+```
+继续 prism-0420 M05 sprint 实施代码（M05 版本时间线；M04 sprint 已完成 commits 4c3c413→c4037a7 / 347 PASS / Phase 2.1 25%）。
+
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
+2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M04-sprint-complete + Prompt 0 + §2 历史/后置债）
+3. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 25%，下一站 M05）
+4. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 2.5 + 闸门 3.4 L1 review 触发粒度规则）
+5. /root/workspace/projects/prism-0420/design/02-modules/M05-version-timeline/00-design.md
+6. /root/workspace/projects/prism-0420/design/audit/m04-pilot-template-validation.md（M04 sprint 实证 + L1 第三数据点 + 5 R-X5 子选项 + punt 池 17 项）
+7. /root/workspace/projects/prism-0420/design/audit/m03-pilot-template-validation.md（M03 sprint 实证）
+8. /root/workspace/projects/prism-0420/design/audit/m01-pilot-template-validation.md（PT1-PT3 tracker — M05 sprint 闸门 2.5 时回填 M05 行）
+9. memory feedback_problem_layered_analysis（5 步分层分析法 — M04 sprint 实质性产出"防本模块绕"价值）
+10. memory feedback_three_agent_pipeline（v2: M02+M03+M04 三数据点稳定 / R1=3 subagent + R2=1 合并 Opus subagent）
+11. memory feedback_sprint_test_helper_reuse_check（含 M04 R1-B 验证：4 migration import 形式统一）
+12. memory feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb（标准红线集）
+
+任务：M05 sprint TDD 实施。
+
+启动顺序（严格按 M02+M03+M04 范式）：
+
+1. **闸门 2.5 reconcile pass**（M05 sprint 启动当天必跑）：
+   - 预查 conftest.py 已有 fixture（make_user / make_project / make_node 等；M04 sprint R1-B 实证规则延续）
+   - grep M05 引用的所有 horizontal helper（含 NodeChildrenServiceProtocol — 注意签名是 4 参 含 actor_user_id；M04 sprint R-X5 升级实证）
+   - 按闸门 2.5 三栏分类（A 机械可做 / B 待 CY 决策 / C 已自我消解）输出
+   - 自审一问："这真有候选吗 / 还是延续既有规则？" — 不允许把"机械应用既有规则"列为 B 栏给 CY 制造假决策（M04 sprint 元教训 2）
+
+2. **闸门 3.4 L1 总则触发**：M05 design 必须含 §14.5 sprint review 拆分计划段（M02+M03+M04 三数据点稳定 → R1=3 subagent / R2=1 合并 Opus subagent / 子片 5 不单跑 / schema 子片禁单跑 = 默认范式）。若缺先补。
+
+3. **M05 写代码 5 子片**（参 M04 sprint 范式）：略，按 design 拆。
+
+4. **R1+R2 review 按 §14.5 计划跑**：
+   - R1 (子片 3 完成) → 3 subagent 并行 background mode；>5min 无通知主动 ping
+   - R1 finding P1 立修同 commit（M04 范式）；P2 punt 进 audit/m05-pilot-template-validation.md
+   - R2 (子片 4 完成) → 1 合并 Opus subagent
+
+5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP 可合并到下游
+
+红线（M04 sprint 实证后强化）：
+- 5 步分层分析法走（机制冲突/设计缺口）— M04 R-X5 实证此规则首次实质性"防本模块绕"
+- NodeChildrenServiceProtocol 现是 4 参签名（含 actor_user_id）— M05 注入时 follow
+- M04 sprint punt 池 17 项里有"M05 sprint 启动 reconcile 时消歧"项（A4 §5 vs §6 R-X3 事务边界字面冲突）— 必看
+- commit 不主动 push（feedback_git_push_kb）
+```
+
+### Prompt 0' — M04 sprint 实施代码启动（已完成 2026-05-07，仅供历史追溯）
 
 ```
 继续 prism-0420 M04 sprint 实施代码（M04 维度记录；M03 sprint 已完成 commits 800e632→656e05c / 285 PASS）。
