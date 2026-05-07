@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M07
 prism_ref: F7
 pilot: false
@@ -308,6 +308,21 @@ stateDiagram-v2
 - `batch_create_in_transaction(db: Session, issues: list[IssueCreateData], project_id: UUID) -> list[Issue]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 issue 写独立 `create` activity_log 事件（R10-1）
 - `orphan_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 节点删除时调用；将该 node 下所有 issues 的 node_id 设为 NULL（游离化，与 FK `ON DELETE SET NULL` 语义一致——**issue 不被删除只变游离**）；接受外部 db session；每条受影响 issue 写独立 `orphan` activity_log 事件（R10-1）；返回受影响记录数
   > **命名说明**（batch3 基线补丁决策 4）：不沿用 M04/M06 的 `delete_by_node_id` 统一命名，改用 `orphan_by_node_id` 以对齐真实行为（SET NULL 而非 DELETE），避免调用方误以为 issue 被真删而遗漏后续处理
+
+---
+
+### 6.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+**A7 — `get_for_embedding` + commit 后尾调 enqueue/enqueue_delete（M18 baseline-patch）**
+
+- **退化路径（enqueue 部分）**：**B 推迟**——Q1 否 + Q2 caller
+- **退化路径（`get_for_embedding` 部分）**：**A 现在建**——M07 own 被动接口
+- **理由**：M07 sprint 期 commit 后**不调** enqueue；scaffold 留 TODO（S2 4 字段，target_type="issue"，拼接 `title + description`，M07 无 url 字段）
+- **alembic 步骤数**：0
+- **触发回写**：M18 sprint 启动时回写本段 + 接通 enqueue + 回归测试
+- **B 路径必动作 — TODO 注释 4 字段**：参 M03 §6.X 模板，target_type 改为 `"issue"`，拼接逻辑改为 `title + description`
+- **A 路径必声明**：`get_for_embedding` unit test 覆盖默认拼接路径；生产路径 M18 sprint 期补
+- **🟡 子选项**：与 M03 §6.X 联动
 
 ---
 

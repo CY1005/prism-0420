@@ -1,4 +1,9 @@
-"""SQLAlchemy 声明基类 + 通用 Mixin。
+"""SQLAlchemy 声明基类 + 通用 Mixin 横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: engineering-spec §3（Base + 通用 Mixin）
+# 位置: api/models/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: SQLAlchemy 真相源（Base / TimestampMixin / ImmutableMixin / SoftDeleteMixin）
 
 Mixin 定义对应 reconcile S6（design/audit/scaffold-design-reconcile.md）。
 各模块 design 直接 `from .base import Base, TimestampMixin`，故必须在 scaffold

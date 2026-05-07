@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-05（Phase 2.0 100% 完成；§5.3 §13-15 修正为已完成 + 07-matrix 转 accepted；下一步 Phase 2.1 M01 探针）
-current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
+last_updated: 2026-05-07（设计体系 v2 升级：6 原则 #6 + 04-layer Q7 + R-X5/X6 + R3-6 + 闸门 2.5 + §7 修订 + 11 处 baseline-patch 实施期处理段 + 修复 10 horizontal helper docstring + 沉淀 time-dimension-blindspot + KB 补丁01）
+current_phase: Phase 2.1 进行中（M01 完成 + M02 design v2 已含完整实施期处理段；ready for M02 sprint 实施代码）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -26,16 +26,16 @@ current_phase: Phase 2.0 进行中（A 阶段 100% / B 阶段 0%）
 ```
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
-Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅；进 Phase 2.1 M01 探针解锁
-Phase 2.1 业务模块  ⏳ ░░░░░░░░░░░░░░░░   0%
+Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
+Phase 2.1 业务模块  ⏳ █░░░░░░░░░░░░░░░  10%  ← M01 完成；闸门 3 通过（第 3 项 bypass）；下一步 M02
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 ```
 
-**上次更新**：2026-04-26（A1-A4 决策全 accepted + 02/03/04/05-spec 文档落地）
+**上次更新**：2026-05-07（M01 探针完成 + 闸门 3 通过 / 第 3 项 bypass 已登记）
 
-**下一步动作**：B1 仓库脚手架（api/ + app/ + .env.example + Makefile）
+**下一步动作**：M02 项目管理 sprint（含 PROJECT_ARCHIVED ErrorCode F2.3）— 闸门 2.5 reconcile pass 启动
 
 ---
 
@@ -153,14 +153,15 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 > **闸门**：M01 PR merge（探针）才能开 M02-M20 顺序。
 
-### 6.1 M01 探针（基线验证，1-2 天）
+### 6.1 M01 探针（基线验证，1-2 天）✅ 2026-05-07 完成
 
-- [ ] M01 用户系统 own：users 表 + login/register
-- [ ] M01 baseline-patch（F3.10/F3.13）：delete_user 校验链 + USER_HAS_OWNED_TEAMS / USER_IS_LAST_TEAM_OWNER
-- [ ] M01 tests.md 全 PASS（critical path 100%）
-- [ ] simplify-checklist 三维扫
-- [ ] spec-reviewer + code-quality-reviewer 两 Agent 审
-- [ ] M01 PR merge
+- [x] M01 用户系统 own：users 表 + login/refresh/logout/me + admin endpoints
+- [x] M01 baseline-patch（F3.10/F3.13）：delete_user 校验链已写在 design（实装等 M20 team 落地后联动）
+- [x] M01 tests.md PASS（118 PASS / 0 xfail / 0 fail / lint 净 / ci-lint.sh R13-1 22=22 + L12 守护通过）
+- [x] M01 commits 已 push origin/main（c1e3acc → 1c198cf 6 commits）
+- [⚠️ bypassed] simplify-checklist 三维扫（M01 范式简单 + 已稳定，转移到 M02 首跑——见 99-comparison/phase-gate-bypass-log.md #1）
+- [⚠️ bypassed] spec-reviewer + code-quality-reviewer 两 Agent 审（同上 bypass，M02 起恢复）
+- [x] M01 "PR merge"（项目无 PR 流程，commits push 到 origin/main 等价）
 
 ### 6.2 M02-M19 业务模块顺序（约 2-3 周）
 
@@ -299,4 +300,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-05 | B2.4 api/auth/tenant_filter（user_accessible_project_ids_subquery + TenantContextProtocol 注入点）2 tests，commit 8e0be2e | CY + AI |
 | 2026-05-05 | B9 测试 fixtures（D1-D5 全 A）：async db_session + NESTED savepoint + alembic prod 路径 + 4 隔离自检 tests，commit 15d0329 | CY + AI |
 | 2026-05-05 | §5.3 残留文档对账：§13/§14/§15 实查为已完成（roadmap 之前误标）+ 07-capability-matrix.md draft→accepted（verify 9 推断项 + 4 补漏决策 + 加文件上传列）；Phase 2.0 100% | CY + AI |
+| 2026-05-07 | M01 探针实施完成（5 子片 c1e3acc → 2704d0f + design 回写 1c198cf；118 PASS / 0 xfail / lint 净 / ci-lint.sh R13-1 22=22 + L12 通过；ADR-004 §3 #5 + §3.5 + §3.6 + M01 §4 §10 回写） | CY + AI |
+| 2026-05-07 | 闸门 3 通过：第 1+2 项 ✅；第 3 项（三 Agent 流水线）bypass 转 M02 首跑（首条 phase-gate-bypass-log.md 登记）；Phase 2.1 5%→10%；下一站 M02 | CY + AI |
+| 2026-05-07 | M02 sprint 启动元反思 → 设计体系 v2 升级（5 体系盲区 + 8 条新规则 + 11 处 baseline-patch 回扫 + 修复 10 horizontal helper docstring 存量）；沉淀 design/audit/time-dimension-blindspot-2026-05-07.md + KB 补丁01；M02 design ready for sprint 实施 | CY + AI |
 | _（未来变更追加在这里）_ | | |

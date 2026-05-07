@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M03
 prism_ref: F3
 pilot: false
@@ -332,6 +332,35 @@ AND project_id = :project_id
 - ❌ Router 直 `db.query(Node)`
 - ❌ M11/M17 直 `INSERT INTO nodes`（必须走 `NodeService.batch_create_in_transaction`）
 - ❌ DAO 内计算 `path` 字段（path 计算是业务逻辑，归 Service 层）
+
+---
+
+### 6.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+> M03 §6 含 M18 baseline-patch（`get_for_embedding` + commit 后尾调 `embedding_service.enqueue` + SilentFailure）。M18 在 M03 之后实施，按 [`../README.md` R-X5 主标准 Q1+Q2](../README.md#横切) 推导。
+
+**A4 — `get_for_embedding` + commit 后尾调 enqueue/enqueue_delete（M18 baseline-patch）**
+
+- **退化路径**：**B 推迟**
+- **主标准推导**：Q1 否（M03 sprint 期 `embedding_service` 不存在，import 必失败）+ Q2 caller（M03 主动调 M18 own service）
+- **理由**：M03 sprint 期 `create_node` / `update_node` / `delete_node` commit 后**不实装** enqueue 调用；scaffold 留 TODO 注释（S2 4 字段强制模板）；M18 sprint 期建 `embedding_service` 后回头接通
+- **alembic 步骤数**：0（无 schema 改动）
+- **触发回写**：M18 sprint 启动时本段更新为"enqueue 已接通 + commit hash"+ 回归测试覆盖增量 enqueue 路径
+- **B 路径必动作 — TODO 注释 4 字段**：
+
+  ```python
+  # api/services/node_service.py
+  # ① 决策内容：M03 sprint 期 commit 后不调 embedding_service.enqueue
+  # ② 简化理由：M18 own embedding_service 在 M03 sprint 期不存在（B caller）
+  # ③ 由 M18 sprint 扩齐：create_node / update_node (name/description 改时) commit 后
+  #    尾调 embedding_service.enqueue(target_type="node", target_id, project_id, user_id,
+  #    enqueued_by="incremental")；delete_node commit 后异步 enqueue_delete +
+  #    SilentFailure + embedding_failures EMBEDDING_DELETE_FAILED + cleanup cron 兜底
+  # ④ 触发回写动作：M18 sprint add 调用 + 回归测试 + 回写 M03 §6 实施期处理段
+  ```
+
+- **A 路径同时含的 `get_for_embedding` 方法**：本子段不推迟——`get_for_embedding(db, node_id, project_id) -> str | None` 是 **M03 own 被动接口**（M18 调，M03 写出方法签名 + 实装拼接 `name + "\n" + description`）。Q1 是（M03 sprint 期可独立实装 + 单元测试覆盖 default 拼接路径）→ **A 现在建**。死代码期 ~M03→M18 sprint，生产路径 M18 sprint 期补回归。
+- **🟡 子选项待 M03 sprint 实证**：与 M02 A2 / A3.2 子选项联动——SearchConfig 类型 owner / OpenAPI 契约层处理等若 M02 sprint 期已实证，M03 直接套；否则 M03 sprint 二次实证后归纳
 
 ---
 

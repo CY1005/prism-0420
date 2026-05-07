@@ -65,6 +65,70 @@ created: 2026-04-26
 
 ---
 
+### S2 注释强制模板（2026-05-07 时间维度盲区沉淀）
+
+scaffold-design-reconcile.md S2（TenantContextProtocol）是"做对了"的范例——
+注释清楚指明 M02/M20 各自补什么形态。但 S1/S4/S6 没做对，导致 6/7 漏写。
+
+**强制规则**：任何 scaffold 简化决策的注释**必须含 4 字段**（缺任一 → 不许 commit）：
+
+```python
+# Scaffold 简化决策（YYYY-MM-DD）
+# ① 决策内容：本期落地形态（含简化范围）
+# ② 简化理由：为什么不直接做完整形态
+# ③ 由哪个模块在何时扩齐到何形态（M? sprint）
+# ④ 触发回写的具体动作：add 列 / 注入 concrete impl / data migration / 等
+```
+
+**正例**（`api/auth/tenant_filter.py` S2 模板）：
+
+```python
+"""...
+本期（B2.4 scaffold）：表 project_members / projects / team_members 由 M02/M20
+owns，尚未落地。helper 定义 Protocol + set_tenant_context 注入点；
+M02 上线时注入"仅 project_members"实现，
+M20 上线时注入 UNION 实现。
+"""
+# ① 决策内容：定 Protocol + 注入点，不实装具体过滤
+# ② 简化理由：依赖表由 M02/M20 owns 尚未落地
+# ③ 由 M02 sprint（注入 only project_members）/ M20 sprint（升级 UNION）扩齐
+# ④ 触发回写动作：set_tenant_context(concrete_impl) 在 lifespan startup 注入
+```
+
+**反例**（M01 sprint 前 `api/auth/dependencies.py` AuthServiceProtocol 1 法 vs ADR-004 4 法）：注释只写"本期 B2 仅冻结接口"，缺 ②③④——M01 sprint 启动时只能猜。
+
+---
+
+### Reconcile pass 三栏强制分类（2026-05-07 时间维度盲区沉淀）
+
+> **背景**：M02 sprint 启动首次 reconcile pass 时把"机械可做"+"待 CY 决策"+"已自我消解" 9 处混入一张表，9 处看似都像问题，5 处实是凑数。CY 元反思暴露分类失误。
+
+**强制规则**：每模块 sprint 启动 reconcile pass 输出**必须分 3 栏**呈现，禁止混入一张表：
+
+#### A 栏：机械可做
+
+直接做、不让 CY 拍、commit 内修复完。例如：M01 sprint 的 S3（ErrorCode 重命名）/ S4（补 AppError 子类）/ S6（建 Mixin）/ S7（注释修正）。
+
+#### B 栏：待 CY 决策
+
+按 [`feedback_decision_transparency`](memory) A 模式呈现：候选 + 优缺点 + 3-5 月后果。例如：M01 sprint 的 S1 D1 决策（AuthServiceProtocol 三选一）/ M02 sprint 的 baseline-patch 退化路径（A/B/C）。
+
+#### C 栏：已自我消解
+
+scaffold 注释清楚 / 上一模块已处理 / 不阻塞本模块——只引用即可。例如：M01 sprint 的 S2（TenantContextProtocol scaffold 注释已指明 M02/M20 各自补什么）/ M02 sprint 的 S5（queue/ 不阻塞 M02）。
+
+#### 禁混入信号
+
+下列任一现象 = 反例：
+- A/B/C 三类问题列在同一张表里
+- 含"机械可做"的项里夹"需 CY 决策"
+- 把"已自我消解"列为待办（导致虚胖问题清单）
+- reconcile pass 输出无明确栏目分隔，CY 看不出哪些他要拍 / 哪些 AI 直接做
+
+**违反 → reconcile pass 重做**。
+
+---
+
 ## 闸门 2.6：M17 前置 — Queue Scaffold Mini-Sprint
 
 M17 对话历程模块依赖 `api/queue/base.py:TaskPayload`（强制 user_id +

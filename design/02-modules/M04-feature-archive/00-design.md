@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: null
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M04
 prism_ref: F4
 pilot: true
@@ -311,6 +311,23 @@ node 实体的 active/archived 状态归属 M03，不在本模块。
 - ❌ Router 直 `db.query(DimensionRecord)`
 - ❌ Service 内 `requests.get(...)` 调外部
 - ❌ DAO 内 `if record.dimension_type_id == 5: ...` 业务判断
+
+---
+
+### 6.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+> M04 §6 含 M18 baseline-patch（同 M03/M06/M07 派生数据范式）。M18 在 M04 之后实施。
+
+**A5 — `get_for_embedding` + commit 后尾调 enqueue/enqueue_delete（M18 baseline-patch）**
+
+- **退化路径（enqueue 调用部分）**：**B 推迟**——Q1 否（embedding_service 不存在）+ Q2 caller
+- **退化路径（`get_for_embedding` 方法部分）**：**A 现在建**——M04 own 被动接口，sprint 期实装 + 单元测试覆盖 default 拼接路径（JSONB content 所有 string 字段拼接）
+- **理由**：M04 sprint 期 `create_dimension_record` / `update` / `delete` commit 后**不调** enqueue；scaffold 留 TODO 注释（S2 4 字段，target_type="dimension_record"，其余同 M03 §6.X 模板）
+- **alembic 步骤数**：0
+- **触发回写**：M18 sprint 启动时回写本段 + 接通 enqueue + 回归测试
+- **B 路径必动作 — TODO 注释 4 字段**：参 M03 §6.X 模板，target_type 改为 `"dimension_record"`，拼接逻辑改为"JSONB content 所有 string 字段（运行期 isinstance 过滤）"
+- **A 路径必声明**：`get_for_embedding` unit test 仅覆盖默认拼接路径；生产路径 M18 sprint 期补
+- **🟡 子选项**：与 M03 §6.X 联动（M03 sprint 实证后套用）
 
 ---
 

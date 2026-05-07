@@ -1,4 +1,9 @@
-"""activity_log 写入封装（横切 helper）。
+"""activity_log 写入封装（horizontal）。
+
+# horizontal: 是
+# owner: M15（design/02-modules/M15-activity-stream/00-design.md，R10-2 主规则下 own）
+# 位置: api/services/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: 全模块共用 write_event 接口（M02-M19 业务 service 都调本 helper 写 activity_log）
 
 设计来源：design/02-modules/M15-activity-stream/00-design.md（M15 是 activity_log 横切表 owner）
 + design/00-roadmap.md §5.2 B7。

@@ -1,3 +1,11 @@
+"""全局错误中间件横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: engineering-spec §7.2（统一错误响应 payload 格式）
+# 位置: api/errors/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: FastAPI exception_handler 注册（AppError → JSONResponse 序列化）
+"""
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 

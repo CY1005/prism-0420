@@ -1,3 +1,14 @@
+"""Auth Depends 横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: M01（design/adr/ADR-004-auth-cross-cutting.md §1 横切范式）
+# 位置: api/auth/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: ADR-004 横切（require_user / set_auth_service / AuthServiceProtocol）
+
+require_user 是所有业务 endpoint 入口的 Depends——P1 Bearer JWT + P2 internal
+token 解码。AuthServiceProtocol concrete 实现由 M01 注入（M01 sprint 落地）。
+"""
+
 from typing import Any, Protocol
 from uuid import UUID
 

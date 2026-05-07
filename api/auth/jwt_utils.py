@@ -1,3 +1,11 @@
+"""JWT 编解码横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: ADR-004 §1 P1 Bearer JWT
+# 位置: api/auth/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: ADR-004 横切（access token + refresh token 编解码 + claims 验证）
+"""
+
 import time
 from typing import Any
 from uuid import UUID

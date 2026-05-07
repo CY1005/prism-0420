@@ -3,6 +3,7 @@ title: 可观测性规划（最小集占位决策）
 status: accepted-minimal
 owner: CY
 created: 2026-04-20
+v2_revision: 2026-05-07  # §7 加 early adopter 触发条款引用（横切判断前置 + §7.1/§7.2 分支），详见 ../audit/time-dimension-blindspot-2026-05-07.md
 accepted: 2026-04-26
 phase: Phase 2.0 启动决策（A4.2）+ Phase 2.3 上线前补完
 parent: ../00-roadmap.md
@@ -91,3 +92,18 @@ parent: ../00-roadmap.md
 - [x] 日志级别约定（DEBUG/INFO/WARN/ERROR + LOG_LEVEL env）
 - [x] X-Request-ID 中间件（Phase 2.0 B4 实现）
 - [ ] **Phase 2.3 上线前补**：监控 + 链路追踪 + 告警决策
+
+---
+
+## 7. accepted-minimal 状态的 early adopter 触发条款（2026-05-07 时间维度盲区沉淀）
+
+本文档为 accepted-minimal 状态——Phase 2.0/2.1/2.2 业务开发够用，详细补完推到 Phase 2.3 §8.0。
+
+若 M02-M19 任一模块在 §8.0 补完之前需要本文件 minimal 范围**之外**的可观测性能力（如某模块需提前用 OTel traceId / Prometheus metrics / 告警通道 / Sentry 错误聚合），sprint 启动 reconcile pass 期间必须按 [`05-security-baseline.md §7`](./05-security-baseline.md#7-accepted-minimal-状态的-early-adopter-触发条款2026-05-07-时间维度盲区沉淀2026-05-07-后续-d4-推演修订) 流程：
+
+1. **判断前置**：能力是横切（traceId / metrics / 告警通道 / 日志聚合等基础设施）还是模块特定？可观测性能力**绝大多数都是横切**——默认走横切分支
+2. **三选一**：横切走 §7.1（A 完整提前 / B' 部分提前 + 横切实装 / C 推迟）；模块特定走 §7.2
+
+**禁止**：把可观测性 helper（如 traceId middleware / metrics 上报 service / 告警通道 client）挂在某业务模块名下——这是横切关注，必须建在横切层（`api/middleware/` 或 `api/services/observability/` 等横切目录）。
+
+> 触发条款完整定义、判断前置、横切 vs 模块特定分支、决策登记格式、清单维护在 05-security-baseline.md §7 主表，本文件仅引用。

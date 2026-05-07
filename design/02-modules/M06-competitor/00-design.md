@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M06
 prism_ref: F6
 pilot: false
@@ -265,6 +265,21 @@ erDiagram
 **对外契约（R-X3，batch3 基线补丁补充）**：
 - `batch_create_in_transaction(db: Session, competitors: list[CompetitorCreateData], project_id: UUID) -> list[Competitor]`——M11/M17 orchestrator 调用；接受外部 db session，不调 `self.db.begin()` 另开事务；每条 competitor 写独立 `create` activity_log 事件（R10-1）
 - `delete_by_node_id(db: Session, node_id: UUID, project_id: UUID) -> int`——M03 级联删除调用；删除该 node 下所有 competitor_refs；接受外部 db session；每条被删 competitor_ref 写独立 `delete` activity_log 事件（R10-1）；返回被删记录数
+
+---
+
+### 6.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+**A6 — `get_for_embedding` + commit 后尾调 enqueue/enqueue_delete（M18 baseline-patch）**
+
+- **退化路径（enqueue 部分）**：**B 推迟**——Q1 否 + Q2 caller
+- **退化路径（`get_for_embedding` 部分）**：**A 现在建**——M06 own 被动接口
+- **理由**：M06 sprint 期 commit 后**不调** enqueue；scaffold 留 TODO（S2 4 字段，target_type="competitor"，拼接 `name + description`，**url 不参与 embedding** CY 决策 4）
+- **alembic 步骤数**：0
+- **触发回写**：M18 sprint 启动时回写本段 + 接通 enqueue + 回归测试
+- **B 路径必动作 — TODO 注释 4 字段**：参 M03 §6.X 模板，target_type 改为 `"competitor"`，拼接逻辑改为 `name + description`（不含 url）
+- **A 路径必声明**：`get_for_embedding` unit test 覆盖默认拼接 + url 字段不参与的断言；生产路径 M18 sprint 期补
+- **🟡 子选项**：与 M03 §6.X 联动
 
 ---
 

@@ -1,4 +1,9 @@
-"""bcrypt password hashing helper.
+"""bcrypt password hashing 横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: M01（design/02-modules/M01-user-account/00-design.md §6）
+# 位置: api/auth/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: 密码学基础（bcrypt 单向 hash 凭据存储）
 
 测试环境通过 ``BCRYPT_ROUNDS_OVERRIDE`` 把 cost 从默认 12 降到 4，加速测试。
 """

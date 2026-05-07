@@ -1,3 +1,11 @@
+"""AppError 子类横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: engineering-spec §7.2（与 ErrorCode 枚举对齐 R13-1 parity）
+# 位置: api/errors/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: 全局异常基类 + 子类（业务模块通过 codes_added 扩展时同步加子类）
+"""
+
 from typing import Any
 
 from api.errors.codes import ErrorCode

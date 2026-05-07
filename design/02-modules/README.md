@@ -1,5 +1,13 @@
 # 模块详细设计（C 档）
 
+> **状态**：accepted（Phase 1 设计前置 2026-04-26 收官）
+> **v2 修订**（2026-05-07，M02 sprint 启动 reconcile pass 暴露的体系缺口）：
+> - 新增 R3-6 启动数据声明（细化 3 子项：启动期硬性 / 测试兜底 / 业务字典运行期）
+> - 新增 R-X5 baseline-patch 时序契约（主标准 Q1+Q2 + 结构性约束 + 子选项清单待实证）
+> - 新增 R-X6 横切 helper 必横切层 + 注释 4 字段
+> - 新增 frontmatter `references.helpers:` 字段约束（仅允许引用横切层路径）
+> - 详见 [`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md)
+
 按 16 字段模板逐模块设计——pilot 验证模板可复用性，再批量填其他模块。
 
 ---
@@ -75,6 +83,46 @@
 
 ---
 
+## frontmatter `references.helpers:` 字段约束（2026-05-07 时间维度盲区沉淀，对齐原则 6 + R-X6）
+
+模块 design frontmatter 的 `references.helpers:` 子字段（见 M02 design 范例）**仅允许引用横切层路径**，禁止填业务模块路径。
+
+**合法值**：
+
+```yaml
+references:
+  helpers:
+    errors:
+      version: v3
+      codes_used: [...]
+      codes_added: [...]
+    models:
+      mixins: [TimestampMixin]
+    auth:
+      ref: api/auth/dependencies.py
+    activity_log:
+      ref: api/services/activity_log_service.py  # M15 own，但位置在横切 api/services/
+    tenant_filter:
+      ref: api/auth/tenant_filter.py             # M02/M20 注入，位置在横切 api/auth/
+    crypto:
+      ref: api/auth/crypto.py                    # 横切，owner = 05-security-baseline
+```
+
+**反模式（reviewer 阻塞 accept）**：
+
+```yaml
+references:
+  helpers:
+    crypto:
+      ref: api/services/m02/crypto.py            # ❌ 横切关注挂业务模块名下
+    audit_log:
+      ref: api/dao/m02/audit_log_dao.py          # ❌ activity_log 横切归 M15，不能挂 M02
+```
+
+**判定**：横切层路径定义见 [`../00-architecture/04-layer-architecture.md` Q7 横切层定义](../00-architecture/04-layer-architecture.md#q7横切层定义2026-05-07-加对齐原则-6) 文件位置清单。
+
+---
+
 ## frontmatter 12 字段标准（CI 可静态扫描）
 
 ```yaml
@@ -145,6 +193,38 @@ complexity: low                         # 必填：low / medium / high（来自 
   5. 若有核心决策（如 M10 folder 均值规则），候选 B 改回成本块仍适用（R3-4 照常）
   - §15 checklist 第 3 行改为"§3：无自有表声明 + 上游清单 + DAO 草案 + ADR-003 规则 X 引用"，**不得**误勾"SQLAlchemy class 满足 R3-1"
   - 适用模块：M09 / M10 / M15 / M18（待设计）/ 未来聚合读模块
+- **R3-6**（新增，2026-05-07 时间维度盲区沉淀；2026-05-07 后续 D3 推演细化）：**字典 / 全局表必须含"启动数据"段，分 3 类显式声明**
+
+  > **细化盲点**（2026-05-07 后续 D3 推演）：原 R3-6 一刀切要求"必种数据清单 / 责任 sprint / 触发时机"，**没区分**启动数据的 3 类性质（启动期硬性 / 测试兜底 / 业务字典）。M02 `dimension_types` 撞到——业务类型清单（feature / competitor 等）属产品决策（运行期 admin 创建），不该被强塞进 design 期"启动数据"决策。
+
+  含字典表 / 枚举注册表 / 全局参数表的模块（如 M02 `dimension_types` / M15 `ActionType` / 未来字典）§3 必须显式包含"启动数据"子段，**对每条数据先分类 3 子项 + 各自 3 字段**：
+
+  **3 子项分类**：
+
+  | 子项 | 性质 | design 期决策 vs 运行期 |
+  |----|----|------|
+  | **R3-6-A 启动期硬性 seed** | 系统启动必须存在（基础设施一部分，如 M01 admin user / 系统配置默认值） | design 期决（必种 + 由谁 + 何时种） |
+  | **R3-6-B 测试兜底 placeholder** | 工程必需的最小集（无此数据下游模块测试跑不起来；如 M02 `dimension_types` 至少 1 条 `default` 类型） | design 期决（必种 + 由谁 + 何时种） |
+  | **R3-6-C 业务字典清单** | 产品决策（具体类型清单 / 角色名 / 业务规则字典） | **运行期 admin 通过 CRUD endpoint 创建——不属 R3-6 范畴**，§3 启动数据段标"非 R3-6，运行期 admin 通过 [endpoint] 创建" |
+
+  **R3-6-A / R3-6-B 子项必填 3 字段**：
+  1. **必种数据清单**：列出启动时必须存在的具体数据行（key / name / 默认值等）
+  2. **责任 sprint**：哪个模块 sprint 期内 seed（**仅 own 模块 sprint 自己 seed** —— 不允许推迟到下游模块 sprint，否则下游测试跑不起来；除非 R3-6-C）
+  3. **触发时机**：alembic data migration / 启动 hook / CLI 命令 / 模块 sprint 内手工 seed 四选一
+
+  **R3-6-C 子项必填**：
+  - **运行期入口声明**：哪个 endpoint / Server Action / admin UI 用于创建（如"M02 POST /api/admin/dimension-types"）
+  - **权限层级**：admin only / project owner only / etc
+
+  **缺则 reviewer 阻塞 accept**——审计教训 1：M02 dimension_types 设计期空白，M03/M04/M07 实施前没兜底数据；审计教训 2（D3 推演）：原 R3-6 一刀切让"业务字典清单"误塞进 design 期决策。
+
+  与 R3-1 / R3-5 关系：R3-6 不区分有无主表，只要含"字典/全局/启动期必需数据"特征都适用。
+
+  适用模块：
+  - M01（已合规：§6 + Q7 决策 env seed + CLI = R3-6-A）
+  - M02 dimension_types（R3-6-B 必种 1 条 `default` placeholder + R3-6-C 业务类型清单运行期创建）
+  - M15 ActionType / TargetType / ErrorCode（CHECK 约束初始版本——R3-6-A 启动期硬性，alembic data migration 内含枚举值）
+  - 未来含字典表的模块（M07 issue type / M20 team role 等）参照本规则分类
 
 ### §4 状态机
 - **R4-1**：无状态实体也要显式声明
@@ -268,6 +348,95 @@ complexity: low                         # 必填：low / medium / high（来自 
     ```
   - 适用：所有"可能被跨模块调用"的 Service 方法（M03/M04/M06/M07/M08/M11/M17 的 batch/delete_by 方法等）
 - **R-X4**（新增，batch3 audit 沉淀）：**聚合读模块必须引 ADR-003**——新增聚合读模块（无自有表 / 跨多模块读）的 §3 必须显式声明适用 [`ADR-003`](../adr/ADR-003-cross-module-read-strategy.md) 的哪条规则（规则 1 上游 Service 接口 / 规则 2 只读 import 豁免 / 规则 3 横切表豁免），禁止默认走"DAO 直 JOIN 业务表"（候选 C 已否决）
+- **R-X6**（新增，2026-05-07 时间维度盲区沉淀；归纳 scaffold S2/S5 先例为通用规则）：**横切关注 helper 必建在横切层 + 注释含 4 字段强制模板**
+
+  > **前置原则**：[`../00-architecture/06-design-principles.md` 原则 6 横切关注 vs 业务关注必须显式判定](../00-architecture/06-design-principles.md#原则-6横切关注-vs-业务关注必须显式判定2026-05-07-时间维度盲区沉淀) + [`../00-architecture/04-layer-architecture.md` Q7 横切层定义](../00-architecture/04-layer-architecture.md#q7横切层定义2026-05-07-加对齐原则-6)
+
+  **规则**：
+  1. 横切关注 helper（多模块复用 / 横切 ADR 范畴 / 工程基础设施）**必须建在横切层目录**之一（见 04-layer §Q7 清单），禁止挂在业务模块名下（如 `api/services/m02/crypto.py` 反模式）
+  2. 横切 helper 文件**必须含 4 字段注释模板**（同 [`../00-phase-gate.md` S2 注释强制模板](../00-phase-gate.md#s2-注释强制模板2026-05-07-时间维度盲区沉淀)）：① 决策内容 ② 简化理由 ③ 由哪个模块在何时扩齐到何形态 ④ 触发回写动作
+  3. 横切 helper 可有 owner 模块（M? own），owner 负责实装 + 测试 + 演进决策；其他模块只读消费——但**文件位置仍在横切层**
+
+  **正例（已落地）**：
+
+  - `api/services/activity_log_service.py` —— owner = M15（R10-2 例外允许独立审计表 own，但本 helper 是 horizontal）
+  - `api/auth/tenant_filter.py` —— owner = M02 / M20（注入 concrete 实现），位置在 `api/auth/`
+  - `api/errors/codes.py` + `api/errors/exceptions.py` + `api/errors/middleware.py` —— owner = engineering-spec 横切
+
+  **反例（曾差点落 M02 own）**：
+
+  - 2026-05-07 D4 推演：M02 sprint 期 AES-256-GCM 加解密 helper 原打算 own M02（路径 B），但 helper 是横切关注（M02 写 / M13 读 / 未来 M16/M17 cron secret），按原则 6 + R-X6 必须建在 `api/auth/crypto.py` 横切层，owner = 05-security-baseline
+
+  **违反 → reviewer 阻塞 accept**；frontmatter `helpers:` 字段静态扫描可识别违反（仅允许引用横切层路径，见下方"frontmatter helpers 字段约束"）
+- **R-X5**（新增，2026-05-07 时间维度盲区沉淀）：**baseline-patch 时序契约——被回写模块必须显式选退化路径**
+
+  > **背景**：baseline-patch 机制是"模块 X 设计期不知道，但模块 Y 设计后回写到 X design 的字段/方法/调用"。例如 M20 baseline-patch 把 `team_id FK` 写到 M02 design §3，M18 baseline-patch 把 `get_for_embedding + enqueue` 写到 M03/M04/M06/M07 design §6。design 层面信息完整，但实施时序是 M02→...→M18→M20（baseline-patch 引用的依赖晚于被回写模块实施），导致被回写模块**实施期撞墙**——依赖表/方法/服务还不存在。
+  >
+  > **根因**：baseline-patch 让 design 始终是"目标态真相"，但**没规定实装期遇到"依赖未到位"如何退化**。
+
+  **判断逻辑（主标准）**：
+
+  对每条 baseline-patch 引用，问 2 个问题决定退化路径：
+
+  **Q1：本模块 sprint 期能否独立完成该改动？**
+  （独立 = 编译通过 + 单元测试通过 + 不依赖未实现的外部资源如表/service/endpoint）
+  - 是 → **A 现在建**
+  - 否 → 进 Q2
+
+  **Q2：本模块在该 baseline-patch 中是 caller 还是 callee？**
+  - **Caller**（本模块主动调用依赖 service / 主动写依赖表）→ **B 推迟** + scaffold 留 TODO 注释（理由：依赖未落地时调用必失败，硬建后 ImportError / NameError / FK 写入异常）
+  - **Callee**（本模块定方法签名给依赖调用 / 字段是被动 schema 形态）→ **C 留中间态**（理由：方法签名 / 字段在，依赖到位时填实现 / ADD CONSTRAINT；本模块 sprint 期无人调用 / 无 FK 写入压力）
+  - **混合**（一条 baseline-patch 含多个改动，如 ErrorCode + endpoint）→ **拆开**逐项套 Q1 + Q2
+
+  **退化路径定义**：
+
+  - **A 提前建占位**：本模块 sprint 期建依赖的最小占位（schema / stub service），自己 seed 数据 / mock 实现；优：alembic 一次成形 / 测试 fixture 直接用；缺：抢做依赖模块 owner 的 schema 边界 / 占位 schema 万一依赖模块 sprint 改动需 ALTER
+  - **B 推迟到依赖落地**：本模块 sprint 期不写该字段/方法，scaffold 留 TODO 注释 + 显式标"M? sprint 实施"；优：模块边界严格 / schema 最小；缺：design ↔ 实装暂偏离需 disambiguation 注释 / alembic 演进多次
+  - **C 留中间态**：本模块 sprint 期写字段（无 FK 约束）/ 方法签名（空实现）/ enum 定义（无引用），依赖模块 sprint 时只 ADD CONSTRAINT / 填实现；优：design 形态保留 / 切分清晰；缺：中间态有"列在但 FK 防御缺位"的窗口期
+
+  **格式要求**（缺任一 → reviewer 阻塞 accept）：
+  ```markdown
+  ### 实施期处理（X baseline-patch 引用 Y）
+  - **退化路径**：A / B / C 之一
+  - **理由**：本期是否有调用 / 是否需 fixture / 是否需 FK 防御
+  - **alembic 步骤数**：N 步（含 ALTER 详情）
+  - **触发回写**：依赖模块（M?）sprint 启动时本模块 design 此段更新为"已落地"+ commit hash
+  ```
+
+  **结构性约束**（X- 折中，2026-05-07 推演沉淀；不依赖工程具体机制，可前置立规）：
+
+  - **A 路径必声明**：unit test 仅覆盖 default 路径 / 死代码期窗口（M? → 依赖模块 sprint）；生产路径回归测试推迟到依赖模块 sprint 期补，回写 design 标"生产路径已验证 + commit hash"
+  - **B 路径必动作**：scaffold 留 TODO 注释**必含 S2 4 字段强制模板**（决策内容 / 简化理由 / 由 M? sprint 扩齐到何形态 / 触发回写动作）；引 [`00-phase-gate.md`](../00-phase-gate.md#s2-注释强制模板2026-05-07-时间维度盲区沉淀)
+  - **C 路径必登记**：
+    1. **测试覆盖盲区清单**：本模块 sprint 期下游模块测不了哪些路径（如 M02 sprint 期下游测不了团队 project 路径）
+    2. **依赖模块回写 checklist**：依赖模块 sprint 启动时本模块需做的回写动作（data migration 清理 / ADD CONSTRAINT FK / 回归测试 / 回写 design 标"已落地" + commit hash）
+    3. 二者写入本模块 design "实施期处理" 段下，依赖模块 sprint 启动 reconcile pass 时校验
+
+  **子选项清单**（_等 M02/M03 sprint 实证后归纳填入_）：
+
+  > **🔴 立规红线**：A/C 路径下的具体子选项（如 C 路径"中间态写入策略"分 API/Service/DAO 三层 / B 路径 OpenAPI 契约层处理 / A 路径"被动接口类型 owner"受分层依赖方向约束）**禁止凭印象立规**，必须基于至少 1 次模块 sprint 真实写代码 + 跑测试的实证后归纳。
+  >
+  > **沉淀依据**：2026-05-07 路径 X+ 推演时凭印象立"C1 禁写 / C2 允许"二选一 + OpenAPI"三选一" + 类型 owner"三选一"，撞 4 个新盲区（C 子选项分层错 / FastAPI OpenAPI 是 router 生成不是 design 生成 / 分层依赖方向约束 / R13-1 标记位置颗粒不够），违反 [`feedback_external_behavior_lookup`](memory)。
+  >
+  > **执行约束**：M02 sprint 启动 reconcile pass 期间，sprint 内若撞结构性子选项，先 case-by-case 决策 + 登记到 design/audit/m02-pilot-template-validation.md（M01 PT tracker 同款机制），M03 sprint 启动时再积累 1 次实证；2 次实证后归纳到本段子选项清单，从而完成立规闭环。
+
+  **类型倾向参考表**（辅助，**不替代主标准 Q1+Q2**——以下倾向是大多数情况的统计常态，仍须按主标准判断）：
+
+  | baseline-patch 类型 | 多数情况倾向 | 主标准对照 | 示例 |
+  |-----------------|---------|---------|----|
+  | 含外部依赖的 schema（FK 引用未存在的表 / 跨表 check）| C 留中间态 | Q1 否 + Q2 callee（schema 形态保留）| M02-M20 team_id FK |
+  | 无外部依赖的 schema（自表 column + default + 自表 check）| A 现在建 | Q1 是（独立完成）| M02-M18 rrf_k / similarity_threshold |
+  | 主动方法调用（commit 后尾调依赖 service / 调用未存在的 endpoint）| B 推迟 + TODO 注释 | Q1 否 + Q2 caller | M03/M04/M06/M07-M18 enqueue |
+  | 被动方法签名（本模块定接口给依赖调用 / 依赖 sprint 期才有 caller）| A / C（无人调影响小）| Q1 是 OR Q2 callee | M04-M13 create_dimension_record / M02-M18 get_search_config |
+  | enum 扩展（ActionType / ErrorCode 添值，不立刻引用）| A 直接写入 | Q1 是（死定义无副作用）| M15-M18 ActionType / M15-M20 ErrorCode / M02-M20 PROJECT_ARCHIVED |
+  | 主动业务 endpoint（POST 写依赖表 / 依赖业务流）| B 推迟 | Q1 否 + Q2 caller | M02-M20 move-team endpoint |
+
+  **扫描清单**（基于 2026-05-07 全 M01-M20 design 扫描）：M02（A1+A2+A3）/ M03+M04+M06+M07（A4-A7 同款）/ M15（A8+A9 enum 扩展）共 5 模块 11 处。回扫工作单独 commit（见 design/audit/time-dimension-blindspot-2026-05-07.md）。
+
+  **关联**：
+  - 体系级新原则："design 是目标态真相，实装期遇到'依赖未到位'必须显式选退化路径，不允许悄悄绕"
+  - 闸门：每模块 sprint 启动 reconcile pass（00-phase-gate.md 闸门 2.5）必扫本模块 design 所有 baseline-patch 引用是否含"实施期处理"段
+  - 沉淀文档：[`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md) / KB `02-技术/架构设计/设计前置方法论-补丁01-时间维度.md`
 
 ---
 

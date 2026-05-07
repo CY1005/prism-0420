@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-07 (post-M01-merge)
+last_updated: 2026-05-07 (post-M02-design-system-upgrade)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,24 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-07 post-M01）
+## 0. 状态快照（更新于 2026-05-07 post-M02-design-system-upgrade）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 5%（**M01 已实施完毕 ready for闸门 3，下一站 M02**）
+- **Phase 2.1 业务模块**：⏳ 10%（M01 完成；M02 design 已含实施期处理段 + R3-6 启动数据 + early adopter §7 引用，**ready for M02 sprint 实施代码**）
+- **2026-05-07 后续 session 产出**（M02 sprint 启动 reconcile pass 元反思 → 设计体系升级 + 11 处 baseline-patch 回扫 + 修复存量）：
+  - **5 个体系盲区 + 2 体系级新原则**（详见 `design/audit/time-dimension-blindspot-2026-05-07.md`）
+  - **8 条新规则落地**：
+    - 6 原则 #6 横切 vs 业务关注必须显式判定（`00-architecture/06-design-principles.md` v2）
+    - 04-layer Q7 横切层定义（`00-architecture/04-layer-architecture.md` v2）
+    - R-X5 baseline-patch 时序契约（主标准 Q1+Q2 + 退化 A/B/C + 结构性约束 + 子选项留空待实证）+ R-X6 横切 helper 必横切层 + R3-6 启动数据细化 3 子项 + frontmatter helpers 字段约束（`02-modules/README.md` v2）
+    - 闸门 2.5 S2 注释 4 字段强制 + reconcile 三栏分类（`00-phase-gate.md`）
+    - accepted-minimal §7 early adopter 修订（含横切 vs 模块特定判断前置 + §7.1/§7.2）（`05-security-baseline.md` + 03/04 引用段）
+  - **11 处 baseline-patch 实施期处理段回写**：M02（A1+A2+A3）/ M03/M04/M06/M07（A4-A7 同款 M18 baseline-patch）/ M15（A8+A9 enum）+ M02 §3.Y dimension_types 启动数据 + §3.Z early adopter AES helper
+  - **修复存量**（T12）：10 horizontal helper docstring 加 horizontal+owner 4 字段 + 3 design 灰区（ADR-001/M18/M17）显式标 horizontal owner
+  - **整体扫描结果**（T11）：0 处真正反模式存量——CY 一直凭 sense 把横切 helper 放对位置；立规价值是防御未来 sprint 漂移
+  - **回归**：pytest 118 PASS / 0 fail / 0 xfail / ruff 净 / ci-lint.sh R13-1 22=22 + L12 守护通过
+  - **KB 沉淀**（跨项目）：`02-技术/架构设计/设计前置方法论-补丁01-时间维度.md`（主方法论加指针）
+  - **元教训 4 条**：立规分两层（结构性可前置 / 工程具体须实证）/ 立规必判 horizontal vs module-specific / 立规防御未来 vs 修复存量 / L1/L2/L3 时间维度切分
 - **2026-05-07 M01 sprint 闭环**（commits c1e3acc → 2704d0f + design 回写 commit pending）：
   - 5 子片全 PASS：read-only auth / PATCH me / admin endpoints / ADR-004 P2 全 / CI 守护
   - 测试 113 PASS + C9 isolated 转 PASS（共 117+ PASS / 0 xfail）
@@ -41,7 +55,45 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — 闸门 3 检查 + M02 启动（**当前推荐**）
+### Prompt 0 — M02 sprint 实施代码启动（**当前推荐**）
+
+```
+继续 prism-0420 M02 sprint 实施代码（design 已含完整实施期处理段 + 体系级 v2 修订已落地）。
+
+冷启动按序读：
+1. 本 _handoff/next-session.md（看 §0 状态快照 + §2.1 后置债 + 体系级 v2 修订清单）
+2. design/02-modules/M02-project/00-design.md（含 §3.X 实施期处理 / §3.Y 启动数据 / §3.Z early adopter AES helper）
+3. design/02-modules/README.md v2（R-X5/X6 + R3-6 + frontmatter helpers 约束）
+4. design/00-architecture/06-design-principles.md v2（6 原则 #6 横切 vs 业务）
+5. design/00-architecture/04-layer-architecture.md v2（Q7 横切层定义）
+6. design/audit/time-dimension-blindspot-2026-05-07.md（M02 sprint 启动元反思 + 4 元教训）
+
+任务：
+1. M02 sprint 闸门 2.5 reconcile pass：本次会话已确认无矛盾 ✅，可直接进 step 4 TDD 实施
+2. M02 写代码顺序（参 M01 sprint 5 子片范式）：
+   - 子片 1：models（Project / ProjectMember / ProjectDimensionConfig / DimensionType + 测试兜底 placeholder seed = 1 条 default 类型 alembic data migration 按 R3-6-B）
+   - 子片 2：DAO + tenant_filter concrete impl 注入（M02 own only project_members 实现）
+   - 子片 3：Service + AES helper 横切层 api/auth/crypto.py 实装（按 §7.1 B'）+ ai_api_key_enc 加解密
+   - 子片 4：Router + 11 endpoints + check_project_access Depends（M02 own）
+   - 子片 5：tests + ci-lint 守护
+3. 三 Agent 流水线（Implementer + Spec Reviewer + Code Quality Reviewer）必须真跑（M01 期 bypass 已是首次，闸门 3 §3.3 不允许第二次 bypass）
+4. simplify-checklist 在 ≥50 行或跨 ≥2 文件改动时跑
+5. M02 sprint 启动期实证子选项（按 R-X5 子选项清单红线，sprint 写代码时拍 case-by-case + 登记到 design/audit/m02-pilot-template-validation.md）：
+   - C 路径 team_id 写入策略（API 不暴露 / Schema 暴露但 service 拒绝 / DAO 完全允许）
+   - A 路径 SearchConfig 类型 owner（M02 own raw types / 共享 horizontal）
+   - B 路径 OpenAPI 契约层处理（不实装 router / 占位 router 501 stub）
+   - R13-1 附加规则标记位置（code 注释 / design §13 加列 / ci-lint.sh 加附加规则）
+
+红线：
+- M02 sprint 写代码时严格按 design 实施期处理段走（A1=C / A2=A / A3.1=A / A3.2=B）
+- 横切 helper（AES crypto）建在横切层 api/auth/crypto.py，禁止挂 M02 名下（原则 6 + R-X6）
+- 三 Agent + simplify 这次必须真跑
+- 实证子选项后回写 R-X5 子选项清单段（推动规则升级，元原则 1）
+
+关联：design/audit/time-dimension-blindspot-2026-05-07.md / KB 02-技术/架构设计/设计前置方法论-补丁01-时间维度.md
+```
+
+### Prompt 0' — M01 sprint 闸门 3 检查 + M02 启动（已完成，仅供历史追溯）
 
 ```
 继续 prism-0420，过闸门 3（M01 PR merge ready 检查）+ 启动 M02 sprint。

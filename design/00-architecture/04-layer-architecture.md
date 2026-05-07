@@ -2,6 +2,7 @@
 
 **状态**：accepted
 **定稿日期**：2026-04-20
+**v2 修订**：2026-05-07（新增 Q7 横切层定义，对齐原则 6——M02 sprint 启动暴露分层架构原 Q1-Q6 仅覆盖纵向分层，缺横切 vs 业务模块层归属判定；详见 [`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md)）
 
 ---
 
@@ -139,6 +140,54 @@ def handle_ai_import(payload):
 - 统一 Task 基类强制 `user_id` + `project_id` 字段（类似 Pydantic）
 - Queue 消费者入口做 payload 校验
 - Service 层权限检查作为第二道防线（纵深防御）
+
+---
+
+## Q7：横切层定义（2026-05-07 加，对齐原则 6）
+
+> **背景**：Q1-Q6 是**纵向**分层（业务流程从前端到 DB）。原则 6 引入**横向**归属判定——某 helper / service / 配置归横切层（多模块复用）还是业务模块层（仅当前模块用）。两者正交。
+
+### 横切层文件位置清单
+
+横切关注必须建在以下横切层目录之一，禁止挂在业务模块名下：
+
+| 横切层 | 路径 | 范畴 | 实例（已落地）|
+|------|----|----|----|
+| **认证 / 鉴权** | `api/auth/` | JWT 编解码 / require_user Depends / internal token / refresh token / tenant filter / 加密 helper（AES-256-GCM） | `dependencies.py` / `jwt_utils.py` / `internal.py` / `password.py` / `tenant_filter.py` + 待建 `crypto.py` |
+| **错误处理** | `api/errors/` | AppError 基类 / ErrorCode 枚举 / 全局错误中间件 | `codes.py` / `exceptions.py` / `middleware.py` |
+| **横切 service** | `api/services/<horizontal>.py` | activity_log / 限流 / 链路追踪 / metrics / 加密 service / queue scaffold | `activity_log_service.py`（M15 own）+ 待建 `crypto.py` 等 |
+| **数据库基础** | `api/models/base.py` | Base 类 / TimestampMixin / ImmutableMixin / SoftDeleteMixin | 已落地（M01 sprint） |
+| **Queue scaffold** | `api/queue/` | TaskPayload 基类（强制 user_id + project_id）/ 重试 / 死信 | 待建（M17 前置 mini-sprint，闸门 2.6） |
+| **HTTP 中间件** | `api/middleware/` | X-Request-ID / 链路追踪 / metrics 上报 / 限流 | 部分已落地（X-Request-ID） |
+| **CI/CD** | `.github/workflows/` | 构建 / 测试 / 部署 / matrix 多版本 | 占位（Phase 2.3 §8.0 补完） |
+| **配置** | `api/config.py` / `api/settings.py` | env 读取 / pydantic-settings / 跨模块共享配置 | 已落地（pydantic-settings）|
+
+### 业务模块层定义
+
+业务模块层 = `api/{models,dao,services,routers,schemas}/` 下**以模块名命名的文件**：
+
+- ✅ 合法：`api/services/project_service.py`（M02）/ `api/dao/node_dao.py`（M03）/ `api/routers/auth.py`（M01）等
+- ❌ 反模式：`api/services/m02/crypto.py`（横切关注挂在 M02 名下）/ `api/dao/m02/audit_log_dao.py`（activity_log 横切归 M15，不该挂 M02）
+
+### 判定流程
+
+design 期对每个 helper / service / 配置回答：
+
+1. 是否多模块复用？（>=2 个业务模块预期会用）
+2. 是否属于横切 ADR 范畴？（ADR-002 Queue 消费者权限 / ADR-003 跨模块读 / ADR-004 Auth 横切 / ADR-005 团队扩展等）
+3. 是否是工程基础设施？（加密 / 限流 / 链路追踪 / metrics / 等）
+
+**任一是 → 横切层** | **全否 → 业务模块层** | **不确定 → 默认横切**（YAGNI 反向，原则 6）
+
+### Owner 归属
+
+横切层文件可以有 **owner 模块**（在文件 frontmatter 或 docstring 标注），表示"由该模块 sprint 期内建并维护"——但**位置仍在横切层**：
+
+- `api/services/activity_log_service.py` —— owner = M15（R10-2）
+- `api/auth/tenant_filter.py` —— owner = M02 / M20（注入 concrete impl）
+- `api/auth/crypto.py` —— owner = 05-security-baseline（横切 ADR 范畴，未来可挂 ADR-006 加密横切）
+
+owner 模块负责 helper 的实装 + 测试 + 演进决策；其他模块只读消费。
 
 ---
 

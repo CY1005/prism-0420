@@ -1,3 +1,12 @@
+"""ErrorCode 枚举横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: engineering-spec §7.2（统一错误码命名表）
+# 位置: api/errors/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: 全局错误码注册表（业务模块通过 codes_added frontmatter 字段扩展）
+# R13-1 守护: 每个 ErrorCode 必有对应 AppError 子类（ci-lint.sh 校验 parity）
+"""
+
 from enum import StrEnum
 
 

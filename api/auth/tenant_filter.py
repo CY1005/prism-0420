@@ -1,4 +1,9 @@
-"""Tenant 过滤横切 helper。
+"""Tenant 过滤横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: M02 / M20（M02 注入 only project_members impl / M20 升级 UNION impl）
+# 位置: api/auth/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: ADR-005 §3.1 团队扩展横切 helper
 
 设计来源：design/adr/ADR-005-team-extension.md §3.1（M20 新增 helper）+
 design/00-roadmap.md §5.2 B8。

@@ -2,12 +2,13 @@
 
 **状态**：accepted
 **定稿日期**：2026-04-20
+**v2 修订**：2026-05-07（M02 sprint 启动 reconcile pass 暴露原则体系缺"横切 vs 业务关注"元维度，新增原则 6；详见 [`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md)）
 
 ---
 
-## 5 条核心原则
+## 6 条核心原则
 
-> 原则数量 ≤5 条（超过 5 条等于没有重点）。
+> 原则数量精简——每条必须是**不可由其他原则推导的元维度**。新增原则前必证明独立性（如原则 6 横切 vs 业务边界与原则 2 纵向分层正交，不可互推）。
 > 每条原则包含"是什么"+"违反时怎么办"。
 
 ### 原则 1：SQLAlchemy 是 schema 唯一真相源
@@ -68,6 +69,38 @@
 - 模块设计 checklist 强制覆盖 4 维
 - 未对照清单检查 → review 拦截
 - 任一清单项违反 = 违反本原则 = 阻塞合并
+
+---
+
+### 原则 6：横切关注 vs 业务关注必须显式判定（2026-05-07 时间维度盲区沉淀）
+
+**含义**：
+
+- 任何 helper / service / 配置 / 基础设施在 design 时必须**显式声明类型**：
+  - **horizontal**（横切关注）：多模块复用 / 横切 ADR 范畴 / 工程基础设施（加密 / 限流 / 链路追踪 / metrics / 鉴权 / activity_log / tenant_filter / queue scaffold 等）
+  - **module-specific**（业务关注）：仅当前模块业务规则封装 / 不属于 horizontal ADR 范畴 / 不被其他模块复用
+- **横切关注必须建在横切层**（`api/auth/` / `api/errors/` / `api/services/<horizontal>.py` / `.github/workflows/` / 等），**禁止挂在某业务模块名下**
+- **不确定时默认横切**（YAGNI 反向）：项目早期 helper 抽象的边际成本低，但**横切关注被错放进模块 own** 的修复成本高（需迁移代码 + 改所有调用方 import + 测试回归）；降级"horizontal → 模块 own"成本远低于升级"模块 own → horizontal"
+- 与原则 2（分层严格）的关系：原则 2 是**纵向**分层（Page/Server Action/Router/Service/DAO/Model），原则 6 是**横向**归属（horizontal vs business），两者正交
+
+**典型反模式**（违反原则 6）：
+
+| 反模式 | 错例 | 正确 |
+|----|----|----|
+| 横切 helper 挂在业务模块名下 | `api/services/m02/crypto.py` | `api/auth/crypto.py`（horizontal owner = 05-security-baseline）|
+| frontmatter `helpers:` 引用业务模块路径 | `helpers: { crypto: { ref: M02.crypto } }` | `helpers: { crypto: { ref: api/auth/crypto.py } }` |
+| accepted-minimal 早期触发条款选 "B 模块 own helper" 处理横切关注 | M02 own AES helper（违反 §7 修订版） | §7.1 横切关注三选一（A 完整 / B' 部分 / C 推迟），helper 都建在横切层 |
+
+**违反时怎么办**：
+- design accepted 前 reviewer 强制扫描所有 helper 引用归属
+- 横切层文件清单见 [`04-layer-architecture.md`](./04-layer-architecture.md) §横切层定义
+- 违反 → 阻塞 accept，修复后再审
+- 已 accepted 模块若发现违反（如 prism-0420 2026-05-07 §7 修订暴露），立刻回扫修复
+
+**关联**：
+- R-X6（02-modules/README.md）：横切 helper 必建在横切层 + 注释含 4 字段强制模板（归纳 scaffold S2/S5 先例）
+- frontmatter `helpers:` 字段约束（02-modules/README.md）：仅允许引用横切层路径
+- accepted-minimal §7 触发条款（05-security-baseline.md）：判断前置（horizontal vs module-specific）
 
 ---
 

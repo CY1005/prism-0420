@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M02
 prism_ref: F2
 pilot: false
@@ -364,6 +364,101 @@ class DimensionType(Base):
 - **M18 baseline-patch（2026-04-26）**：projects 表加 2 列 `rrf_k INT NOT NULL DEFAULT 60` + `similarity_threshold REAL NOT NULL DEFAULT 0.3` + 2 个 CHECK 约束（rrf_k 范围 1-200 / similarity_threshold 范围 0.0-1.0）；纯加字段带默认值，已有数据不受影响
 - **M20 baseline-patch（2026-04-26）**：`space_id → team_id` 字段重命名 + 启用 FK ondelete=RESTRICT。Alembic 2 步：① `ALTER TABLE projects RENAME COLUMN space_id TO team_id`；② `ALTER TABLE projects ADD CONSTRAINT fk_projects_team FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE RESTRICT`。详见 [`../baseline-patch-m20.md`](../baseline-patch-m20.md) §M02 章节。
 - **M20 baseline-patch（2026-04-26）F2.3 archived×team 互锁修复**：M02 新增 ErrorCode `PROJECT_ARCHIVED`（422，detail: `{project_id, status}`），用于 `POST /api/projects/{pid}/move-team` 入口拒绝 archived project 加入 team。已注册到本模块 §13 ErrorCode 表。
+
+---
+
+### 3.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+> M02 design §3 含 3 处 baseline-patch 反向时序引用（M20 在 M02 之后实施 / M18 在 M02 之后实施）。按 [`../README.md` R-X5 主标准 Q1+Q2](../README.md#横切) 推导退化路径 + 结构性约束动作 + 子选项实证清单。
+
+#### A1 — `team_id` FK to `teams` 表（M20 baseline-patch）
+
+- **退化路径**：**C 留中间态**
+- **主标准推导**：Q1 否（teams 表 M20 期才存在）+ Q2 callee（schema 形态保留，M02 不主动写 teams）
+- **理由**：M02 sprint 期写 `team_id` UUID nullable 列但**不启用 FK constraint**；M20 sprint 期 `ALTER ADD CONSTRAINT FK ondelete=RESTRICT`
+- **alembic 步骤数**：M02 sprint 1 步（CREATE TABLE projects 含 team_id UUID nullable 无 FK）+ M20 sprint 1 步（ALTER ADD CONSTRAINT）
+- **触发回写**：M20 sprint 启动时本段更新为"FK 已启用 + commit hash"
+- **C 路径必登记 — 测试盲区**：M02-M19 sprint 期下游模块（M03/M04/M06/M07 等）测不了"team_id 非空"路径（团队 project 上的功能），仅能测 `team_id=None` 的个人 project；M20 sprint 期补回归
+- **C 路径必登记 — M20 回写 checklist**：① data migration 清理（若 M02-M20 期间有不合法 team_id 写入，先 SET NULL 或修正）② ALTER ADD CONSTRAINT FK ③ 团队 project 回归测试（覆盖下游 M03-M19 跨 team 路径）④ 回写本段 status="已落地"
+- **🟡 子选项待 M02 sprint 实证**：中间态期间 `team_id` 写入策略（API 不暴露 / Schema 暴露但 service 拒绝 / DAO 完全允许）—— sprint 写代码时按 R-X5 子选项立规红线 case-by-case，登记到 `design/audit/m02-pilot-template-validation.md`
+
+#### A2 — `rrf_k` + `similarity_threshold` + `get_search_config` 方法（M18 baseline-patch）
+
+- **退化路径**：**A 现在建**
+- **主标准推导**：Q1 是（纯加列默认值齐 + 自表 check 约束 + 方法签名空实现，无外部依赖）
+- **理由**：M02 sprint 期 schema 加 2 列 + 2 check + ProjectService.get_search_config 方法实装；M02-M18 期 ~3-4 周无 caller 但功能完备
+- **alembic 步骤数**：1 步成形（M02 CREATE TABLE 含 2 列 + check）
+- **触发回写**：M18 sprint 启动时本段更新为"M18 SearchService.hybrid_search 已接入 + commit hash"
+- **A 路径必声明**：unit test 仅覆盖 `get_search_config` default 路径返回（rrf_k=60 / similarity_threshold=0.3）；生产路径（M18 hybrid_search 调）回归测试推迟到 M18 sprint 期补
+- **🟡 子选项待 M02 sprint 实证**：`SearchConfig` 类型定义放哪（M02 own raw types / 共享 horizontal `api/schemas/shared.py`）—— 受分层依赖方向约束（M02 不能 import M18），sprint 写代码时实证
+
+#### A3 — `PROJECT_ARCHIVED` ErrorCode + `POST /api/projects/{pid}/move-team` endpoint（M20 baseline-patch F2.3）
+
+A3 拆 2 项独立处理：
+
+##### A3.1 — ErrorCode `PROJECT_ARCHIVED` + `ProjectArchivedError` 子类
+
+- **退化路径**：**A 现在建**
+- **主标准推导**：Q1 是（enum 死定义 + AppError 子类 R13-1 配齐即可，无外部依赖）
+- **理由**：M02 sprint 期 ErrorCode 入 codes.py + AppError 子类入 exceptions.py；R13-1 守护 22→23 parity 通过
+- **alembic 步骤数**：0
+- **触发回写**：M20 sprint move-team endpoint 实装时建 raise caller + 加 raise 测试，回写本段
+- **A 路径必声明**：M02 sprint 期 `ProjectArchivedError` 无 raise caller；ci-lint.sh R13-1 仅查 parity 不查 caller，不阻塞但留**未实装期 ErrorCode**——本子段即声明位置
+- **🟡 子选项待 M02 sprint 实证**：标记位置（code 注释 / design §13 表加列 / ci-lint.sh 加附加规则）—— sprint 写代码时实证
+
+##### A3.2 — `POST /api/projects/{pid}/move-team` endpoint
+
+- **退化路径**：**B 推迟**
+- **主标准推导**：Q1 否（依赖 teams 表）+ Q2 caller（POST 主动写 teams 关联）
+- **理由**：M02 sprint 期 router 不实装 move-team；scaffold 留 TODO 注释（S2 4 字段强制模板）；M20 sprint 期建路由 + 接通 `ProjectArchivedError` raise
+- **alembic 步骤数**：0
+- **触发回写**：M20 sprint move-team router 实装时回写本段 + design §7 endpoint 表对应行标"已落地 + commit hash"
+- **B 路径必动作 — TODO 注释 4 字段**：
+
+  ```python
+  # api/routers/project_router.py
+  # ① 决策内容：M02 sprint 期 move-team endpoint 不实装
+  # ② 简化理由：依赖 teams 表（M20 own），M02 期主动写 teams 不可行（B caller）
+  # ③ 由 M20 sprint 扩齐到完整路由：POST /api/projects/{pid}/move-team
+  #    含 require_user + check_project_access(role=owner) + ProjectArchivedError raise
+  # ④ 触发回写动作：M20 sprint add 路由实装 + raise ProjectArchivedError caller +
+  #    回写 M02 design §7 endpoint 表对应行 + 本段 status="已落地"
+  ```
+
+- **🟡 子选项待 M02 sprint 实证**：OpenAPI 契约层处理（router 不实装 OpenAPI 不含 vs 占位 router 返回 501 stub OpenAPI 含）—— sprint 写代码时按 FastAPI 实际行为决定
+
+### 3.Y 启动数据声明（R3-6 细化版，2026-05-07 加；含 dimension_types 3 子项）
+
+> M02 own `dimension_types` 全局字典表（design §1 边界灰区）。按 [`../README.md` R3-6 启动数据声明（3 子项分类）](../README.md#§3-数据模型) 拆 R3-6-A / R3-6-B / R3-6-C：
+
+#### R3-6-A 启动期硬性 seed
+- **本模块无 R3-6-A 子项**——M02 不需要"系统启动必须存在"的字典数据；空 dimension_types 表不阻塞 M02 自身功能（项目创建可不用任何 dimension type）
+
+#### R3-6-B 测试兜底 placeholder
+- **必种数据清单**：`dimension_types` 表至少 1 条 `default` 类型（`key='default'` / `name='默认维度'` / `icon='FileText'` / `field_schema=null`），作为下游 M03/M04/M07 sprint 测试 fixture 兜底——避免空字典导致 dimension_record 等依赖测试无法跑
+- **责任 sprint**：**M02 own**（不允许推迟到 M03/M04 sprint，否则下游测试跑不起来）
+- **触发时机**：alembic data migration（CREATE TABLE 后 INSERT 默认行；与 schema migration 同 revision）
+
+#### R3-6-C 业务字典清单（非 R3-6 范畴，运行期 admin 创建）
+- **运行期入口声明**：`POST /api/admin/dimension-types`（M02 §7 endpoint 表已含 / 待 admin UI 实装时补 endpoint）/ Server Action `web/src/actions/dimensionType.ts`
+- **权限层级**：`platform_admin` only（CY 决策：维度类型注册表是平台级 catalog，不该项目 owner 独自决定；与 `dimension_types` design §1 "全局维度类型注册表" 一致）
+- **典型业务清单（产品决策示例，不写死在 design）**：feature / competitor / issue / version / risk / requirement / etc——由 admin 在 M02 sprint 落地后通过运行期 endpoint 创建；具体清单不属 design 期决策
+
+### 3.Z early adopter 触发（accepted-minimal 之外能力，C1 AES helper）
+
+> M02 design §3 ai_api_key_enc 字段需 AES-256-GCM 加解密 helper。按 [`../../01-engineering/05-security-baseline.md §7`](../../01-engineering/05-security-baseline.md#7-accepted-minimal-状态的-early-adopter-触发条款2026-05-07-时间维度盲区沉淀2026-05-07-后续-d4-推演修订) 流程登记：
+
+- **能力**：AES-256-GCM 加解密 service（M02 写 `ai_api_key_enc` / M13 读解密走 prompt context / 未来 M16/M17 cron secret 加密复用）
+- **来源 spec**：05-security-baseline §4 数据加密
+- **判断前置 — Helper 类型**：**横切**（多模块复用，符合 §7 判断前置 4 项中 "多模块复用" + "横切 ADR 范畴" 两项）
+- **退化路径**：**§7.1 B' 部分提前**
+- **本 sprint 实装边界**：
+  - helper 建在横切层 `api/auth/crypto.py`（**禁止挂业务模块名下**，原则 6 + R-X6）
+  - 实装 `encrypt(plaintext: str) -> str` / `decrypt(ciphertext: str) -> str` 两方法（AES-256-GCM + base64）
+  - 密钥读 env `ENCRYPTION_KEY`（settings.py 加 1 字段）
+  - 单元测试覆盖：encrypt/decrypt 往返 / 错密钥 raise / 错 ciphertext raise
+- **回写动作**：05-security-baseline §4 数据加密表加最小段（"AES-256-GCM helper 在 `api/auth/crypto.py`，密钥从 env `ENCRYPTION_KEY` 读"~5-10 行）；§8.0 必补清单保留"密钥轮转 / HSM / 多密钥 fallback"
+- **回写 commit hash**：_M02 sprint 实装时填_
 
 ---
 

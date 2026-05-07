@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-21
+last_reviewed_at: 2026-05-07
 module_id: M17
 prism_ref: F17
 pilot: true
@@ -443,11 +443,11 @@ async def execute_importing(self, task_id: UUID):
 | **Router** | `api/routers/import_router.py` | REST endpoints + WebSocket endpoint + 权限 |
 | **Service** | `api/services/import_service.py`<br>`api/services/ai_orchestration_service.py` | 任务编排 / 状态转换 / 调 AI / 调 Queue |
 | **DAO** | `api/dao/import_task_dao.py` | SQL + tenant 过滤 |
-| **Queue Tasks** | `api/queue/import_tasks.py` | arq @task 函数：extract / ai_step1 / ai_step2 / ai_step3 / batch_insert |
-| **Queue Base** | `api/queue/base.py` | TaskPayload 基类强制 user_id + project_id（呼应 04-layer Q6） |
-| **AI Client** | `api/clients/ai_client.py` | 多 provider 统一接口（Claude / Codex / Kimi） |
-| **Storage** | `api/clients/storage_client.py` | S3 / MinIO 暂存文件 |
-| **WebSocket Server** | `api/ws/import_progress.py` | 任务进度实时推送 |
+| **Queue Tasks** | `api/queue/import_tasks.py` **[business owner=M17, location=api/queue/ 横切目录]** | arq @task 函数：extract / ai_step1 / ai_step2 / ai_step3 / batch_insert。**横切归属**（2026-05-07 对齐原则 6 + R-X6 + 04-layer Q7）：M17 own 业务任务函数，但**位置在 `api/queue/` 横切目录下**（横切目录承载所有模块的 Queue task 函数，业务 owner 通过文件名前缀明示）；不能放 `api/services/m17/import_tasks.py` |
+| **Queue Base** | `api/queue/base.py` **[horizontal, owner=ADR-002 §1]** | TaskPayload 基类强制 user_id + project_id（呼应 04-layer Q6 + ADR-002）。**横切归属**：horizontal helper（所有 Queue 模块复用），owner = ADR-002 §1 |
+| **AI Client** | `api/clients/ai_client.py` **[horizontal, owner=ADR-001 §预设 4]** | 多 provider 统一接口（Claude / Codex / Kimi）。**横切归属**：horizontal helper（M13/M16/M17 多模块复用），owner = ADR-001 §预设 4 AI Provider 抽象 |
+| **Storage** | `api/clients/storage_client.py` **[horizontal, owner=05-security-baseline §4]** | S3 / MinIO 暂存文件。**横切归属**：horizontal helper（潜在多模块复用），owner = 05-security-baseline §4 |
+| **WebSocket Server** | `api/ws/import_progress.py` **[business owner=M17, location=api/ws/ 横切目录]** | 任务进度实时推送。**横切归属**：M17 own 业务 WS handler，位置在 `api/ws/` 横切目录（同 Queue tasks 模式）|
 | **Model** | `api/models/import_task.py` | SQLAlchemy 模型 |
 | **Schema** | `api/schemas/import_schema.py` | Pydantic 请求/响应 |
 

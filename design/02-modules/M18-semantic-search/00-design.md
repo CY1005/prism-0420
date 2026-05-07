@@ -6,7 +6,7 @@ created: 2026-04-25
 accepted: null
 supersedes: [M09]
 superseded_by: null
-last_reviewed_at: null
+last_reviewed_at: 2026-05-07
 module_id: M18
 prism_ref: F18
 pilot: true
@@ -575,8 +575,8 @@ stateDiagram-v2
 | **Router** | `api/routers/search.py` | `POST /api/projects/{pid}/search` —— Bearer JWT auth + project access check + 调 SearchService |
 | **Router** | `api/routers/embedding_admin.py`（CY 内部用，platform_admin 限定） | `POST /api/admin/embedding/backfill` 手动触发 / `POST /api/admin/embedding/model-upgrade` 触发回填 |
 | **Service** | `api/services/search.py` (M18 接管 M09) | `SearchService.hybrid_search(db, query, project_id, user_id)` —— 入口读 env `SEARCH_MODE`（hybrid / keyword_only / semantic_only，audit B5 kill switch）+ 调上游 search_by_keyword + 调 EmbeddingService.embed_query + RRF 融合 + filter + 超时事件埋点（audit M12）。**dim 路由**（fix v3 verify N5）：query embed 返回的 dim 决定查哪一列——512 → `embedding_512 <=> :q`、1536 → `embedding_1536 <=> :q`、3072 → `embedding_3072 <=> :q`，并附 `WHERE embedding_<dim> IS NOT NULL AND provider = :p`，由部署期 EMBEDDING_PROVIDER 决定走哪一档，不在 query path 跨列 union |
-| **Service** | `api/services/embedding.py` | `EmbeddingService.enqueue / get_or_compute_embedding / embed_query / batch_backfill / enqueue_delete` —— **fix v2 决策 1=B**：write/read 操作内部按 (provider, dim) 路由到 embedding_512/1536/3072 列；search 时按 current provider 的 dim 选目标列 |
-| **Service** | `api/services/embedding_provider.py` | `EmbeddingProvider` 基类 + OpenAI / bge / Mock 实现（仿 ADR-001 §4 LLM provider 抽象） |
+| **Service** | `api/services/embedding.py` **[horizontal, owner=M18]** | `EmbeddingService.enqueue / get_or_compute_embedding / embed_query / batch_backfill / enqueue_delete` —— **fix v2 决策 1=B**：write/read 操作内部按 (provider, dim) 路由到 embedding_512/1536/3072 列；search 时按 current provider 的 dim 选目标列。**横切归属**（2026-05-07 对齐原则 6 + R-X6）：horizontal helper（M03/M04/M06/M07 多模块复用 enqueue / enqueue_delete），owner = M18，位置在横切层 api/services/，**禁止挂业务模块名下** |
+| **Service** | `api/services/embedding_provider.py` **[horizontal, owner=M18]** | `EmbeddingProvider` 基类 + OpenAI / bge / Mock 实现（仿 ADR-001 §4 LLM provider 抽象）。**横切归属**：horizontal helper（embedding 提供者抽象），owner = M18 |
 | **Queue Worker** | `api/queue/embedding_tasks.py` | `embed_single` task —— 入口校验 payload + advisory_xact_lock + content_hash 比对 + Provider 调用 + 写 embeddings or embedding_failures |
 | **Cron** | `api/cron/embedding_backfill.py` | 每日 0 点扫 backfill / 每 5min 扫 zombie / 每小时扫 failures 阈值（详见 §15.1 cron 矩阵） |
 | **Cron** | `api/cron/embedding_backfill_recovery.py` | fix v4.1 verify R5' 新增：arq cron 每小时调 `EmbeddingBackfillService.detect_and_resume_pending_backfill(db, arq_pool)` 真 re-enqueue 残留 task |

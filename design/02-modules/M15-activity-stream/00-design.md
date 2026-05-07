@@ -6,7 +6,7 @@ created: 2026-04-21
 accepted: 2026-04-21
 supersedes: []
 superseded_by: null
-last_reviewed_at: 2026-04-24
+last_reviewed_at: 2026-05-07
 module_id: M15
 prism_ref: F15
 pilot: false
@@ -430,6 +430,35 @@ class ActivityStreamDAO:
 - M15 作为 `activity_logs` owner（R10-2）：**M15 负责 activity_logs 表的 Alembic 迁移文件**，索引 + CheckConstraint 均由此模块维护。
 - **ImmutableMixin 引入**：`base.py` 若无 `ImmutableMixin`，则本模块引入——仅含 `created_at`，无 `updated_at`，专用于日志等不可变实体（M15-F3 修复）。
 - `action_type` / `target_type` CheckConstraint 初始值见上方 model `__table_args__`；随各模块 accepted 回写时需追加 Alembic 迁移（ALTER TABLE ... DROP CONSTRAINT + ADD CONSTRAINT）。
+
+---
+
+### 3.X 实施期处理（R-X5 baseline-patch 时序契约，2026-05-07 加）
+
+> M15 design §3 含 2 处 baseline-patch 反向时序引用（M18 / M20 在 M15 之后实施）。enum 扩展类型在 R-X5 主标准下 Q1 都是"是"——死定义无副作用。
+
+#### A8 — M18 baseline-patch（embedding 相关 ActionType + TargetType enum 扩展）
+
+- **退化路径**：**A 现在建**
+- **主标准推导**：Q1 是（enum 加值 + CHECK 约束直接写入 alembic，对功能无副作用——CHECK 只校验 INSERT 写入值合法，无 caller 时不触发）
+- **理由**：M15 sprint 期 ActionType / TargetType enum 直接含 M18 embedding 相关值（如 `embedding_failures` target_type 等，详见 §3 model code block）；CHECK 约束初始版本即包含 M18 值，避免 M18 sprint 期再 ALTER DROP+ADD CONSTRAINT
+- **alembic 步骤数**：0 额外（M15 sprint 期 CHECK 约束初始版本即含 M18 值，1 步成形）
+- **触发回写**：M18 sprint 启动时本段更新为"M18 已使用相关 ActionType / TargetType + commit hash"
+- **A 路径必声明**：M15 sprint 期 M18 相关 enum 值无 INSERT caller，仅 CHECK 约束防御层；unit test 仅测 enum 定义包含某值，不测真实 INSERT 路径——生产路径 M18 sprint 期补回归
+- **🟡 子选项**：标记位置（code 注释 / design §3 表加列 / ci-lint.sh 加附加规则）—— 与 M02 A3.1 同款问题，与 M02 sprint 实证结果联动
+
+#### A9 — M20 baseline-patch（team 相关 TargetType + 8 ErrorCode + TEAM_NOT_FOUND）
+
+- **退化路径**：**A 现在建**
+- **主标准推导**：Q1 是（enum 加值 + ErrorCode + AppError 子类 R13-1 配齐即可）
+- **理由**：M15 sprint 期 TargetType enum 含 `team`（详见 §3 line 612 已定义）；ErrorCode 8 类（含 `TEAM_NOT_FOUND`）入 codes.py + AppError 子类入 exceptions.py；R13-1 守护 parity 通过
+- **alembic 步骤数**：0 额外（同 A8）
+- **触发回写**：M20 sprint 启动时本段更新为"M20 team 相关 INSERT caller + ErrorCode raise caller 已建 + commit hash"
+- **A 路径必声明**：
+  1. M15 sprint 期 8 个 ErrorCode + AppError 子类无 raise caller（ci-lint.sh R13-1 仅查 parity）；标"未实装期 ErrorCode"
+  2. M15 sprint 期 `team` TargetType 无 INSERT caller，仅 CHECK 约束防御层
+  3. unit test 仅测 enum / R13-1 parity；生产路径 M20 sprint 期补回归
+- **🟡 子选项**：标记位置（同 A8）—— 与 M02 sprint 实证结果联动
 
 ---
 

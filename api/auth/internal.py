@@ -1,3 +1,11 @@
+"""Internal token 签名横切 helper（horizontal）。
+
+# horizontal: 是
+# owner: ADR-004 §1 P2 internal token（Server Action → FastAPI 转发签名）
+# 位置: api/auth/（横切层，对齐原则 6 + R-X6 + 04-layer Q7）
+# 范畴: ADR-004 横切（HMAC P2 签名 / 时间戳防回放 / 签名校验）
+"""
+
 import hashlib
 import hmac
 import time

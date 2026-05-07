@@ -3,6 +3,7 @@
 - **状态**：accepted（§预设 3 部分 superseded by ADR-005，2026-04-26）
 - **日期**：2026-04-20
 - **决策者**：CY
+- **v2 修订**：2026-05-07（§预设 4 AI Provider 抽象段加横切归属标，对齐原则 6 + R-X6 + 04-layer Q7；详见 [`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md)）
 - **partial_superseded_by**：[ADR-005-team-extension.md] —— §预设 3 整段（命名 + 类型 + FK 三件）
 
 ---
@@ -159,6 +160,12 @@ class Project(Base):
 ```
 
 ### 预设 4：AI Provider 抽象设计
+
+> **横切归属**（2026-05-07 时间维度盲区沉淀，对齐原则 6 + R-X6 + 04-layer Q7）：
+> - **horizontal: 是**——多模块复用（M13 流式 SSE / M16 后台任务 / M17 Queue 异步）
+> - **owner: ADR-001 §预设 4**（横切 ADR 范畴）
+> - **位置**: `api/services/ai_provider.py`（横切层 api/services/ 下 horizontal helper，不挂业务模块名下）
+> - **范畴**: LLM provider 抽象（流式 + 同步 / aclose 协议 / 重试策略 / Provider 自动切换策略）
 
 #### 4.1 接口签名 — 流式 + 同步双支持
 
