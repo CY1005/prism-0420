@@ -51,3 +51,15 @@ class ErrorCode(StrEnum):
     AI_KEY_ENCRYPT_FAILED = "ai_key_encrypt_failed"
     # F2.3 M20 baseline-patch (move-team scaffold caller 子片 4 推迟 / R-X5 子选项实证标记位置=code 注释)
     PROJECT_ARCHIVED = "project_archived"
+
+    # M03 功能模块树 (design §13)
+    # R-X5 子选项实证 (M02 sprint 末): R13-1 未实装期 ErrorCode 标记位置 = code 注释
+    # NODE_NAME_EMPTY: Pydantic min_length=1 拦得早, ErrorCode 保留备用 (R13-1 parity)
+    # NODE_DELETE_HAS_CHILDREN: G2 决策硬删除级联, 此码保留备用不触发 (R13-1 parity)
+    NODE_NOT_FOUND = "node_not_found"
+    NODE_NAME_EMPTY = "node_name_empty"
+    NODE_PARENT_NOT_FOUND = "node_parent_not_found"
+    NODE_TYPE_IMMUTABLE = "node_type_immutable"
+    NODE_REORDER_INVALID = "node_reorder_invalid"
+    NODE_DELETE_HAS_CHILDREN = "node_delete_has_children"
+    NODE_MOVE_CYCLE_DETECTED = "node_move_cycle_detected"

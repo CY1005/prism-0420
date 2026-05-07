@@ -240,3 +240,53 @@ class ProjectArchivedError(AppError):
     code = ErrorCode.PROJECT_ARCHIVED
     http_status = 422
     message = "Archived project cannot be moved to a team"
+
+
+# ─── M03 功能模块树 (design §13) ─────────────────────────────────
+# R-X5 子选项实证 (M02 sprint 末): R13-1 未实装期 ErrorCode 标记位置 = code 注释
+
+
+class NodeNotFoundError(NotFoundError):
+    code = ErrorCode.NODE_NOT_FOUND
+    http_status = 404
+    message = "Node not found"
+
+
+class NodeNameEmptyError(ValidationError):
+    """G2 — Pydantic min_length=1 拦得早 (router 层 422); 此 ErrorCode 保留备用 (R13-1 parity)."""
+
+    code = ErrorCode.NODE_NAME_EMPTY
+    http_status = 422
+    message = "Node name cannot be empty"
+
+
+class NodeParentNotFoundError(NotFoundError):
+    code = ErrorCode.NODE_PARENT_NOT_FOUND
+    http_status = 404
+    message = "Parent node not found"
+
+
+class NodeTypeImmutableError(ValidationError):
+    code = ErrorCode.NODE_TYPE_IMMUTABLE
+    http_status = 422
+    message = "Node type cannot be changed after creation"
+
+
+class NodeReorderInvalidError(ValidationError):
+    code = ErrorCode.NODE_REORDER_INVALID
+    http_status = 422
+    message = "All nodes in reorder request must belong to the same parent"
+
+
+class NodeDeleteHasChildrenError(ValidationError):
+    """G2 决策硬删除级联子树, 此码保留备用不触发 (R13-1 parity)."""
+
+    code = ErrorCode.NODE_DELETE_HAS_CHILDREN
+    http_status = 422
+    message = "Cannot delete node with children; delete children first or confirm cascade"
+
+
+class NodeMoveCycleDetectedError(ValidationError):
+    code = ErrorCode.NODE_MOVE_CYCLE_DETECTED
+    http_status = 422
+    message = "Cannot move node to its own descendant (cycle detected)"
