@@ -105,7 +105,8 @@ async def test_update_node_name(auth_client, make_user):
 # ─────────────── G5: reorder ───────────────
 
 
-async def test_reorder_siblings_returns_tree(auth_client, make_user):
+async def test_reorder_siblings_returns_list(auth_client, make_user):
+    """R2-1 修后: response NodeListResponse (design §7 字面)."""
     user = await make_user(email="m03-reord@example.com")
     pid = await _create_project(auth_client, user.id)
     a = await _create_node(auth_client, user.id, pid, name="a")
@@ -119,7 +120,9 @@ async def test_reorder_siblings_returns_tree(auth_client, make_user):
         headers=_bearer(user.id),
     )
     assert r.status_code == 200
-    by_name = {root["name"]: root for root in r.json()["roots"]}
+    body = r.json()
+    assert "items" in body, f"R2-1 修: 应返回 NodeListResponse 而非 NodeTreeResponse, got={body}"
+    by_name = {n["name"]: n for n in body["items"]}
     assert by_name["a"]["sort_order"] == 5
     assert by_name["b"]["sort_order"] == 0
 

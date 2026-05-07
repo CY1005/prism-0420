@@ -32,6 +32,20 @@ class NodeDAO:
         )
         return result.scalars().all()
 
+    async def list_by_ids(
+        self, db: AsyncSession, node_ids: list[UUID], project_id: UUID
+    ) -> list[Node]:
+        """R2-4 修: 一次 IN 查（breadcrumb / batch ops 用），强制 tenant 过滤。
+
+        节点不存在或跨租户的 id 不在结果中。caller 负责按需排序。
+        """
+        if not node_ids:
+            return []
+        result = await db.execute(
+            select(Node).where(Node.project_id == project_id, Node.id.in_(node_ids))
+        )
+        return list(result.scalars().all())
+
     async def get_by_id(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> Node | None:
         """tenant 过滤：单节点查询强制带 project_id。"""
         result = await db.execute(

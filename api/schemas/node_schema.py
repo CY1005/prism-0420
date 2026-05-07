@@ -60,7 +60,8 @@ class NodeResponse(BaseModel):
     parent_id: UUID | None
     name: str
     description: str | None
-    type: str
+    # R2-8 修: design §7 字面 NodeTypeEnum, 实装回归 (前端拿到 enum 类型保证)
+    type: NodeTypeEnum
     depth: int
     sort_order: int
     path: str

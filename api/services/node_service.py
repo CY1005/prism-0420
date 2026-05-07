@@ -55,6 +55,13 @@ class NodeChildrenServiceProtocol(Protocol):
     若下游 service 静默吞错，子树清理会半途而废但 DB CASCADE 兜底删 nodes，
     导致 dimension_records/competitors/issues 残留孤儿数据 + activity_log 缺事件。
     被允许的 catch：仅当 impl 已显式记录错误为独立事件并继续抛 AppError 时（M15 sprint 落地后）。
+
+    **未来契约升级路径 (R2-3 punt 注记)**：当前 Protocol 是单 node 调用 (db, node_id, project_id)。
+    M04+ sprint 注入 concrete impl 后，delete_node 子树有 N 节点 × K service = N×K 次单 node 调用，
+    深树时是 N+1 风险。子树节点数 >50 时，concrete impl 应升级为支持 batch 形态:
+        async def __call__(self, db, node_ids: list[UUID], project_id) -> None
+    并由 M03 delete_node 改为 list_subtree 后单次 batch 调用。当前为 noop 不修;
+    M04 sprint 启动时按 design §6 R-X2 决策"是否升级 Protocol 签名"。
     """
 
     async def __call__(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> None: ...
@@ -123,17 +130,17 @@ class NodeService:
         return node.name
 
     async def breadcrumb(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> list[Node]:
-        """面包屑：从根到当前节点（含自身）。基于 path 物化路径解析。"""
+        """面包屑：从根到当前节点（含自身）。基于 path 物化路径解析。
+
+        R2-4 修：原 N+1（O(深度) 次 get_by_id）→ 改为一次 list_by_ids IN 查
+        （兑现 design §1 "O(1) 面包屑查询" 承诺；O(1) 指 1 次 DB roundtrip）。
+        """
         node = await self.get_node(db, node_id, project_id)
         ids = [UUID(seg) for seg in node.path.strip("/").split("/") if seg]
         if not ids:
             return [node]
-        # 一次 IN 查 + 按 path 顺序排
-        result_map: dict[UUID, Node] = {}
-        for nid in ids:
-            n = await self.dao.get_by_id(db, nid, project_id)
-            if n is not None:
-                result_map[nid] = n
+        rows = await self.dao.list_by_ids(db, ids, project_id)
+        result_map = {n.id: n for n in rows}
         return [result_map[nid] for nid in ids if nid in result_map]
 
     # ─── 写 ───

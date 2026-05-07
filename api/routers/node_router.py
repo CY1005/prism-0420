@@ -30,6 +30,7 @@ from api.schemas.node_schema import (
     BreadcrumbItem,
     BreadcrumbResponse,
     NodeCreate,
+    NodeListResponse,
     NodeMove,
     NodeReorder,
     NodeResponse,
@@ -168,18 +169,19 @@ async def delete_node(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/reorder", response_model=NodeTreeResponse)
+@router.post("/reorder", response_model=NodeListResponse)
 async def reorder_siblings(
     payload: NodeReorder,
     access: ProjectAccess = Depends(check_project_access(role="editor")),
     db: AsyncSession = Depends(get_db),
-) -> NodeTreeResponse:
-    """重排同级节点（NodeListResponse 形式可由前端按需用 list_tree 自取）。
+) -> NodeListResponse:
+    """重排同级节点。返回受影响的同级节点最新 sort_order（design §7）。
 
-    返回最新整树以便前端无需二次请求即可渲染。
+    R2-1 修：原实装返回 NodeTreeResponse 整树是契约漂移（design §7 字面 NodeListResponse）；
+    且 service 已返回 list[Node]，router 不再多调 svc.list_tree（R2-2 N+1 同合并修）。
     """
     svc = NodeService()
-    await svc.reorder_siblings(
+    updated = await svc.reorder_siblings(
         db,
         project_id=access.project.id,
         actor_user_id=access.user.id,
@@ -187,8 +189,7 @@ async def reorder_siblings(
         items=[(item.node_id, item.sort_order) for item in payload.items],
     )
     await db.commit()
-    flat = await svc.list_tree(db, access.project.id)
-    return NodeTreeResponse(roots=_build_tree(flat))
+    return NodeListResponse(items=[_node_response(n) for n in updated])
 
 
 @router.post("/{node_id}/move", response_model=NodeResponse)
