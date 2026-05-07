@@ -23,6 +23,7 @@ last_reviewed_at: 2026-05-07
 |------|---------|--------------|
 | M02 项目管理 | 4 表 (projects/members/dim_configs/dim_types) 全实装,无预留模式 | ❌ 不复用 (2026-05-07): M02 是 tenant 锚点,所有字段必须可用; SearchConfig+rrf_k+similarity_threshold 是"现在建未来用"部分模式但属横切扩展非"预留 schema" |
 | M03 模块树 | nodes 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-07): M03 是 M04-M19 树结构锚点,当前所有字段必须可用; A2 reconcile 加 description 字段是 M18 baseline-patch 被动接口需求,属横切扩展非"预留 schema" |
+| M04 维度记录 | dimension_records 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-07): M04 是档案页主表,所有字段（content JSONB / version / created_by / updated_by）必须可用; M18 baseline-patch get_for_embedding A 路径已实装非"预留 schema" |
 | M11 节点版本 | 是否预建 `node_versions` 表但本期只读？ | ⏳ M11 实施时核对 |
 | M16/M17/M18 cron | 预留 cron config 表 vs 本期硬编码？ | ⏳ M16 实施时核对 |
 | M07 dimension 配置 | 预留 dimension type 枚举扩展位 vs 本期固定？ | ⏳ M07 实施时核对 |

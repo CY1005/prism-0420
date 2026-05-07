@@ -1,9 +1,9 @@
 ---
 title: M04 功能项档案页 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-21
-accepted: null
+accepted: 2026-05-07
 supersedes: []
 superseded_by: null
 last_reviewed_at: 2026-05-07
@@ -603,10 +603,10 @@ class DimensionDuplicateError(AppError):
 - [x] 节 13：ErrorCode 新增清单 + AppError 类
 - [x] 节 14：tests.md 测试场景写完
 - [x] 节 15：本 checklist 全勾过
-- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
-- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
-- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
-- [ ] CY 全文复审通过 → status 转 accepted
+- [x] **🔴 第一轮 reviewer audit（完整性）通过** — M04 sprint R1（3 subagent: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）共 4 P1 全立修（commit `0ca7e5b`）+ 10 P2 punt + 7 P3 顺手清候选；详见 `../../audit/m04-pilot-template-validation.md`
+- [x] **🔴 第二轮 reviewer audit（边界场景）通过** — M04 sprint R2（1 合并 Opus subagent）1 P1 立修（commit `5a97824`，B6.x enabled_dimension_types 字段名/SQL 契约漂移）+ 3 P2 punt + 3 P3 顺手清；详见 audit
+- [x] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过** — PT1-PT3 回写 `../../audit/m01-pilot-template-validation.md` M04 行；R-X5 子选项 5 项实证（含新决 NodeChildrenServiceProtocol 4 参升级 + pdc-existence-strict + ck_clause 提取 + make_node fixture 位置 + A5 enqueue/embedding）
+- [x] CY 全文复审通过 → status 转 accepted（2026-05-07）
 
 ---
 
