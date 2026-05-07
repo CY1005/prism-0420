@@ -30,9 +30,8 @@ _PROJECT_STATUSES = ("active", "archived")
 _MEMBER_ROLES = ("owner", "editor", "viewer")
 
 
-def _ck_clause(column: str, values: tuple[str, ...]) -> str:
-    quoted = ", ".join(f"'{v}'" for v in values)
-    return f"{column} IN ({quoted})"
+# M04 sprint R1-B C2 闭环：_ck_clause 三处重复 → migrations/helpers.py
+from migrations.helpers import ck_clause as _ck_clause  # noqa: E402
 
 
 def upgrade() -> None:

@@ -1,6 +1,7 @@
 """注册所有 ORM model 到 Base.metadata（Alembic autogenerate 依赖）。"""
 
 from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixin
+from api.models.dimension_record import DimensionRecord
 from api.models.node import Node, NodeType
 from api.models.project import (
     DimensionType,
@@ -26,6 +27,7 @@ __all__ = [
     "AuthAuditLog",
     "AuthIdentity",
     "Base",
+    "DimensionRecord",
     "DimensionType",
     "EmailChangeRequest",
     "ImmutableMixin",

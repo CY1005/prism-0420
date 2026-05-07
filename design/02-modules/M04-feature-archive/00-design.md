@@ -564,6 +564,24 @@ class DimensionDuplicateError(AppError):
 - **权限**：viewer 写 / 未登录读 / role downgrade
 - **错误处理**：DB 唯一冲突 / 乐观锁冲突 / 节点已删
 
+### 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-07 立）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md#闸门-34--review-触发粒度规则l1-总则2026-05-07-立) L1 总则要求落本 sprint review 计划。
+> M04 sprint 拆 5 子片，按 M02+M03 双数据点稳定（R1=3 subagent / R2=1 合并 Opus subagent 已稳定足够；详见 `../../audit/m02-pilot-template-validation.md` + `m03-pilot-template-validation.md`）推 2 次 review：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（service + R-X2 第一真注入 + activity_log 落地） | 子片 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（3 subagent: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| M02+M03 双数据点稳定：schema 子片 Spec 信号弱必须合并 service 才能审业务；DAO+service 合并跑横向 reuse + 纵向 quality + 动态 efficiency 三维信号最强 |
+| **R2** | 子片 4 完成（6 endpoints + check_project_access + completion endpoint） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**，M02+M03 双数据点已验证足够，节省 subagent 调用）| endpoint 层是 Prism 契约漂移 (维度 2 #17-20) + 静默吞错 (#21-23) + 权限三层 + tenant 隔离 (#4-5) 等 checklist 高命中区，单跑保留独立性 |
+
+**子片 5 不单跑**：纯 tests + ci-lint + R-X5 实证子选项 / PT1-PT3 文档回写，无新业务代码——按触发器例外条款（≥80% SKIP）。
+
+**schema 子片禁单跑**（M02+M03 双数据点稳定结论）：dimension_record schema 单独 Spec 信号弱，必须合并到 service 后审。
+
+**承接 bypass log #1 配套承诺**：R1 + R2 共 2 次完整三 Agent + simplify，满足 sprint ≥1 次硬承诺。
+
+**L3 实证回写承诺**：sprint 结束时把"实际跑下来 R1/R2 命中 vs SKIP 比例" + R-X5 子选项实证（M04 §6.X A5 enqueue 推迟 / get_for_embedding A 现在建 / NodeChildrenServiceProtocol 是否升级 batch 形态 R2-3 punt / make_node fixture conftest 复用规则延伸 / _ck_clause helper 提取） + L1 第三数据点回写到新建文件 `../../audit/m04-pilot-template-validation.md`，作为 L3 数据驱动 M05 sprint review 计划。
+
 ---
 
 ## 15. 完成度判定 checklist

@@ -209,6 +209,41 @@ async def make_project(db_session, make_user):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_node(db_session):
+    """工厂 fixture：建一个 node（默认 folder，path 与 depth 一致）。
+
+    M04 sprint 加：M03 R1-B C1 规则延伸——禁止跨模块 test helper 内联重复。
+    test_m03_dao.py 原内联 `_make_node` 迁移到本 fixture，M04+ 复用。
+    """
+    from uuid import uuid4
+
+    from api.models.node import Node
+
+    async def _make(project_id, *, parent=None, name: str = "n", **extra) -> Node:
+        if parent is None:
+            depth = 0
+            prefix = "/"
+        else:
+            depth = parent.depth + 1
+            prefix = parent.path
+        nid = uuid4()
+        node = Node(
+            id=nid,
+            project_id=project_id,
+            parent_id=parent.id if parent else None,
+            name=name,
+            depth=depth,
+            path=f"{prefix}{nid}/",
+            **extra,
+        )
+        db_session.add(node)
+        await db_session.flush()
+        return node
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def isolated_db(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """独立连接 + 顶层事务的 session（不走 savepoint）。
 

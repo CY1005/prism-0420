@@ -104,3 +104,9 @@ class Node(Base, TimestampMixin):
         remote_side="Node.id",
         foreign_keys="Node.parent_id",
     )
+    # M04 sprint 加：design §3 ER 双向链
+    dimension_records: Mapped[list["DimensionRecord"]] = relationship(  # noqa: F821
+        "DimensionRecord",
+        back_populates="node",
+        cascade="all, delete-orphan",
+    )

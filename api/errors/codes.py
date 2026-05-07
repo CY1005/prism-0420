@@ -63,3 +63,10 @@ class ErrorCode(StrEnum):
     NODE_REORDER_INVALID = "node_reorder_invalid"
     NODE_DELETE_HAS_CHILDREN = "node_delete_has_children"
     NODE_MOVE_CYCLE_DETECTED = "node_move_cycle_detected"
+
+    # M04 功能项档案页 / 维度记录 (design §13)
+    DIMENSION_NOT_FOUND = "dimension_not_found"
+    DIMENSION_TYPE_DISABLED = "dimension_type_disabled"
+    DIMENSION_TYPE_NOT_FOUND = "dimension_type_not_found"
+    DIMENSION_CONTENT_INVALID = "dimension_content_invalid"
+    DIMENSION_DUPLICATE = "dimension_duplicate"

@@ -290,3 +290,36 @@ class NodeMoveCycleDetectedError(ValidationError):
     code = ErrorCode.NODE_MOVE_CYCLE_DETECTED
     http_status = 422
     message = "Cannot move node to its own descendant (cycle detected)"
+
+
+# ─────────────── M04 功能项档案页 / 维度记录 ───────────────
+
+
+class DimensionNotFoundError(NotFoundError):
+    code = ErrorCode.DIMENSION_NOT_FOUND
+    http_status = 404
+    message = "Dimension record not found"
+
+
+class DimensionTypeDisabledError(AppError):
+    code = ErrorCode.DIMENSION_TYPE_DISABLED
+    http_status = 422
+    message = "This dimension type is disabled in current project"
+
+
+class DimensionTypeNotFoundError(NotFoundError):
+    code = ErrorCode.DIMENSION_TYPE_NOT_FOUND
+    http_status = 404
+    message = "Dimension type not found"
+
+
+class DimensionContentInvalidError(ValidationError):
+    code = ErrorCode.DIMENSION_CONTENT_INVALID
+    http_status = 422
+    message = "Dimension content does not match field schema"
+
+
+class DimensionDuplicateError(ConflictError):
+    code = ErrorCode.DIMENSION_DUPLICATE
+    http_status = 409
+    message = "Dimension record already exists for this node and type"
