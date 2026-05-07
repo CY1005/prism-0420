@@ -11,7 +11,7 @@ from api.core.redis import get_redis
 from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
 from api.routers import auth as auth_router
-from api.routers import project_router
+from api.routers import node_router, project_router
 from api.services.auth_service import get_auth_service
 
 configure_logging()
@@ -66,6 +66,7 @@ app = FastAPI(title="prism-0420", version="0.1.0", lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(auth_router.router)
 app.include_router(project_router.router)
+app.include_router(node_router.router)
 
 
 @app.get("/health")
