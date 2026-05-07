@@ -32,6 +32,7 @@ from api.errors.exceptions import (
     MemberNotFoundError,
     PermissionDeniedError,
     ProjectAlreadyArchivedError,
+    ProjectArchivedError,
     ProjectNameDuplicateError,
     ProjectNotFoundError,
 )
@@ -124,11 +125,10 @@ class ProjectService:
         actor_user_id: UUID,
         changes: dict[str, Any],
     ) -> Project:
-        """要求 actor 是 owner; 返回更新后的 project."""
-        await self._require_owner(db, project_id, actor_user_id)
-        proj = await self.projects.get_by_id(db, project_id)
-        if proj is None:
-            raise ProjectNotFoundError(project_id=str(project_id))
+        """要求 actor 是 owner; 返回更新后的 project. archived project 拒改 (R1 P2-A)."""
+        proj, _m = await self.require_owner(db, project_id, actor_user_id)
+        if proj.status == ProjectStatus.ARCHIVED.value:
+            raise ProjectArchivedError(project_id=str(project_id), reason="cannot_update_archived")
 
         changed_fields = []
         for key, val in changes.items():
@@ -152,10 +152,7 @@ class ProjectService:
         self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
     ) -> Project:
         """active → archived; 重复 archive raise PROJECT_ALREADY_ARCHIVED (design §4 R4-2)."""
-        await self._require_owner(db, project_id, actor_user_id)
-        proj = await self.projects.get_by_id(db, project_id)
-        if proj is None:
-            raise ProjectNotFoundError(project_id=str(project_id))
+        proj, _m = await self.require_owner(db, project_id, actor_user_id)
         if proj.status == ProjectStatus.ARCHIVED.value:
             raise ProjectAlreadyArchivedError(project_id=str(project_id))
         proj.status = ProjectStatus.ARCHIVED.value
@@ -183,11 +180,7 @@ class ProjectService:
         ai_provider: str | None,
         ai_api_key: str | None,
     ) -> Project:
-        await self._require_owner(db, project_id, actor_user_id)
-        proj = await self.projects.get_by_id(db, project_id)
-        if proj is None:
-            raise ProjectNotFoundError(project_id=str(project_id))
-
+        proj, _m = await self.require_owner(db, project_id, actor_user_id)
         proj.ai_provider = ai_provider
         if ai_api_key is not None:
             try:
@@ -221,21 +214,37 @@ class ProjectService:
 
     # ─── helpers ───
 
-    async def _require_owner(
+    async def require_owner(
         self, db: AsyncSession, project_id: UUID, user_id: UUID
-    ) -> ProjectMember:
-        m = await self.members.get_member(db, project_id, user_id)
-        if m is None:
-            raise PermissionDeniedError(project_id=str(project_id))
+    ) -> tuple[Project, ProjectMember]:
+        """合并 project + membership 一次 JOIN 查询 (R1 E1/E5/E4 修).
+
+        - 非 member → ProjectNotFoundError (R1 P2-A: 与 get_for_user 行为对齐 + 防 enum 攻击)
+        - 非 owner → PermissionDeniedError
+        返回 (project, member) 元组,caller 不再重复 get_by_id.
+        """
+        from sqlalchemy import select as _sel
+
+        stmt = (
+            _sel(Project, ProjectMember)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(Project.id == project_id, ProjectMember.user_id == user_id)
+        )
+        result = await db.execute(stmt)
+        row = result.one_or_none()
+        if row is None:
+            raise ProjectNotFoundError(project_id=str(project_id))
+        proj, m = row
         if m.role != MemberRole.OWNER.value:
             raise PermissionDeniedError(project_id=str(project_id), role=m.role)
-        return m
+        return proj, m
 
 
 class MemberService:
-    def __init__(self) -> None:
+    def __init__(self, project_service: ProjectService | None = None) -> None:
         self.members = ProjectMemberDAO()
-        self.projects_svc = ProjectService()
+        # R1 P2-A: 共享 ProjectService 实例 (避免重复构造 4 个 DAO)
+        self.projects_svc = project_service or ProjectService()
 
     async def list_members(
         self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
@@ -251,16 +260,16 @@ class MemberService:
         project_id: UUID,
         actor_user_id: UUID,
         invited_user_id: UUID,
-        role: str = "viewer",
+        role: MemberRole | str = MemberRole.VIEWER,
     ) -> ProjectMember:
-        await self.projects_svc._require_owner(db, project_id, actor_user_id)
-        # DB UNIQUE(project_id, user_id) 防重 (design §11 G2)
+        await self.projects_svc.require_owner(db, project_id, actor_user_id)
+        role_value = role.value if isinstance(role, MemberRole) else role
         try:
             m = await self.members.create(
                 db,
                 project_id=project_id,
                 user_id=invited_user_id,
-                role=role,
+                role=role_value,
                 invited_by=actor_user_id,
             )
             await write_event(
@@ -270,8 +279,12 @@ class MemberService:
                 action_type="invite_member",
                 target_type="project_member",
                 target_id=str(m.id),
-                summary=f"Invited user {invited_user_id} as {role}",
-                metadata={"invited_user_id": str(invited_user_id), "role": role},
+                summary=f"Invited user {invited_user_id} as {role_value}",
+                metadata={
+                    "project_id": str(project_id),
+                    "invited_user_id": str(invited_user_id),
+                    "role": role_value,
+                },
             )
             return m
         except IntegrityError as e:
@@ -287,19 +300,20 @@ class MemberService:
         project_id: UUID,
         actor_user_id: UUID,
         target_user_id: UUID,
-        new_role: str,
+        new_role: MemberRole | str,
     ) -> ProjectMember:
-        await self.projects_svc._require_owner(db, project_id, actor_user_id)
+        await self.projects_svc.require_owner(db, project_id, actor_user_id)
         m = await self.members.get_member(db, project_id, target_user_id)
         if m is None:
             raise MemberNotFoundError(project_id=str(project_id), user_id=str(target_user_id))
-        if m.role == MemberRole.OWNER.value and new_role != MemberRole.OWNER.value:
-            # 不允许把 owner 降级 (design §8 特殊权限规则)
+        new_role_value = new_role.value if isinstance(new_role, MemberRole) else new_role
+        if m.role == MemberRole.OWNER.value and new_role_value != MemberRole.OWNER.value:
+            # owner 降级 + owner 移除 共用 MemberCannotRemoveOwnerError (R1 P1-A: message 已改宽)
             raise MemberCannotRemoveOwnerError(
                 project_id=str(project_id), reason="cannot_demote_owner"
             )
         old_role = m.role
-        m.role = new_role
+        m.role = new_role_value
         await db.flush()
         await write_event(
             db=db,
@@ -308,11 +322,12 @@ class MemberService:
             action_type="update_member_role",
             target_type="project_member",
             target_id=str(m.id),
-            summary=f"Changed role for user {target_user_id}: {old_role} → {new_role}",
+            summary=f"Changed role for user {target_user_id}: {old_role} → {new_role_value}",
             metadata={
+                "project_id": str(project_id),
                 "user_id": str(target_user_id),
                 "old_role": old_role,
-                "new_role": new_role,
+                "new_role": new_role_value,
             },
         )
         return m
@@ -325,13 +340,15 @@ class MemberService:
         actor_user_id: UUID,
         target_user_id: UUID,
     ) -> int:
-        await self.projects_svc._require_owner(db, project_id, actor_user_id)
+        await self.projects_svc.require_owner(db, project_id, actor_user_id)
         m = await self.members.get_member(db, project_id, target_user_id)
         if m is None:
             raise MemberNotFoundError(project_id=str(project_id), user_id=str(target_user_id))
         if m.role == MemberRole.OWNER.value:
             raise MemberCannotRemoveOwnerError(
-                project_id=str(project_id), user_id=str(target_user_id)
+                project_id=str(project_id),
+                user_id=str(target_user_id),
+                reason="cannot_remove_owner",
             )
         deleted = await self.members.delete(db, project_id, target_user_id)
         await write_event(
@@ -342,6 +359,9 @@ class MemberService:
             target_type="project_member",
             target_id=str(m.id),
             summary=f"Removed user {target_user_id} from project",
-            metadata={"removed_user_id": str(target_user_id)},
+            metadata={
+                "project_id": str(project_id),
+                "removed_user_id": str(target_user_id),
+            },
         )
         return deleted

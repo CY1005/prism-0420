@@ -85,14 +85,48 @@ async def test_archive_project_idempotent_raises_already_archived(db_session, al
         await svc.archive_project(db_session, project_id=p.id, actor_user_id=alice.id)
 
 
-async def test_archive_by_non_owner_raises_permission(db_session, alice, bob):
-    from api.errors.exceptions import PermissionDeniedError
+async def test_archive_by_non_member_raises_not_found(db_session, alice, bob):
+    """R1 P2-A 修: 非 member 抛 ProjectNotFoundError 而非 PermissionDeniedError
+    (与 get_for_user 行为对齐 + 防 enumeration 攻击)."""
+    from api.errors.exceptions import ProjectNotFoundError
     from api.services.project_service import ProjectService
 
     svc = ProjectService()
     p = await svc.create_project(db_session, owner_id=alice.id, name="OwnerOnly")
-    with pytest.raises(PermissionDeniedError):
+    with pytest.raises(ProjectNotFoundError):
         await svc.archive_project(db_session, project_id=p.id, actor_user_id=bob.id)
+
+
+async def test_update_archived_project_raises(db_session, alice):
+    """R1 P2-A 修: archived project 不可更新 (design §4 归档=只读快照)."""
+    from api.errors.exceptions import ProjectArchivedError
+    from api.services.project_service import ProjectService
+
+    svc = ProjectService()
+    p = await svc.create_project(db_session, owner_id=alice.id, name="ArchUpdP")
+    await svc.archive_project(db_session, project_id=p.id, actor_user_id=alice.id)
+    with pytest.raises(ProjectArchivedError):
+        await svc.update_project(
+            db_session,
+            project_id=p.id,
+            actor_user_id=alice.id,
+            changes={"description": "new"},
+        )
+
+
+async def test_invite_by_non_member_raises_not_found(db_session, alice, bob):
+    """R1 P2-A 修: 非 member invite_member 抛 NotFound (统一行为)."""
+    from api.errors.exceptions import ProjectNotFoundError
+    from api.services.project_service import MemberService, ProjectService
+
+    psvc = ProjectService()
+    msvc = MemberService(psvc)
+    p = await psvc.create_project(db_session, owner_id=alice.id, name="NonMemInvP")
+    other = await _make_user(db_session)
+    with pytest.raises(ProjectNotFoundError):
+        await msvc.invite_member(
+            db_session, project_id=p.id, actor_user_id=bob.id, invited_user_id=other.id
+        )
 
 
 async def test_update_ai_provider_encrypts_key(db_session, alice):
@@ -160,13 +194,18 @@ async def test_invite_existing_member_raises(db_session, alice, bob):
         )
 
 
-async def test_invite_by_non_owner_raises_permission(db_session, alice, bob):
+async def test_invite_by_viewer_member_raises_permission(db_session, alice, bob):
+    """非 owner 但是 member (viewer/editor) 应抛 PermissionDeniedError."""
     from api.errors.exceptions import PermissionDeniedError
     from api.services.project_service import MemberService, ProjectService
 
     psvc = ProjectService()
-    msvc = MemberService()
-    p = await psvc.create_project(db_session, owner_id=alice.id, name="InvNonOwn")
+    msvc = MemberService(psvc)
+    p = await psvc.create_project(db_session, owner_id=alice.id, name="ViewerInvP")
+    # bob 加入为 viewer
+    await msvc.invite_member(
+        db_session, project_id=p.id, actor_user_id=alice.id, invited_user_id=bob.id, role="viewer"
+    )
     other = await _make_user(db_session)
     with pytest.raises(PermissionDeniedError):
         await msvc.invite_member(

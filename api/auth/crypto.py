@@ -57,12 +57,12 @@ def encrypt(plaintext: str) -> str:
     return base64.b64encode(nonce + ct).decode("ascii")
 
 
-def decrypt(ciphertext_b64: str) -> str:
-    """解密 base64(nonce || ciphertext+tag) 返回原文 str。"""
-    if not ciphertext_b64:
+def decrypt(ciphertext: str) -> str:
+    """解密 base64(nonce || ciphertext+tag) 返回原文 str (入参为 base64 字符串)。"""
+    if not ciphertext:
         raise CryptoDecryptError("empty ciphertext")
     try:
-        blob = base64.b64decode(ciphertext_b64)
+        blob = base64.b64decode(ciphertext)
     except Exception as e:
         raise CryptoDecryptError(f"ciphertext not valid base64: {e}") from e
     if len(blob) < _NONCE_LEN + 16:

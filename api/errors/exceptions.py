@@ -201,9 +201,14 @@ class MemberAlreadyExistsError(AppError):
 
 
 class MemberCannotRemoveOwnerError(AppError):
+    """R1 P1-A: message 改宽,覆盖 拒移除 owner / 拒降级 owner 两种语义.
+
+    具体语义在 details.reason 区分: cannot_remove_owner / cannot_demote_owner.
+    """
+
     code = ErrorCode.MEMBER_CANNOT_REMOVE_OWNER
     http_status = 422
-    message = "Cannot remove the project owner from members"
+    message = "Cannot modify project owner's role/membership"
 
 
 class MemberRoleInvalidError(ValidationError):

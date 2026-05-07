@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.project import (
     DimensionType,
+    MemberRole,
     Project,
     ProjectDimensionConfig,
     ProjectMember,
@@ -93,10 +94,13 @@ class ProjectMemberDAO:
         *,
         project_id: UUID,
         user_id: UUID,
-        role: str = "viewer",
+        role: MemberRole | str = MemberRole.VIEWER,
         invited_by: UUID | None = None,
     ) -> ProjectMember:
-        m = ProjectMember(project_id=project_id, user_id=user_id, role=role, invited_by=invited_by)
+        role_value = role.value if isinstance(role, MemberRole) else role
+        m = ProjectMember(
+            project_id=project_id, user_id=user_id, role=role_value, invited_by=invited_by
+        )
         db.add(m)
         await db.flush()
         return m
