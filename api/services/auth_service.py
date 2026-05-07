@@ -24,9 +24,12 @@ from api.errors.exceptions import (
     AccountPendingError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
+    OldPasswordMismatchError,
     PasswordTooWeakError,
     RefreshTokenExpiredError,
     UnauthenticatedError,
+    ValidationError,
+    VersionConflictError,
 )
 from api.models.user import User, UserStatus
 
@@ -179,6 +182,93 @@ class AuthService:
             )
             await db.commit()
         # 即使 token 不存在也返回 ok（不暴露存在性）
+
+    async def update_self_profile(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: UUID,
+        expected_version: int,
+        name: str | None = None,
+        old_password: str | None = None,
+        new_password: str | None = None,
+        ip: str | None = None,
+    ) -> User:
+        """PATCH /auth/me — 改 name 或改密码（design §5 多人架构 / §10 audit）。
+
+        事务原子性：mutation + audit + revoke_all 在同一事务；任一失败显式 rollback。
+        """
+        if name is None and new_password is None:
+            raise ValidationError("at_least_one_of_name_or_new_password_required")
+        if new_password is not None and old_password is None:
+            raise OldPasswordMismatchError()
+
+        # 第 1 段：纯校验 + 读，不做 mutation（异常不 rollback）
+        user = await self.users.get_by_id(db, user_id)
+        if user is None or user.version != expected_version:
+            raise VersionConflictError()
+
+        if new_password is not None and not verify_password(
+            old_password or "", user.password_hash or ""
+        ):
+            raise OldPasswordMismatchError()
+
+        # 第 2 段：mutation（任何异常必须 rollback 防部分写入）
+        try:
+            changed_fields: list[str] = []
+            if name is not None and name != user.name:
+                user.name = name
+                changed_fields.append("name")
+
+            password_changed = False
+            if new_password is not None:
+                user.password_hash = hash_password(new_password)
+                user.token_invalidated_at = _now()
+                password_changed = True
+
+            if not changed_fields and not password_changed:
+                return user
+
+            user.version = (user.version or 1) + 1
+
+            if changed_fields and not password_changed:
+                await self.audit.write(
+                    db,
+                    action_type="user.profile_update",
+                    user_id=user.id,
+                    metadata={"changed_fields": changed_fields, "ip": ip},
+                )
+
+            if password_changed:
+                revoked_count = await self.tokens.revoke_all_for_user(db, user.id)
+                await self.audit.write(
+                    db,
+                    action_type="user.password_change",
+                    user_id=user.id,
+                    metadata={"triggered_by": "self", "ip": ip},
+                )
+                await self.audit.write(
+                    db,
+                    action_type="user.all_tokens_revoked",
+                    user_id=user.id,
+                    metadata={
+                        "reason": "password_change",
+                        "revoked_count": revoked_count,
+                    },
+                )
+                if changed_fields:
+                    await self.audit.write(
+                        db,
+                        action_type="user.profile_update",
+                        user_id=user.id,
+                        metadata={"changed_fields": changed_fields, "ip": ip},
+                    )
+
+            await db.commit()
+            return user
+        except Exception:
+            await db.rollback()
+            raise
 
     async def get_user_for_jwt(self, db: AsyncSession, user_id: UUID, iat: int) -> User:
         user = await self.users.get_by_id(db, user_id)

@@ -139,7 +139,10 @@ async def auth_app(db_session):
 async def auth_client(auth_app):
     from httpx import ASGITransport, AsyncClient
 
-    async with AsyncClient(transport=ASGITransport(app=auth_app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=auth_app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
         yield client
 
 

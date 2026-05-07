@@ -23,6 +23,7 @@ from api.schemas.auth import (
     RefreshRequest,
     RefreshResponse,
     TokenResponse,
+    UpdateProfileRequest,
     UserProfile,
 )
 from api.services.auth_service import AuthService, get_auth_service
@@ -174,3 +175,23 @@ async def logout(
 @router.get("/me", response_model=UserProfile)
 async def me(user: User = Depends(current_user)) -> UserProfile:
     return UserProfile.model_validate(user)
+
+
+@router.patch("/me", response_model=UserProfile)
+async def update_me(
+    payload: UpdateProfileRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    svc = get_auth_service()
+    updated = await svc.update_self_profile(
+        db,
+        user_id=user.id,
+        expected_version=payload.expected_version,
+        name=payload.name,
+        old_password=payload.old_password,
+        new_password=payload.new_password,
+        ip=_client_ip(request),
+    )
+    return UserProfile.model_validate(updated)
