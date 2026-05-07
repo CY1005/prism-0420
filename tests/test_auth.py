@@ -165,7 +165,7 @@ def test_require_user_no_credentials_returns_401():
         client = TestClient(_build_app())
         r = client.get("/me")
         assert r.status_code == 401
-        assert r.json()["code"] == "UNAUTHENTICATED"
+        assert r.json()["code"] == "unauthenticated"
     finally:
         set_auth_service(None)
 

@@ -20,5 +20,14 @@ class Settings(BaseSettings):
     internal_token: str = Field(default="dev-only-internal-token-change-me-in-prod-min-32-chars")
     internal_signature_window_seconds: int = Field(default=300)
 
+    # M01
+    refresh_token_ttl_days: int = Field(default=30)
+    max_failed_logins: int = Field(default=5)
+    account_lock_minutes: int = Field(default=15)
+
+    bootstrap_admin_email: str | None = Field(default=None)
+    bootstrap_admin_password: str | None = Field(default=None)
+    bootstrap_admin_name: str = Field(default="Platform Admin")
+
 
 settings = Settings()

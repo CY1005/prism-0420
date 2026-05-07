@@ -13,6 +13,8 @@ dependencies = [
     "alembic>=1.14",
     "structlog>=24.4",
     "pyjwt>=2.10",
+    "bcrypt>=4.2",
+    "email-validator>=2.2",
 ]
 
 [dependency-groups]
@@ -31,6 +33,18 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
 ignore = ["E501"]
+extend-safe-fixes = ["UP017"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的 Depends/Header/Query/Body/Path 用 default 是官方惯用法
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Body",
+    "fastapi.Path",
+    "fastapi.Cookie",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

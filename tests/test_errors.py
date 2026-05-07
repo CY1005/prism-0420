@@ -62,7 +62,7 @@ def test_app_error_returns_structured_json():
     assert r.status_code == 404
     body = r.json()
     assert body == {
-        "code": "NOT_FOUND",
+        "code": "not_found",
         "message": "Module 42 not found",
         "details": {"module_id": 42},
     }
@@ -81,5 +81,5 @@ def test_unhandled_exception_does_not_leak_internal_message():
     r = client.get("/raise-bare")
     assert r.status_code == 500
     body = r.json()
-    assert body["code"] == "INTERNAL_ERROR"
+    assert body["code"] == "internal_error"
     assert "oops" not in body["message"]

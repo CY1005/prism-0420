@@ -4,8 +4,6 @@ from api.errors.codes import ErrorCode
 
 
 class AppError(Exception):
-    """所有业务错误的基类。Service/Router 层禁止裸 raise Exception。"""
-
     code: ErrorCode = ErrorCode.INTERNAL_ERROR
     http_status: int = 500
     message: str = "Internal error"
@@ -21,12 +19,6 @@ class NotFoundError(AppError):
     code = ErrorCode.NOT_FOUND
     http_status = 404
     message = "Resource not found"
-
-
-class PermissionDeniedError(AppError):
-    code = ErrorCode.PERMISSION_DENIED
-    http_status = 403
-    message = "Permission denied"
 
 
 class ValidationError(AppError):
@@ -69,3 +61,89 @@ class AccountLockedError(AppError):
     code = ErrorCode.ACCOUNT_LOCKED
     http_status = 423
     message = "Account is locked"
+
+
+# ─── M01 ─────────────────────────────────────────────
+
+
+class InvalidCredentialsError(AppError):
+    code = ErrorCode.INVALID_CREDENTIALS
+    http_status = 401
+    message = "Invalid email or password"
+
+
+class AccountDisabledError(AppError):
+    code = ErrorCode.ACCOUNT_DISABLED
+    http_status = 403
+    message = "Account disabled"
+
+
+class AccountPendingError(AppError):
+    code = ErrorCode.ACCOUNT_PENDING
+    http_status = 403
+    message = "Account pending approval"
+
+
+class InvalidRefreshTokenError(AppError):
+    code = ErrorCode.INVALID_REFRESH_TOKEN
+    http_status = 401
+    message = "Invalid refresh token"
+
+
+class OldPasswordMismatchError(ValidationError):
+    code = ErrorCode.OLD_PASSWORD_MISMATCH
+    http_status = 400
+    message = "Old password mismatch"
+
+
+class PasswordTooWeakError(ValidationError):
+    code = ErrorCode.PASSWORD_TOO_WEAK
+    http_status = 422
+    message = "Password too weak"
+
+
+class EmailAlreadyExistsError(AppError):
+    code = ErrorCode.EMAIL_ALREADY_EXISTS
+    http_status = 409
+    message = "Email already exists"
+
+
+class UserNotFoundError(NotFoundError):
+    code = ErrorCode.USER_NOT_FOUND
+    message = "User not found"
+
+
+class PermissionDeniedError(AppError):
+    code = ErrorCode.PERMISSION_DENIED
+    http_status = 403
+    message = "Permission denied"
+
+
+class SelfDowngradeForbiddenError(AppError):
+    code = ErrorCode.SELF_DOWNGRADE_FORBIDDEN
+    http_status = 400
+    message = "Cannot change your own role"
+
+
+class LastAdminProtectedError(AppError):
+    code = ErrorCode.LAST_ADMIN_PROTECTED
+    http_status = 400
+    message = "Cannot disable the last platform admin"
+
+
+class InvalidStatusTransitionError(AppError):
+    code = ErrorCode.INVALID_STATUS_TRANSITION
+    http_status = 400
+    message = "Invalid status transition"
+
+
+class VersionConflictError(AppError):
+    code = ErrorCode.VERSION_CONFLICT
+    http_status = 409
+    message = "Version conflict — refresh and retry"
+
+
+class RegistrationDisabledError(AppError):
+    code = ErrorCode.REGISTRATION_DISABLED
+    http_status = 403
+    message = "Registration disabled"

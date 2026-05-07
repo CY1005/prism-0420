@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import AsyncIterator
 
-import pytest_asyncio
-from alembic import command
+# 测试环境降低 bcrypt 成本，必须在 api.auth.password 被首次 import 前设置
+os.environ.setdefault("BCRYPT_ROUNDS_OVERRIDE", "4")
+
+from collections.abc import AsyncIterator  # noqa: E402
+
+import pytest_asyncio  # noqa: E402
+from alembic import command  # noqa: E402
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
@@ -107,3 +111,71 @@ async def db_session(db_connection: AsyncConnection) -> AsyncIterator[AsyncSessi
         yield session
     finally:
         await session.close()
+
+
+# ─────────────── M01 fixtures ────────────────
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_app(db_session):
+    """复用 test db_session 的 FastAPI app（覆盖 get_db dependency）。
+
+    跳过 lifespan（不跑 bootstrap），bootstrap 测试在专属 fixture 里手动触发。
+    """
+    from api.core.db import get_db
+    from api.main import app
+
+    async def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield app
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_client(auth_app):
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(transport=ASGITransport(app=auth_app), base_url="http://test") as client:
+        yield client
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_user(db_session):
+    """工厂 fixture：插一个 user 行（默认 active / role=user）。"""
+    from api.auth.password import hash_password
+    from api.models.user import User
+
+    created: list[User] = []
+
+    async def _make(
+        *,
+        email: str | None = None,
+        password: str = "Password123!",
+        name: str = "Test User",
+        role: str = "user",
+        status_: str = "active",
+        password_hash: str | None = None,
+    ) -> User:
+        from uuid import uuid4
+
+        if email is None:
+            email = f"u{uuid4().hex[:8]}@example.com"
+        user = User(
+            email=email,
+            name=name,
+            role=role,
+            status=status_,
+            password_hash=password_hash if password_hash is not None else hash_password(password),
+            failed_login_count=0,
+            version=1,
+        )
+        db_session.add(user)
+        await db_session.flush()
+        created.append(user)
+        return user
+
+    yield _make

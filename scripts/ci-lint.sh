@@ -20,8 +20,10 @@ ERROR_CODES=$(grep -cE '^[[:space:]]+[A-Z][A-Z_]+ = "[a-z_]+"$' "$CODES_FILE")
 INTERNAL_COUNT=$(grep -cE '^[[:space:]]+INTERNAL_ERROR = "internal_error"$' "$CODES_FILE")
 BUSINESS_CODES=$((ERROR_CODES - INTERNAL_COUNT))
 
-# AppError 子类：直接或间接继承 AppError 的 *Error 类（基类 AppError 不计）
-APP_ERRORS=$(grep -cE '^class [A-Z][A-Za-z]*Error\(AppError\):' "$EXC_FILE")
+# AppError 子类：任何 *Error 类，继承自 AppError 或其 *Error 子类（中间继承允许，
+# design §9 / §13 例：OldPasswordMismatchError(ValidationError)、
+# UserNotFoundError(NotFoundError)）。基类 AppError 不计。
+APP_ERRORS=$(grep -cE '^class [A-Z][A-Za-z]*Error\([A-Z][A-Za-z]*Error\):' "$EXC_FILE")
 
 if [ "$BUSINESS_CODES" -ne "$APP_ERRORS" ]; then
   echo "ERROR (R13-1): 业务 ErrorCode 数 ($BUSINESS_CODES, INTERNAL_ERROR 除外)" \
@@ -30,7 +32,7 @@ if [ "$BUSINESS_CODES" -ne "$APP_ERRORS" ]; then
   grep -E '^[[:space:]]+[A-Z][A-Z_]+ = "[a-z_]+"$' "$CODES_FILE" \
     | grep -v INTERNAL_ERROR
   echo "  $EXC_FILE 中 AppError 子类:"
-  grep -E '^class [A-Z][A-Za-z]*Error\(AppError\):' "$EXC_FILE"
+  grep -E '^class [A-Z][A-Za-z]*Error\([A-Z][A-Za-z]*Error\):' "$EXC_FILE"
   exit 1
 fi
 
