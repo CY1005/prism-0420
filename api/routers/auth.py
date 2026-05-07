@@ -15,15 +15,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth.internal import verify_internal_signature
 from api.auth.jwt_utils import decode_jwt
 from api.core.db import get_db
-from api.errors.exceptions import UnauthenticatedError
+from api.errors.exceptions import PermissionDeniedError, UnauthenticatedError
 from api.models.user import User
 from api.schemas.auth import (
+    CreateUserRequest,
+    CreateUserResponse,
     LoginRequest,
     LogoutResponse,
     RefreshRequest,
     RefreshResponse,
     TokenResponse,
     UpdateProfileRequest,
+    UpdateUserRequest,
+    UserListItem,
+    UserListResponse,
     UserProfile,
 )
 from api.services.auth_service import AuthService, get_auth_service
@@ -177,6 +182,12 @@ async def me(user: User = Depends(current_user)) -> UserProfile:
     return UserProfile.model_validate(user)
 
 
+async def require_admin(user: User = Depends(current_user)) -> User:
+    if user.role != "platform_admin":
+        raise PermissionDeniedError()
+    return user
+
+
 @router.patch("/me", response_model=UserProfile)
 async def update_me(
     payload: UpdateProfileRequest,
@@ -195,3 +206,57 @@ async def update_me(
         ip=_client_ip(request),
     )
     return UserProfile.model_validate(updated)
+
+
+# ─────────────── admin endpoints ───────────────
+
+
+@router.post("/users", response_model=CreateUserResponse, status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    payload: CreateUserRequest,
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> CreateUserResponse:
+    svc = get_auth_service()
+    user = await svc.admin_create_user(
+        db,
+        admin_id=admin.id,
+        email=payload.email,
+        name=payload.name,
+        password=payload.password,
+        role=payload.role,
+        ip=_client_ip(request),
+    )
+    return CreateUserResponse.model_validate(user)
+
+
+@router.get("/users", response_model=UserListResponse)
+async def admin_list_users(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserListResponse:
+    svc = get_auth_service()
+    users = await svc.admin_list_users(db)
+    return UserListResponse(users=[UserListItem.model_validate(u) for u in users], total=len(users))
+
+
+@router.patch("/users/{user_id}", response_model=UserProfile)
+async def admin_update_user(
+    user_id: UUID,
+    payload: UpdateUserRequest,
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    svc = get_auth_service()
+    target = await svc.admin_update_user(
+        db,
+        admin_id=admin.id,
+        target_user_id=user_id,
+        expected_version=payload.expected_version,
+        role=payload.role,
+        status_=payload.status,
+        ip=_client_ip(request),
+    )
+    return UserProfile.model_validate(target)

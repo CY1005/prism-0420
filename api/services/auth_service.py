@@ -270,6 +270,162 @@ class AuthService:
             await db.rollback()
             raise
 
+    # ─────────────── admin endpoints ───────────────
+
+    async def admin_create_user(
+        self,
+        db: AsyncSession,
+        *,
+        admin_id: UUID,
+        email: str,
+        name: str,
+        password: str,
+        role: str,
+        ip: str | None = None,
+    ) -> User:
+        if len(password) < MIN_PASSWORD_LEN:
+            raise PasswordTooWeakError()
+        existing = await self.users.get_by_email(db, email)
+        if existing is not None:
+            from api.errors.exceptions import EmailAlreadyExistsError
+
+            raise EmailAlreadyExistsError()
+        try:
+            user = await self.users.create(
+                db,
+                email=email,
+                name=name,
+                password_hash=hash_password(password),
+                role=role,
+                status=UserStatus.ACTIVE.value,
+                failed_login_count=0,
+                version=1,
+            )
+            await self.audit.write(
+                db,
+                action_type="user.admin_create",
+                user_id=user.id,
+                metadata={"role": role, "created_by": str(admin_id), "ip": ip},
+            )
+            await db.commit()
+            return user
+        except Exception:
+            await db.rollback()
+            raise
+
+    async def admin_list_users(self, db: AsyncSession) -> list[User]:
+        return list(await self.users.list_all(db))
+
+    async def admin_update_user(
+        self,
+        db: AsyncSession,
+        *,
+        admin_id: UUID,
+        target_user_id: UUID,
+        expected_version: int,
+        role: str | None = None,
+        status_: str | None = None,
+        ip: str | None = None,
+    ) -> User:
+        from api.errors.exceptions import (
+            InvalidStatusTransitionError,
+            LastAdminProtectedError,
+            SelfDowngradeForbiddenError,
+            UserNotFoundError,
+        )
+
+        if role is None and status_ is None:
+            raise ValidationError("at_least_one_of_role_or_status_required")
+
+        target = await self.users.get_by_id(db, target_user_id)
+        if target is None:
+            raise UserNotFoundError()
+        if target.version != expected_version:
+            raise VersionConflictError()
+
+        # 自降权防护：admin 不能改自己的 role
+        if target_user_id == admin_id and role is not None and role != target.role:
+            raise SelfDowngradeForbiddenError()
+
+        # 状态转换闸：禁 disabled→pending，且 R4-3a 任何写入 pending 抛 InvalidTransition
+        if status_ is not None and status_ != target.status:
+            if status_ == UserStatus.PENDING.value:
+                raise InvalidStatusTransitionError()
+            if target.status == UserStatus.PENDING.value:
+                # pending 是预留态，本期 service 拒任何来自 pending 的转换写入
+                raise InvalidStatusTransitionError()
+
+        try:
+            old_role = target.role
+            old_status = target.status
+            role_changed = role is not None and role != target.role
+            status_changed = status_ is not None and status_ != target.status
+
+            # 禁用最后 admin 保护
+            if (
+                status_changed
+                and status_ == UserStatus.DISABLED.value
+                and target.role == "platform_admin"
+                and target.status == "active"
+            ):
+                active_admin_count = await self.users.count_active_admins(db)
+                if active_admin_count <= 1:
+                    raise LastAdminProtectedError()
+
+            if role_changed:
+                target.role = role  # type: ignore[assignment]
+            if status_changed:
+                target.status = status_  # type: ignore[assignment]
+
+            need_revoke = status_changed and status_ == UserStatus.DISABLED.value
+            if need_revoke:
+                target.token_invalidated_at = _now()
+
+            if role_changed or status_changed:
+                target.version = (target.version or 1) + 1
+
+            if role_changed:
+                await self.audit.write(
+                    db,
+                    action_type="user.admin_update_role",
+                    user_id=target.id,
+                    metadata={
+                        "old_role": old_role,
+                        "new_role": role,
+                        "admin_id": str(admin_id),
+                        "ip": ip,
+                    },
+                )
+            if status_changed:
+                await self.audit.write(
+                    db,
+                    action_type="user.admin_update_status",
+                    user_id=target.id,
+                    metadata={
+                        "old_status": old_status,
+                        "new_status": status_,
+                        "admin_id": str(admin_id),
+                        "ip": ip,
+                    },
+                )
+            if need_revoke:
+                revoked_count = await self.tokens.revoke_all_for_user(db, target.id)
+                await self.audit.write(
+                    db,
+                    action_type="user.all_tokens_revoked",
+                    user_id=target.id,
+                    metadata={
+                        "reason": "admin_disable",
+                        "revoked_count": revoked_count,
+                    },
+                )
+
+            await db.commit()
+            return target
+        except Exception:
+            await db.rollback()
+            raise
+
     async def get_user_for_jwt(self, db: AsyncSession, user_id: UUID, iat: int) -> User:
         user = await self.users.get_by_id(db, user_id)
         if user is None:
