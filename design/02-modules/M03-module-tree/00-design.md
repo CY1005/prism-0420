@@ -213,9 +213,13 @@ class Node(Base, TimestampMixin):
         nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    type: Mapped[NodeType] = mapped_column(
-        String(20), nullable=False, default=NodeType.folder
-    )  # R3-2：状态字段用 Mapped[NodeType]
+    # M03 sprint A2 reconcile 加 (2026-05-07): M18 get_for_embedding 拼接 name + "\n" + description
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    # M03 sprint A1 范式校准 (M02 R1 已立同款): Mapped[str] + StrEnum.value default + DB CHECK
+    # 与 M01 user.py role/status + M02 ProjectStatus/MemberRole 一致
+    type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=NodeType.folder.value
+    )  # R3-2：状态字段三重防护 (Python StrEnum + Mapped[str] + DB CHECK)
     depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     path: Mapped[str] = mapped_column(
@@ -252,7 +256,10 @@ class Node(Base, TimestampMixin):
 
 ### G5 path 计算策略（G7-M03-R2-06，供 M11/M17 batch_create 调用方参考）
 
-**单节点 create**：`parent.path + '/' + new_id + '/'`（Service 层读父节点 path 计算）
+**单节点 create**：`(parent.path if parent else "/") + str(new_id) + "/"`（Service 层读父节点 path 计算）
+
+> **R1 P2-05 校准 (2026-05-07)**: parent.path 已含末尾 `/`（如 `/{pid}/`），故公式不再加额外 `/`；
+> 根节点 parent=None 时用 `"/"` 作前缀。原字面 `parent.path + '/' + new_id + '/'` 会双 `//`，已校正。
 
 **batch_create（M11/M17 调用 `NodeService.batch_create_in_transaction`）**：
 - 拓扑排序后单阶段处理——先按 `parent_id → child` 关系排序，确保父节点先入库拿到 id
@@ -360,7 +367,25 @@ AND project_id = :project_id
   ```
 
 - **A 路径同时含的 `get_for_embedding` 方法**：本子段不推迟——`get_for_embedding(db, node_id, project_id) -> str | None` 是 **M03 own 被动接口**（M18 调，M03 写出方法签名 + 实装拼接 `name + "\n" + description`）。Q1 是（M03 sprint 期可独立实装 + 单元测试覆盖 default 拼接路径）→ **A 现在建**。死代码期 ~M03→M18 sprint，生产路径 M18 sprint 期补回归。
-- **🟡 子选项待 M03 sprint 实证**：与 M02 A2 / A3.2 子选项联动——SearchConfig 类型 owner / OpenAPI 契约层处理等若 M02 sprint 期已实证，M03 直接套；否则 M03 sprint 二次实证后归纳
+- **status (M03 sprint 末回写, 2026-05-07)**: ✅ 已落地
+  - get_for_embedding A 路径: commit `4887f7c` (api/services/node_service.py:104) + 4 单元测试
+  - enqueue B 推迟: commit `10f2f54` + `4e48cb9` (scaffold 4 字段注释 ✅)
+  - 触发回写动作 (M18 sprint): 本段 status 改 "enqueue 已接通 + commit hash" + 加增量 enqueue 测试
+
+**A5 — `batch_create_in_transaction` 拓扑排序责任 (M03 sprint R1 P-A-03 punt, 2026-05-07 加)**
+
+- **退化路径**: **B 半路径推迟**
+- **主标准推导**: Q1 是 (M03 sprint 期可实装最小拓扑 ~15 行) + Q2 callee (M03 own 接口) → 本应 A 现在建
+- **理由**: 子片 3 实装"caller 已按层级顺序排好"简化版功能正确（拓扑对正确输入幂等），M11/M17 sprint 期 csv 流通常已层序——此期不重复实装拓扑；caller 未保证拓扑 → `parent_temp_id not in temp_to_real` raise NodeParentNotFoundError，行为可观测
+- **alembic 步骤数**: 0
+- **触发回写**: M11/M17 sprint 启动时拍"service 加最小拓扑 vs caller 必排序契约"（详见 audit/m03-pilot-template-validation.md R-X5 子选项 2）
+
+**A6 — child_services 分发语义 (M03 sprint R1 P-A-06 reconcile, 2026-05-07 加)**
+
+- **决策**: 每 target_type service 对**全 subtree** 节点都调用一次（对每节点 iterate `_child_services.items()` 全调）
+- **理由**: M04/M06/M07 各 service 内部用 node_id 过滤本表数据——多余调用是 noop 不影响正确性（dimension svc 调到 competitor 节点 → 无 dimension_records 关联，noop 返回）
+- **替代候选** (未采用): target_type→subtree filter 分发——需要 nodes 表也存 target_type 标记，违反 M03 design §3 R4-1（无业务字段）
+- **触发回写**: 若 M04+ sprint 期实测 N×K noop 调用引入显著延迟（>50ms / delete），按 R2-3 注记升级 Protocol 为 batch 形态
 
 ---
 
@@ -554,7 +579,7 @@ class NodeDAO:
 | `update` | `node` | `<node_id>` | `{project_id, old_name, new_name}` |
 | `delete` | `node` | `<node_id>` | `{project_id, name, type, depth}` |
 | `reorder` | `node` | `<node_id>` | `{project_id, parent_id, old_sort_order, new_sort_order}` |
-| `move` | `node` | `<node_id>` | `{project_id, old_path, new_path, old_depth, new_depth, triggered_by, root_node_id}` |
+| `move` | `node` | `<node_id>` | `{project_id, old_path, new_path, old_depth, new_depth, triggered_by, root_node_id}` *（注: M03 期实装中 root_node 含 old_path/old_depth, 子节点该字段为 None；M15 sprint 期可选回填，详 R2-5 + P2-06）* |
 
 > **R10-1（batch3 基线补丁）**：
 > - **delete_node 子树**：Service 层先 `list_subtree` 获取所有子节点，从叶节点到根节点逐一写独立 `delete` 事件（每条 target_id = node_id）。DB CASCADE 仍作兜底。

@@ -1,6 +1,6 @@
 ---
 title: M03 sprint 实证子选项 + R1/R2 命中比例
-status: tracking
+status: accepted
 owner: CY
 created: 2026-05-07
 purpose: |
@@ -119,14 +119,33 @@ last_reviewed_at: 2026-05-07
 
 ## R2 命中比例 (子片 4 endpoint 单审 / 1 合并 subagent)
 
-[**待 R2 subagent 完成后回填**]
+### M03 R2 数据 (commit 656e05c R2 修)
 
-预期对照 M02 R2 (6 P1 立修 + 5 P2 punt):
-- 契约漂移 response 字段
-- router 直调 db 违分层
-- N+1 / batch_update 优化
-- 未校验关联 raise IntegrityError 吞成业务 error
-- role typo 静默退化 (已 R1 修, M02 R2 修过)
+| Subagent | 命中 | SKIP | 命中率 | 总判 |
+|---|---|---|---|---|
+| Spec+Quality+Simplify 合并 (Opus) | 4 P1 立修 + 5 P2 punt | 14+ | 高 (endpoint 是高命中区印证) | ❌ 不通过 → 修后 ✅ |
+
+**4 P1 立修 (commit 656e05c)**:
+1. **R2-1** reorder 契约漂移: `NodeTreeResponse → NodeListResponse` (design §7 字面)
+   + 删 reorder 后多余 list_tree call (R2-2 N+1 同合并修)
+2. **R2-3** NodeChildrenServiceProtocol 未来契约升级路径 docstring 注 (子树 N×K 风险埋点)
+3. **R2-4** breadcrumb 真 N+1: 加 NodeDAO.list_by_ids 一次 IN 查 (兑现 design §1 "O(1) 面包屑")
+
+P2 顺修 1 项:
+- **R2-8** NodeResponse type: str → NodeTypeEnum (design §7 字面，前端 enum 类型保证)
+
+**5 P2 punt 子片 5 / design 回写**:
+- R2-5 move 子节点 metadata old_path/old_depth None → design §10 显式声明 ✅ (子片 5 已回写)
+- R2-6 NodeListResponse 死代码 → R2-1 修后启用 ✅ 自然消解
+- R2-7 _build_tree 双 Pydantic 验证 → M11/M17 batch_create 实证后再优化
+- R2-9 update_node service 层 type 参数死防御 → 子片 5 加 service 层直调测试 (低优,有 raise 路径)
+- R2-3 (P1 但 docstring punt) → M04 sprint 启动时实装 batch 形态
+
+**实证结论 (M03 R2)**:
+- ✅ **endpoint 单审 1 合并 Opus subagent 信号强**：4 P1 全命中契约漂移/N+1/未来债（Prism 特有 22 条 endpoint 高命中区印证）— **M02 R2 (6 P1) + M03 R2 (4 P1) 双数据点验证 1 合并 subagent 范式足够**
+- ✅ R2 高命中区一致：契约漂移 (R2-1+R2-8) + N+1 (R2-4) + 未来债 (R2-3)
+- ❓ **新增模式**：docstring 自承单方面改契约 (R2-1 router L177) → 应纳入 simplify checklist 维度 17 ("docstring 不能凌驾 design 表")
+- 下游 M04+ 计划修订建议: **保留** R2 endpoint 单审 1 合并 Opus subagent 范式 (双数据点足够)
 
 ---
 

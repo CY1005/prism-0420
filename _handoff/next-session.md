@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-07 (post-M02-sprint-complete)
+last_updated: 2026-05-07 (post-M03-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-07 post-M02-sprint-complete）
+## 0. 状态快照（更新于 2026-05-07 post-M03-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 15%（M01 + M02 完成；下一站 M03 模块树）
+- **Phase 2.1 业务模块**：⏳ 20%（M01 + M02 + M03 完成；下一站 M04 维度记录）
+- **2026-05-07 M03 sprint 完成**（5 子片 + R1+R2 闭环 / L1+L2+L3 节奏第二次实证 / 4 R-X5 子选项复用 + 1 新决）：
+  - commits: `800e632` §14.5 prep + `d174e90` 子片 1 models + `4887f7c` 子片 2 DAO + get_for_embedding + `4e48cb9` 子片 3 Service + `ce73570` R1 修 + 子片 4 schema + `4a1a615` 子片 4 Router + `656e05c` R2 修 + 子片 5 design 回写
+  - **285 PASS / 0 fail / ruff 净 / ci-lint R13-1 41=41 + L12 守护通过**
+  - **L1+L2+L3 节奏第二次实证** (M02 首 / M03 第二; 双数据点稳定):
+    - L1 总则: sprint ≥1 次 + ≥50 行 OR ≥2 文件触发 + 触发例外条款 — 全合规
+    - L2 sprint 计划: §14.5 commit `800e632` (闸门 3.4 强制存在)
+    - L3 实证回写: `design/audit/m03-pilot-template-validation.md` (R-X5 子选项 + R1/R2 命中比例 + PT1-PT3 + L1 双数据点)
+  - **R1 命中**: 3 subagent 共 4 P1 立修 + 12 P2 punt; B reuse Sonnet ~18% 与 M02 17% 稳定
+  - **R2 命中**: 1 合并 Opus subagent 4 P1 立修 + 5 P2 punt; M02 (6 P1) + M03 (4 P1) 双数据点验证 1 subagent 足够
+  - **R-X5 子选项**:
+    - A4 enqueue B 推迟 / get_for_embedding A 现在建: design §6.X status 改 "已落地 + commit hash"
+    - A5 batch_create 拓扑责任: B 半路径推迟 + design §6.X 加 A5 段 (M11/M17 sprint 启动时拍)
+    - A6 child_services 分发语义 reconcile: 全 subtree 全 service 调用 (noop 容忍) + design §6.X 加 A6 段
+    - 复用 M02 4 项 (C team_id / A SearchConfig / B move-team / R13-1 标记位置)
+  - **新发现 (R1-B C1)**: 跨模块 test helper 重复 → conftest.py 加 make_project fixture, 47 测试调用迁移; 未来 M04+ sprint 启动前应预查 conftest 是否已有可用 fixture
+
+- **2026-05-07 M02 sprint 完成**（5 子片 + 2 review 闭环）：
 - **2026-05-07 M02 sprint 完成**（5 子片 + 2 review 闭环）：
   - commits: `c6b97d6` 子片1 models + `a42dc81` 子片2 DAO + `10f2f54` 子片3 service+AES + `c9b0618` 子片4 router (12 endpoints) + R1 修 `e5651bf` (8 项) + R2 修 `e7b1b7f` (6 P1)
   - **205 PASS / 0 fail / ruff clean / ci-lint R13-1 34=34 + L12 + S5d-改进**
@@ -72,7 +89,43 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M02 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M04 sprint 实施代码启动（**当前推荐**）
+
+```
+继续 prism-0420 M04 sprint 实施代码（M04 维度记录；M03 sprint 已完成 commits 800e632→656e05c / 285 PASS）。
+
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
+2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M03-sprint-complete）
+3. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 20%，下一站 M04）
+4. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 3.4 L1 review 触发粒度规则）
+5. /root/workspace/projects/prism-0420/design/02-modules/M04-dimension-record/00-design.md
+6. /root/workspace/projects/prism-0420/design/audit/m03-pilot-template-validation.md（M03 sprint 实证 + L1 双数据点 + R-X5 子选项）
+7. /root/workspace/projects/prism-0420/design/audit/m01-pilot-template-validation.md（PT1-PT3 tracker — M04 sprint 闸门 2.5 时回填 M04 行）
+8. memory feedback_problem_layered_analysis（5 步分层分析法）
+9. memory feedback_three_agent_pipeline + Prism-simplify-checklist.md（review 流水线原义）
+
+任务：M04 sprint TDD 实施（参 M03 sprint 5 子片 + 2 review 范式，§14.5 sprint review 拆分计划必先存在）。
+
+启动顺序：
+1. **闸门 2.5 reconcile pass**（M04 sprint 启动当天必跑）：
+   - **预查 conftest.py 已有 fixture**（M03 R1-B C1 新发现的禁忌：跨模块 helper 重复）
+   - grep M04 引用的所有 horizontal helper（含 NodeChildrenServiceProtocol — M04 是 M03 R-X2 第一个注入方）
+   - 按闸门 2.5 三栏分类（A 机械可做 / B 待 CY 决策 / C 已自我消解）输出
+2. **闸门 3.4 L1 总则触发**：M04 design 必须含 §14.5 sprint review 拆分计划段。若缺先补
+3. **M04 写代码**：M03 R-X2 第一个真注入 — register_child_service("dimension", DimensionService.delete_by_node_id)
+4. **R1+R2 review 按 §14.5 计划跑**（M03 实证: R1=3 subagent / R2=1 合并 subagent 已稳定足够）
+5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发
+
+红线（M03 sprint 实证后强化）：
+- 跨模块 helper 复用：sprint 启动前 grep conftest.py / api/auth/ / api/services/ 既有 fixture
+- 5 步分层分析法走（机制冲突/设计缺口）
+- M04 是 M03 R-X2 第一注入方 — 验证 register_child_service 范式跑通
+- M03 NodeChildrenServiceProtocol 异常契约 (R1-C P1-01): 不 catch-all 静默吞错
+- commit 不主动 push（feedback_git_push_kb）
+```
+
+### Prompt 0' — M02 sprint 实施代码启动（已完成，仅供历史追溯）
 
 ```
 继续 prism-0420 M02 sprint 实施代码（design 已含完整实施期处理段 + 体系级 v2 修订已落地）。
@@ -220,6 +273,19 @@ M14 baseline-patch tail。
 ---
 
 ## 2. 历史 prompt（已完成，仅供追溯）
+
+- ❌ ~~Prompt 0: M03 sprint 实施代码启动~~ → ✅ 2026-05-07 commits 800e632 → 656e05c（5 子片 + R1+R2 闭环；285 PASS / R13-1 41=41 / L12 守护通过）
+  - L1+L2+L3 节奏第二次实证（M02 首 / M03 第二，双数据点稳定）
+  - R-X5 子选项: A4 enqueue B 推迟 + get_for_embedding A 现在建 ✅ + 新决 A5 batch_create 拓扑 + A6 child_services 分发
+  - design/audit/m03-pilot-template-validation.md status=accepted
+  - 后置债 (M04+ sprint 顺手清):
+    - R-X2 跨模块 stub: M04 sprint 是第一个真注入方 (DimensionService.delete_by_node_id)
+    - R1-C R2-3 punt: NodeChildrenServiceProtocol 升级 batch 形态（M04 sprint 期评估）
+    - R2-9 punt: NodeService.update_node service 层直调 type 参数测试
+    - P-A-09 punt: refresh attribute_names 加 path（防御性）
+    - P2-02 punt: batch_create max_sort_order O(N) TODO 注释
+    - P2-03 punt: update_paths_in_subtree REPLACE 安全性 docstring
+    - C2 punt (R1-B): migrations `_ck_clause` 重复 → migrations/helpers.py（M04 migration 出现前提取）
 
 - ❌ ~~Prompt: Phase 2.0 决策类（quality-spec + engineering-spec §13）~~ → ✅ 2026-05-05 commit b91c8d5
 - ❌ ~~Prompt: Phase 2.0 代码地基（5 helper + Makefile + queue scaffold）~~ → ✅ 已落地，B1-B10 全 ✅

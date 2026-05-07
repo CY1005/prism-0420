@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-07（M02 sprint 完成: 5 子片 + R1+R2 闭环 / L1+L2+L3 节奏实证 / 5 步法首次落地 / 4 R-X5 子选项全决）
-current_phase: Phase 2.1 进行中（M01+M02 完成；下一站 M03 模块树）
+last_updated: 2026-05-07（M03 sprint 完成: 5 子片 + R1+R2 闭环 / L1+L2+L3 节奏第二次实证 / 4+1 R-X5 子选项 / R1-B C1 新发现 conftest 复用）
+current_phase: Phase 2.1 进行中（M01+M02+M03 完成；下一站 M04 维度记录）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -27,7 +27,7 @@ current_phase: Phase 2.1 进行中（M01+M02 完成；下一站 M03 模块树）
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
-Phase 2.1 业务模块  ⏳ ██░░░░░░░░░░░░░░  15%  ← M01+M02 完成；下一步 M03 模块树
+Phase 2.1 业务模块  ⏳ ███░░░░░░░░░░░░░  20%  ← M01+M02+M03 完成；下一步 M04 维度记录
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -167,7 +167,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 按依赖顺序：
 - [x] M02 项目管理（含 PROJECT_ARCHIVED ErrorCode F2.3）✅ 2026-05-07 (5 子片 c6b97d6→c9b0618 + R1+R2 修 e5651bf+e7b1b7f + 收尾 bc1b6a7; 205 PASS)
-- [ ] M03 模块树
+- [x] M03 模块树 ✅ 2026-05-07 (§14.5 prep 800e632 + 5 子片 d174e90→4a1a615 + R1+R2 修 ce73570+656e05c; 285 PASS; L1+L2+L3 第二次实证)
 - [ ] M04 维度记录
 - [ ] M05 版本时间线
 - [ ] M06 竞品对标
@@ -303,4 +303,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-07 | M01 探针实施完成（5 子片 c1e3acc → 2704d0f + design 回写 1c198cf；118 PASS / 0 xfail / lint 净 / ci-lint.sh R13-1 22=22 + L12 通过；ADR-004 §3 #5 + §3.5 + §3.6 + M01 §4 §10 回写） | CY + AI |
 | 2026-05-07 | 闸门 3 通过：第 1+2 项 ✅；第 3 项（三 Agent 流水线）bypass 转 M02 首跑（首条 phase-gate-bypass-log.md 登记）；Phase 2.1 5%→10%；下一站 M02 | CY + AI |
 | 2026-05-07 | M02 sprint 启动元反思 → 设计体系 v2 升级（5 体系盲区 + 8 条新规则 + 11 处 baseline-patch 回扫 + 修复 10 horizontal helper docstring 存量）；沉淀 design/audit/time-dimension-blindspot-2026-05-07.md + KB 补丁01；M02 design ready for sprint 实施 | CY + AI |
+| 2026-05-07 | M03 sprint 完成（5 子片 + R1+R2 闭环；285 PASS / R13-1 41=41 / L12 守护；§14.5 prep + design §6.X A4/A5/A6 + §3 description + §10 metadata + audit/m03-pilot-template-validation.md）；Phase 2.1 15→20%；下一站 M04 | CY + AI |
 | _（未来变更追加在这里）_ | | |
