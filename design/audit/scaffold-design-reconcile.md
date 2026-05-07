@@ -226,6 +226,34 @@ MODULE_ARCHIVED = "MODULE_ARCHIVED"
 
 ---
 
+## M01 sprint 启动 reconcile pass（2026-05-07）
+
+**结论**：✅ **闸门 2.5 通过**——M01 sprint 可启动业务实施。
+
+| Seam | 状态 | 证据 |
+|------|------|------|
+| S1 AuthServiceProtocol 形态不一致 | ✅ fixed | `api/auth/dependencies.py:11` AuthServiceProtocol class 已落地（单 Protocol 路径） |
+| S2 TenantContextProtocol | ✅ 已自我消解 | scaffold 注释清楚指明 M02/M20 各自补什么形态 |
+| S3 ErrorCode 命名漂移 | ✅ fixed | commit 57eb550 |
+| S4 R13-1 ErrorCode↔AppError parity | ✅ fixed | commit 9de4047（CI 守护已上） |
+| S5 queue/base.py 未建 | ⏸ 不阻塞 M01 | 闸门 2.6 M17 前置才建；M01 设计不依赖 queue/ |
+| S6 Timestamp/Immutable/SoftDelete mixins | ✅ fixed | commit c462e9e |
+| S7 engineering-spec § 7.2 模块编号注释 | ✅ fixed | commit df060b4 |
+
+**M01 design 决策包**：空——9 处 ⚠️/TBD/TODO 全为部署前 / 6 个月复审 / m3 README 回写远期项，无设计阶段阻塞决策。
+
+**P5 audit 关联**：F-1（M01 mermaid×禁止表自相矛盾）已通过 R4-3a 严格档闸门同步闭环（commit 2e93de9），M01 sprint 启动前无遗留状态机决策。
+
+**4 项 checkbox 自检**：
+- [x] helper 对照（5/7 ✅ + 1/7 不阻塞 + 1/7 自我消解）
+- [x] seam 已分类登记（scaffold-design-reconcile §1 7 seam）
+- [x] 机械可做项已修（5 个 fix commit 已 merge 到 main）
+- [x] 待 CY 决策项空（M01 design 无 ⚠️ 占位）
+
+可进入 step 4 TDD 实施。
+
+---
+
 ## 关联
 
 - 触发事件：M01 实施前 D1 决策（AuthServiceProtocol 1 法 vs ADR-004 4 法）
