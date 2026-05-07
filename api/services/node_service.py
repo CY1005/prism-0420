@@ -56,15 +56,29 @@ class NodeChildrenServiceProtocol(Protocol):
     导致 dimension_records/competitors/issues 残留孤儿数据 + activity_log 缺事件。
     被允许的 catch：仅当 impl 已显式记录错误为独立事件并继续抛 AppError 时（M15 sprint 落地后）。
 
-    **未来契约升级路径 (R2-3 punt 注记)**：当前 Protocol 是单 node 调用 (db, node_id, project_id)。
+    **签名升级 (M04 sprint R-X5 实证 / 2026-05-07)**：原签名为
+    ``(db, node_id, project_id) -> None`` 缺 ``actor_user_id``——但 design §10
+    R10-1 batch3 要求 child service 写 per-record ``delete`` activity_log，而
+    ``write_event`` 强制 ``actor_user_id`` 字段。M04 是 R-X2 第一真注入方，sprint
+    期通过 5 步分层分析法定位为 L1 跨模块契约层缺口（本模块绕都违反 design §10
+    或引入全局状态），决策升级 Protocol 加 ``actor_user_id``。M03 delete_node
+    已有 ``actor_user_id`` 参数，调用点同步改 4 参。
+
+    **未来契约升级路径 (R2-3 punt 注记)**：当前 Protocol 是单 node 调用。
     M04+ sprint 注入 concrete impl 后，delete_node 子树有 N 节点 × K service = N×K 次单 node 调用，
     深树时是 N+1 风险。子树节点数 >50 时，concrete impl 应升级为支持 batch 形态:
-        async def __call__(self, db, node_ids: list[UUID], project_id) -> None
-    并由 M03 delete_node 改为 list_subtree 后单次 batch 调用。当前为 noop 不修;
-    M04 sprint 启动时按 design §6 R-X2 决策"是否升级 Protocol 签名"。
+        async def __call__(self, db, node_ids: list[UUID], project_id, actor_user_id) -> None
+    并由 M03 delete_node 改为 list_subtree 后单次 batch 调用。当前 M04 注入仍是单
+    node 形态——M06/M07 sprint 起或子树节点 >50 性能压力出现时再评估。
     """
 
-    async def __call__(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> None: ...
+    async def __call__(
+        self,
+        db: AsyncSession,
+        node_id: UUID,
+        project_id: UUID,
+        actor_user_id: UUID,
+    ) -> None: ...
 
 
 _child_services: dict[str, NodeChildrenServiceProtocol] = {}
@@ -288,9 +302,9 @@ class NodeService:
         subtree.sort(key=lambda n: -n.depth)
 
         for sub in subtree:
-            # R-X2: 调下游 service（M03 sprint 期注册表为空 noop）
+            # R-X2: 调下游 service（M04 sprint 起 dimension impl 注入；signature 升级为 4 参）
             for _target_type, svc in _child_services.items():
-                await svc(db, sub.id, project_id)
+                await svc(db, sub.id, project_id, actor_user_id)
             # R10-1 batch3: 每节点独立 delete 事件
             await write_event(
                 db=db,

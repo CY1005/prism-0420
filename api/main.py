@@ -13,6 +13,8 @@ from api.errors import register_exception_handlers
 from api.routers import auth as auth_router
 from api.routers import node_router, project_router
 from api.services.auth_service import get_auth_service
+from api.services.dimension_service import DimensionService
+from api.services.node_service import register_child_service
 
 configure_logging()
 
@@ -42,7 +44,14 @@ async def lifespan(app: FastAPI):
     _validate_startup_config()
     # M02 子片 2: 注入 TenantContext concrete impl (覆盖 B2.4 scaffold Protocol)
     tenant_filter.set_tenant_context(M02TenantContext())
-    log.info("app.startup", version="0.1.0", tenant_context="M02 (project_members)")
+    # M04 子片 3: R-X2 第一真注入（M03 delete_node 调下游 → DimensionService 清下游）
+    register_child_service("dimension", DimensionService().delete_by_node_id)
+    log.info(
+        "app.startup",
+        version="0.1.0",
+        tenant_context="M02 (project_members)",
+        child_services=["dimension"],
+    )
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
         try:
             async with SessionLocal() as db:

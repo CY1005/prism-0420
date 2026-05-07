@@ -247,10 +247,11 @@ async def test_svc_delete_calls_registered_child_services(db_session, svc, make_
 
     called: list[tuple[str, str]] = []
 
-    async def fake_dimension_svc(db, node_id, project_id):
+    # M04 sprint Protocol 升级：(db, node_id, project_id, actor_user_id)
+    async def fake_dimension_svc(db, node_id, project_id, actor_user_id):
         called.append(("dimension", str(node_id)))
 
-    async def fake_competitor_svc(db, node_id, project_id):
+    async def fake_competitor_svc(db, node_id, project_id, actor_user_id):
         called.append(("competitor", str(node_id)))
 
     register_child_service("dimension", fake_dimension_svc)
