@@ -664,6 +664,22 @@ class NodeMoveCycleDetectedError(AppError):
 - **权限**：viewer 写 / 未登录读 / editor 权限覆盖
 - **错误处理**：删除不存在节点 / 重排含非同级节点
 
+### 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-07 立）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md#闸门-34--review-触发粒度规则l1-总则2026-05-07-立) L1 总则要求落本 sprint review 计划。
+> M03 sprint 拆 5 子片，按 M02 sprint 实证（R1=3 subagent / R2=1 合并 subagent 已足够；详见 `../../audit/m02-pilot-template-validation.md`）推 2 次 review：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（service + path 计算 + activity_log 落地） | 子片 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（3 subagent: spec+quality / reuse / quality+efficiency）| M02 实证 R1 schema 子片 ≥80% SKIP 假设部分成立——Spec 维度合并 service 后才能审业务，三维合并跑信号最强；M03 同型（schema + DAO + service 同合并）|
+| **R2** | 子片 4 完成（8 endpoints + check_project_access + move/reorder/breadcrumb） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 subagent**，M02 实证已足够，节省 subagent 调用）| endpoint 层是 Prism 契约漂移 (维度 2 #17-20) + 静默吞错 (#21-23) + 权限三层 + tenant 隔离 (#4-5) 等 checklist 高命中区，单跑保留独立性 |
+
+**子片 5 不单跑**：纯 tests + ci-lint + 4 实证子选项 / PT1-PT3 文档回写，无新业务代码——按触发器例外条款（≥80% SKIP）。
+
+**承接 bypass log #1 配套承诺**：R1 + R2 共 2 次完整三 Agent + simplify，满足 sprint ≥1 次硬承诺。
+
+**L3 实证回写承诺**：sprint 结束时把"实际跑下来 R1/R2 命中 vs SKIP 比例"+ R-X5 子选项实证（M03 §6.X A4 enqueue 推迟 / get_for_embedding A 现在建 / R1 schema 子片 SKIP 比例 / R2 1 合并 subagent 是否仍足够）回写到新建文件 `../../audit/m03-pilot-template-validation.md`，作为 L3 数据驱动 M04 sprint review 计划。
+
 ---
 
 ## 15. 完成度判定 checklist
