@@ -313,6 +313,48 @@ v3：A（启动包）+ A'（lessons-learned）混合——启动包等 PRISM 跑
 
 ---
 
+## 6.5 2026-05-07 续追：模板缺规则 + 存量回扫 4 步流程
+
+### 触发
+
+P5 audit F-1 揭出 M01 mermaid `pending → disabled (预留)` 与禁止表 `pending → disabled` 自相矛盾。本以为是单点 patch，CY 追问"为什么会出现这种矛盾"——根因是**R4 模板缺一条规则**（"非常规态独立登记"），导致作者把"未来全图"思维混进"本期硬约束"思维。
+
+### 4 步通用流程（沉淀，给未来同类问题用）
+
+| 步 | 动作 | 红线 |
+|---|---|---|
+| 1 识别根因升级 | audit 抓到 finding 时先问"是作者疏忽还是模板缺规则"。template-gap → 升级为模板修订事项，不在单点 patch 浪费 | 跳过此步 → 修一处放过同类十处 |
+| 2 改规则（权威 spec）| 在权威规约位置（如 02-modules/README.md R4）加新规则 + 样例 + 反例。一个 baseline-patch commit | 跳过此步 → 规则散落注释 |
+| 3 扫存量（grep 全仓） | 列出所有符合 trigger 的模块，按新规则 patch；CY 拍可合大 commit 也可逐模块 | 跳过此步 → 旧矛盾不会自动消失 |
+| 4 加自动化守护 | structural-audit.sh + pre-commit hook 加 lint 规则；未来漏写直接 fail commit | 跳过此步 → 半年后再踩 |
+
+### 何时不加自动化守护（步 4）
+
+本次实操 CY 拍砍掉步 4，理由：`scripts/structural-audit.sh` 还不存在（在 contracts-draft §4 才规划新建），现在新建独立 hook = 散落基础设施，等 contracts §4 落地时合并实现。**判别条件**：步 4 工具已存在 → 必加；不存在 → 评估"是否值得为这一条规则单独建工具"——不值得就把规则记入 contracts/structural audit TODO，等下次合并实现。
+
+### 元教训：用 superpower 起草规则文本
+
+CY 在本次明确指示"找问题→分析原因→写修复规则"必须用 superpower。本次用 `superpowers:brainstorming` 走完整流程：探索 context → 一次一个问题 → 起草 v1 → 起 Agent 查 5+ 业界项目（K8s/Temporal/Step Functions/Stripe/Shopify/UML PSSM/SCXML）实证 v1 合理性 → 修订 v2（仅接受 1 项业界证据强的修订）→ CY 审通过 → 落地。
+
+**关键判断**：业界证据强的修订（加 since 字段——K8s/Stripe/Shopify 都有）接受；业界主流但与项目偏好冲突的（放松严格档——CY 不接受，认为留口子让人偷懒）拒绝；超出当前需求的（5 类扩展为支持降级/迁移态）保留 YAGNI 但 CY 选择保留扩展空间。**外部证据 ≠ 直接照抄**——证据进决策，决策权在 CY。
+
+### F-1 的两层时间视角教训
+
+mermaid 用"未来全图"思维画（覆盖完整生命周期）+ 禁止表用"本期硬约束"思维写（覆盖本期跑得通的代码路径）——两次思维上下文切换之间没人喊停说"等等，这两份是同一个状态机的两个时间切片，要么都画未来要么都画本期"，结果同一条边一处当未来允许、一处当本期禁止。
+
+**适用范围广**：不止状态机。任何"现在文档" + "未来预留" 共存的设计文档都有此风险——API 契约里的 deprecated 字段、配置项的 reserved key、ErrorCode 表里的"暂不抛出但保留"——都需要"主表只列本期可用 + 非本期独立登记"的硬规约。
+
+### 本次产出
+
+| 文件 | 性质 | commit |
+|------|-----|-------|
+| 02-modules/README.md R4-3a | 模板修订（规则 + 5 类 + 6 字段态表 + 3 字段边表 + 反例对照）| 2e93de9 |
+| M01/M16/M17/M18 00-design.md | 4 模块按 R4-3a 回扫（mermaid 删 + 登记表加）| 2e93de9 |
+| ADR-002 §1.1 | 触发方清单 3 → 10 + Queue/SQL 形态区分 | b24f049 |
+| M16/M17/M18 模块端 cron user_id 反向引用 | 双向链补全 | b24f049 |
+
+---
+
 ## 7. 关联
 
 - 触发：M01 D1 决策（详见 commit `c9a580d` audit § 触发）
