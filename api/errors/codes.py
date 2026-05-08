@@ -90,3 +90,10 @@ class ErrorCode(StrEnum):
     ISSUE_ASSIGNEE_REQUIRED = "issue_assignee_required"
     ISSUE_CATEGORY_INVALID = "issue_category_invalid"
     ISSUE_NODE_CROSS_PROJECT = "issue_node_cross_project"
+
+    # M08 模块关系图 (design §13)
+    RELATION_NOT_FOUND = "relation_not_found"
+    RELATION_DUPLICATE = "relation_duplicate"
+    RELATION_SELF_LOOP = "relation_self_loop"
+    RELATION_NODE_NOT_IN_PROJECT = "relation_node_not_in_project"
+    RELATION_TYPE_INVALID = "relation_type_invalid"

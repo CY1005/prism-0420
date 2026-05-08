@@ -410,3 +410,36 @@ class IssueNodeCrossProjectError(ValidationError):
     code = ErrorCode.ISSUE_NODE_CROSS_PROJECT
     http_status = 422
     message = "The specified node does not belong to this project"
+
+
+# ─────────────── M08 模块关系图 ───────────────
+
+
+class RelationNotFoundError(NotFoundError):
+    code = ErrorCode.RELATION_NOT_FOUND
+    http_status = 404
+    message = "Module relation not found"
+
+
+class RelationDuplicateError(ConflictError):
+    code = ErrorCode.RELATION_DUPLICATE
+    http_status = 409
+    message = "This relation already exists between the two nodes with the same type"
+
+
+class RelationSelfLoopError(ValidationError):
+    code = ErrorCode.RELATION_SELF_LOOP
+    http_status = 422
+    message = "source_node_id and target_node_id must be different"
+
+
+class RelationNodeNotInProjectError(ValidationError):
+    code = ErrorCode.RELATION_NODE_NOT_IN_PROJECT
+    http_status = 404
+    message = "One or both nodes do not belong to the given project"
+
+
+class RelationTypeInvalidError(ValidationError):
+    code = ErrorCode.RELATION_TYPE_INVALID
+    http_status = 422
+    message = "Invalid relation_type value"
