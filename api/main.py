@@ -16,6 +16,7 @@ from api.routers import (
     comparison_router,
     competitor_router,
     dimension_router,
+    industry_news_router,
     issue_router,
     module_relation_router,
     node_router,
@@ -113,6 +114,8 @@ app.include_router(overview_router.overview_router)
 app.include_router(cold_start_router.cold_start_router)
 app.include_router(comparison_router.comparison_router)
 app.include_router(analyze_router.analyze_router)
+app.include_router(industry_news_router.news_router)
+app.include_router(industry_news_router.news_node_router)
 
 
 @app.get("/health")
