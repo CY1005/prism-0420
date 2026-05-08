@@ -102,3 +102,12 @@ class ErrorCode(StrEnum):
     OVERVIEW_PROJECT_NOT_FOUND = "overview_project_not_found"
     OVERVIEW_NODE_NOT_FOUND = "overview_node_not_found"
     OVERVIEW_NO_DIMENSIONS = "overview_no_dimensions"
+
+    # M11 冷启动支持 (design §13；G2/G6 移除 COLD_START_DUPLICATE)
+    COLD_START_TASK_NOT_FOUND = "cold_start_task_not_found"
+    COLD_START_CSV_INVALID = "cold_start_csv_invalid"
+    COLD_START_ROW_VALIDATION_FAILED = "cold_start_row_validation_failed"
+    COLD_START_BATCH_INSERT_FAILED = "cold_start_batch_insert_failed"
+    COLD_START_TASK_FINALIZED = "cold_start_task_finalized"
+    COLD_START_INVALID_STATE_TRANSITION = "cold_start_invalid_state_transition"
+    COLD_START_FILE_TOO_LARGE = "cold_start_file_too_large"

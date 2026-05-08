@@ -478,3 +478,48 @@ class OverviewNoDimensionsError(ValidationError):
     code = ErrorCode.OVERVIEW_NO_DIMENSIONS
     http_status = 422
     message = "Project has no enabled dimensions configured; completion rate cannot be calculated"
+
+
+# ─────────────── M11 冷启动支持 ───────────────
+
+
+class ColdStartTaskNotFoundError(NotFoundError):
+    code = ErrorCode.COLD_START_TASK_NOT_FOUND
+    http_status = 404
+    message = "Cold start task not found"
+
+
+class ColdStartCsvInvalidError(ValidationError):
+    code = ErrorCode.COLD_START_CSV_INVALID
+    http_status = 422
+    message = "CSV file is invalid or cannot be parsed"
+
+
+class ColdStartRowValidationFailedError(ValidationError):
+    code = ErrorCode.COLD_START_ROW_VALIDATION_FAILED
+    http_status = 422
+    message = "One or more rows failed validation; see error_report for details"
+
+
+class ColdStartBatchInsertFailedError(AppError):
+    code = ErrorCode.COLD_START_BATCH_INSERT_FAILED
+    http_status = 500
+    message = "Batch insert failed; transaction rolled back"
+
+
+class ColdStartTaskFinalizedError(ConflictError):
+    code = ErrorCode.COLD_START_TASK_FINALIZED
+    http_status = 409
+    message = "Cold start task is in final state and cannot be re-triggered"
+
+
+class ColdStartInvalidStateTransitionError(ConflictError):
+    code = ErrorCode.COLD_START_INVALID_STATE_TRANSITION
+    http_status = 409
+    message = "Invalid state transition for cold start task"
+
+
+class ColdStartFileTooLargeError(AppError):
+    code = ErrorCode.COLD_START_FILE_TOO_LARGE
+    http_status = 413
+    message = "CSV file exceeds maximum allowed size"
