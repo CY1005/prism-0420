@@ -7,6 +7,13 @@ from api.models.cold_start_task import ColdStartStatus, ColdStartTask
 from api.models.comparison_snapshot import ComparisonSnapshot, ComparisonSnapshotItem
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
+from api.models.import_task import (
+    ImportSourceType,
+    ImportTask,
+    ImportTaskItem,
+    ImportTaskItemStatus,
+    ImportTaskStatus,
+)
 from api.models.industry_news import IndustryNews, NewsNodeLink
 from api.models.issue import ISSUE_CATEGORIES, ISSUE_STATUSES, Issue
 from api.models.module_relation import ModuleRelation, RelationTypeEnum
@@ -51,6 +58,11 @@ __all__ = [
     "ISSUE_CATEGORIES",
     "ISSUE_STATUSES",
     "ImmutableMixin",
+    "ImportSourceType",
+    "ImportTask",
+    "ImportTaskItem",
+    "ImportTaskItemStatus",
+    "ImportTaskStatus",
     "IndustryNews",
     "InviteCode",
     "Issue",
