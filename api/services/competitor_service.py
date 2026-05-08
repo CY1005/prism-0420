@@ -377,12 +377,20 @@ class CompetitorService:
         ``delete`` activity_log（design §10 R10-1 batch3）。
 
         异常契约 (R1-C P1-01)：不 catch-all 吞错；DAO/write_event 任一异常向上传播。
+
+        **R10-1 弱化已知 punt（M06 R1-C P1-01 立修文字消歧 / 与 M04 R1-C C1.2 同款）**：
+        ``rows == 0`` 路径**主动豁免** activity_log 写入（list 后被他方并发删 → 继续下一条
+        不抛、不补记 cascade 事件）。这与"异常契约不 catch-all 吞错"的精神是兼容的——
+        rows==0 不是异常路径而是数据态判定，但 R10-1 批量记录的"每条 delete event"在
+        并发末尾 N 条会丢失。M15 升级 write_event 真 INSERT 时统一复审是否改用
+        SELECT FOR UPDATE 防并发 / 或 INSERT 前缀写"尝试删但已不存在"事件。
+        Audit 池：m04-pilot R1-C C1.2 + m06-pilot 同款延续。
         """
         records = await self.dao.list_refs_by_node_for_delete(db, node_id, project_id)
         for rec in records:
             rows = await self.dao.delete_ref(db, rec.id, project_id)
             if rows == 0:
-                # 并发删除导致 list 后被他方清掉 — 继续下一条，不抛
+                # R10-1 弱化主动豁免（见 docstring）：并发删除已被他方清，跳过 activity_log
                 continue
             await write_event(
                 db=db,

@@ -289,6 +289,65 @@ async def make_version(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_competitor(db_session):
+    """工厂 fixture：建一条 competitors 行（M06）。
+
+    R1-B P1-01 / R1-C P1-02 立修（M06 sprint，2026-05-08）：
+    test_m06_dao.py 内联 `_make_competitor` 迁入 conftest，规则延续
+    M04 R1-B B1.1（_seed_dim_type）+ M05 R1-B P1-01（_make_version）。
+
+    用法：
+      c = await make_competitor(project=proj, user=user, name="Notion")
+      c = await make_competitor(project=proj, user=user, website_url="...", description="...")
+    """
+    from api.models.competitor import Competitor
+
+    async def _make(
+        *,
+        project,
+        user,
+        name: str = "Notion",
+        website_url: str | None = None,
+        description: str | None = None,
+    ):
+        c = Competitor(
+            project_id=project.id,
+            display_name=name,
+            website_url=website_url,
+            description=description,
+            created_by=user.id,
+        )
+        db_session.add(c)
+        await db_session.flush()
+        return c
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_competitor_ref(db_session):
+    """工厂 fixture：建一条 competitor_refs 行（M06）。
+
+    R1-B P1-01 / R1-C P1-02 立修（M06 sprint，2026-05-08）：
+    test_m06_dao.py 内联 `_make_ref` 迁入 conftest。
+    """
+    from api.models.competitor import CompetitorRef
+
+    async def _make(*, project, node, competitor, user):
+        ref = CompetitorRef(
+            node_id=node.id,
+            competitor_id=competitor.id,
+            project_id=project.id,
+            created_by=user.id,
+        )
+        db_session.add(ref)
+        await db_session.flush()
+        return ref
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_dim_type(db_session):
     """工厂 fixture：建 dimension_types 行（可选同时建 ProjectDimensionConfig）。
 
