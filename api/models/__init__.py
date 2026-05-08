@@ -1,6 +1,7 @@
 """注册所有 ORM model 到 Base.metadata（Alembic autogenerate 依赖）。"""
 
 from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixin
+from api.models.cold_start_task import ColdStartStatus, ColdStartTask
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
 from api.models.issue import Issue
@@ -31,6 +32,8 @@ __all__ = [
     "AuthAuditLog",
     "AuthIdentity",
     "Base",
+    "ColdStartStatus",
+    "ColdStartTask",
     "Competitor",
     "CompetitorRef",
     "DimensionRecord",
