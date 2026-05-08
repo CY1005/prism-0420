@@ -456,3 +456,21 @@ async def test_svc_get_for_embedding_not_found_returns_none(db_session, svc, mak
     _, proj = await make_project()
     text_out = await svc.get_for_embedding(db_session, uuid4(), proj.id)
     assert text_out is None
+
+
+async def test_svc_get_for_embedding_empty_description_still_includes_separator(
+    db_session, svc, make_project
+):
+    """R1-C P1-01 立修配套：description 空字符串不应被 falsy 跳过。"""
+    user, proj = await make_project()
+    i = await svc.create(
+        db_session,
+        project_id=proj.id,
+        category="bug",
+        title="title only",
+        description="",  # 空字符串（design §3 nullable=False，但允许 ""）
+        actor_user_id=user.id,
+    )
+    text_out = await svc.get_for_embedding(db_session, i.id, proj.id)
+    # 应拼出 "title only\n"（含分隔符），而非旧 falsy 跳过得 "title only"
+    assert text_out == "title only\n"

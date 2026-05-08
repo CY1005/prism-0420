@@ -370,11 +370,12 @@ class IssueService:
         """M18 baseline-patch（A6 A 路径）：拼接 title + description。
 
         M07 无 url 字段（CY 决策 4 不影响）。
+
+        R1-C P1-01 立修：description 空字符串 "" 在 ``if X:`` 下 falsy 会被静默跳过，
+        但 design §3 description 是 ``nullable=False``（永远是 str），用 ``is not None``
+        语义不准。直接拼接 title + description（"" 拼出 "title\\n"，与 M16 消费契约一致）。
         """
         i = await self.dao.get_by_id(db, issue_id, project_id)
         if i is None:
             return None
-        parts = [i.title]
-        if i.description:
-            parts.append(i.description)
-        return "\n".join(parts)
+        return f"{i.title}\n{i.description}"
