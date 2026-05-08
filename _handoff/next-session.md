@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M12-sprint-complete)
+last_updated: 2026-05-08 (post-M14-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,23 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M13-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M14-sprint-complete）
+
+- **Phase 2.0 工程基线**：✅ 100%
+- **Phase 2.1 业务模块**：⏳ 70%（M01-M08+M10+M11+M12+M13+M14 完成；下一站 M15 数据流转；M09 superseded by M18 不实装）
+- **2026-05-08 M14 sprint 完成**（7 commit / 930 PASS / R13-1 86→90 / L12 守护 / **首个全局豁免业务模块 + write_event project_id UUID→Optional 升级 + N/A 元教训显式声明范式 + owner-or-admin 替代 viewer 写 403**）：
+  - commits: 3afbbdb 子片 0 prep（§14.5）+ c2858f7 子片 1 model+alembic+9 model tests + 968b284 子片 2 DAO+18 unit（GLOBAL DATA — NO TENANT FILTER 字面）+ e184c8b 子片 3 IndustryNewsService+4 ErrorCode+Pydantic+35 unit/schema（write_event UUID→Optional 升级 / source_type 强制 manual）+ 6ab088d R1 6 P1 立修（NewsNodeLink.node + design §8 unlink disambiguation + ORM mutate + make_news conftest 十连 + page validation + tags max_length=50）+ 9028875 子片 4 Router 8 endpoints+27 e2e + 059c7ea R2 4 P1 立修（write_event e2e 2 + design §10 metadata e2e 2 + list_by_node disambiguation + source_type 守 e2e 2）+ 子片 5 关闸 commit
+  - **930 PASS / 4 skipped (M13 carryover) / R13-1 86→90 (+4) / L12 守护通过**
+  - **闸门 2.5 第九次 B 栏 0 项实证**：M05+M06+M07+M08+M10+M11+M12+M13+M14 九连稳定
+  - **R1 + R2 命中数据**：R1=3 subagent 7 P1→去重 6 立修 / R2=1 合并 Opus 4 项；M02-M14 十二数据点稳定 → M15+ 默认范式可作模板
+  - **全局豁免业务模块首发新教训 3 条 sink**（详见 audit/m14-pilot-template-validation.md "全局豁免业务模块首发新教训" 段）：
+    1. write_event project_id 类型必须 Optional[UUID]（M14 首发；M15 ActivityLog NULLABLE column + ActionType +5）
+    2. N/A 元教训必须显式声明（design §14.5 + 测试 docstring 双重；防 R1/R2 把"未覆盖"当 P1 抓）
+    3. endpoint 形态特殊不免除契约纪律（M13 NEW 复用 + 强化；list_by_node R2 P1-3 抓出 page_size=len() or 1 漂移）
+  - **元教训防御 actionable 应用 9 项**：viewer 写 403 ✅ N/A / cross-tenant 404 ✅ N/A / cross-project node 404 ✅ link 反向 / IntegrityError 区分约束 ✅ / M12 元自审 ✅ 多处自决 / M13 "3 端点全" ✅ 形态特殊不免除 / M13 metadata 字段集 ❌→R2 立修 ✅ / write_event 异常传播 R1 service ✅ R2 e2e ❌→立修 ✅ / R-X1 失败补偿 N/A / 文件上传 N/A
+  - **owner-or-admin 替代 viewer 写 403 范式**（M14 全局豁免特化）：Service _check_news_owner_or_admin + e2e 双对照（non-owner 403 + platform_admin 豁免）
+
+## 0a. 上一版本快照（M13 sprint 完成）
 
 - **Phase 2.0 工程基线**：✅ 100%
 - **Phase 2.1 业务模块**：⏳ 65%（M01-M08+M10+M11+M12+M13 完成；下一站 M14 行业新闻；M09 superseded by M18 不实装）
@@ -204,7 +220,64 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M14 sprint 启动（**当前推荐 / M13 已完整收官 / 复制下方代码块到新 session**）
+### Prompt 0 — M15 sprint 启动（**当前推荐 / M14 已完整收官 / 复制下方代码块到新 session**）
+
+```
+继续 prism-0420 M15 sprint 实施代码（M15 数据流转 / activity_log 横切表 own；M14 sprint 已收官 7 commit / 子片 5 关闸 [hash] / 930 PASS / R13-1 90=90 / L12 守护 / Phase 2.1 70%）。
+
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
+2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M14-sprint-complete + 本 Prompt 0 M15 启动 reconcile checklist）
+3. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 70%，下一站 M15）
+4. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 2.5 + 闸门 3.4 L1 review 触发粒度规则）
+5. /root/workspace/projects/prism-0420/design/02-modules/M15-activity-stream/00-design.md（M15 design）
+6. /root/workspace/projects/prism-0420/design/audit/m14-pilot-template-validation.md（M14 sprint 实证 + R1 6 P1 + R2 4 项 + Punt 池 12 项 + 全局豁免业务模块首发新教训 3 条 + 元教训 9 项应用情况）
+7. memory feedback_problem_layered_analysis（含 M13 NEW + M14 NEW 失效信号 — endpoint 形态特殊不免除契约纪律）
+8. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb（标准红线集）
+
+任务：M15 sprint TDD 实施。
+
+M15 模块特定要素（必查）：
+- **承接 M14 baseline-patch**：write_event project_id UUID→Optional 升级（M14 sprint 落地 / M15 实装 ActivityLog NULLABLE column + UI 时间线"全局事件"分组）
+- **新增 ActionType +5**（M14 全局事件类型）：news_create / news_update / news_delete / news_link / news_unlink；ActivityLog target_type 含 industry_news / news_node_link
+- M15 own：activity_log 横切表 + list_for_team F2.5 + ActionType +10 + ErrorCode +8（design 字面）
+- 与 M14 的接口契约：write_event stub 当前打 structlog；M15 sprint 替换为真 INSERT + 兼容 None project_id
+
+启动顺序（严格按 M02-M14 范式 / 第十二数据点稳定）：
+
+1. **闸门 2.5 reconcile pass**（M15 sprint 启动当天必跑）：
+   - 预查 conftest.py 已有 fixture（M14 R1-B 新增 make_news；十连规则延续）
+   - grep M15 引用的所有 horizontal helper（含 write_event / activity_log_service / NodeChildrenServiceProtocol 4 参 等）
+   - 重点核 M14 baseline-patch：activity_log_service.py write_event project_id Optional 升级 + scaffold 简化决策注释 4 字段（M15 sprint 必须把 stub 替换为真 INSERT 兼容 None）
+   - 按闸门 2.5 三栏分类（A 机械可做 / B 待 CY 决策 / C 已自我消解）
+
+2. **闸门 3.4 L1 总则触发**：M15 design 必须含 §14.5 sprint review 拆分计划段（M02-M14 十二数据点稳定 → R1=3 subagent / R2=1 合并 Opus / 子片 5 不单跑 = 默认范式）。若缺先补。
+
+3. **M15 写代码 5 子片**（参 M14 sprint 范式）
+
+4. **R1+R2 review 按 §14.5 计划跑**
+
+5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP
+
+红线（M02-M14 实证后强化 / 元教训防御 actionable 主动复制）：
+- viewer 写所有写端点 403 全覆盖（M07 立 / M08+M11+M12+M13 应用 / M14 N/A 显式声明）
+- write_event 异常传播测试（M04+ 范式）：M15 是 write_event 实装方，自身路径全覆盖 + 调用方契约不破
+- cross-tenant 404（M02 范式）；M15 list_for_team 必须 tenant 过滤
+- IntegrityError 区分约束名（M05 P1-01 立规延续）
+- M12 元自审：L1 范式既锁裁决型 P1 不让 CY 拍 / AI 自决 + sink design disambiguation
+- M13 元自审：design metadata 字段集每条 e2e 验
+- **M14 NEW**：endpoint 形态特殊不免除契约纪律（list/反查/复用通用 schema 都需 disambiguation 注释）
+- **M14 NEW**：N/A 元教训必须显式声明（design §14.5 + 测试 docstring 双重）
+
+启动注意：
+1. 不要在同一会话连续跑多个 sprint：M11+M12+M13+M14 单 sprint 都堆到大 context，下次开新窗口
+2. 当前周 usage（Asia/Tokyo Reset 周三 6pm；本周 reset ~5/13）—— 启动 M15 前先 /usage 同步 + 更新 memory feedback_usage_budget.md 基线
+3. M15 design 内是否含完整 §14.5？冷启动第一步 grep "## 14.5\\|sprint review 拆分" design/02-modules/M15-activity-stream/00-design.md 确认；缺则子片 0 prep 补齐
+```
+
+参考来源（详见）：`_handoff/sprint-prompts-M05-M20.md` § "## M15 — 数据流转" + `design/02-modules/M15-activity-stream/00-design.md` + `design/audit/m14-pilot-template-validation.md`。
+
+### Prompt 0' — M14 sprint 启动（已完成 2026-05-08，仅供历史追溯）
 
 ```
 继续 prism-0420 M14 sprint 实施代码（M14 行业新闻；M13 sprint 已收官 8 commit / 子片 5 关闸 [hash] / 827 PASS / R13-1 86=86 / L12 守护 / Phase 2.1 65%）。
