@@ -110,3 +110,9 @@ class Node(Base, TimestampMixin):
         back_populates="node",
         cascade="all, delete-orphan",
     )
+    # M05 sprint 加：design §3 ER 双向链（A2 闸门 2.5 reconcile）
+    version_records: Mapped[list["VersionRecord"]] = relationship(  # noqa: F821
+        "VersionRecord",
+        back_populates="node",
+        cascade="all, delete-orphan",
+    )

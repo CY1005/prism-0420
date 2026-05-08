@@ -22,6 +22,7 @@ from api.models.user import (
     UserRole,
     UserStatus,
 )
+from api.models.version_record import VersionRecord
 
 __all__ = [
     "AuthAuditLog",
@@ -46,4 +47,5 @@ __all__ = [
     "User",
     "UserRole",
     "UserStatus",
+    "VersionRecord",
 ]
