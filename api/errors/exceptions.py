@@ -617,3 +617,67 @@ class AnalysisSaveFailedError(AppError):
 class AnalysisInvalidLevelError(ValidationError):
     code = ErrorCode.ANALYSIS_INVALID_LEVEL
     message = "Invalid analysis level (must be L1/L2/L3)"
+
+
+# ─── M15 数据流转 (design §13) ───
+
+
+class ActivityStreamProjectNotFoundError(NotFoundError):
+    code = ErrorCode.ACTIVITY_STREAM_PROJECT_NOT_FOUND
+    message = "Project not found or access denied"
+
+
+class ActivityStreamForbiddenError(AppError):
+    code = ErrorCode.ACTIVITY_STREAM_FORBIDDEN
+    http_status = 403
+    message = "Only project owner or editor can view activity stream"
+
+
+class ActivityStreamInvalidFilterError(ValidationError):
+    code = ErrorCode.ACTIVITY_STREAM_INVALID_FILTER
+    message = "Invalid filter parameters: from_dt must be before to_dt"
+
+
+# ─── M20 团队 (M15 sprint baseline-patch / design §13) ───
+# M15 sprint 期仅注册 + R13-1 parity；M20 sprint raise caller + e2e 回归
+
+
+class TeamNotFoundError(NotFoundError):
+    code = ErrorCode.TEAM_NOT_FOUND
+    message = "Team not found"
+
+
+class TeamNameDuplicateError(ConflictError):
+    code = ErrorCode.TEAM_NAME_DUPLICATE
+    message = "Team name already exists for this creator"
+
+
+class TeamHasProjectsError(ValidationError):
+    code = ErrorCode.TEAM_HAS_PROJECTS
+    message = "Cannot delete team with active projects"
+
+
+class TeamOwnerRequiredError(ValidationError):
+    code = ErrorCode.TEAM_OWNER_REQUIRED
+    message = "Team must have at least one owner"
+
+
+class TeamMemberNotFoundError(NotFoundError):
+    code = ErrorCode.TEAM_MEMBER_NOT_FOUND
+    message = "Team member not found"
+
+
+class TeamMemberDuplicateError(ConflictError):
+    code = ErrorCode.TEAM_MEMBER_DUPLICATE
+    message = "User already a team member"
+
+
+class TeamPermissionDeniedError(AppError):
+    code = ErrorCode.TEAM_PERMISSION_DENIED
+    http_status = 403
+    message = "Insufficient team role for this action"
+
+
+class CrossTeamMoveForbiddenError(ValidationError):
+    code = ErrorCode.CROSS_TEAM_MOVE_FORBIDDEN
+    message = "Cannot move project across teams in single update"

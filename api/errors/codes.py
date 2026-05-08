@@ -133,3 +133,19 @@ class ErrorCode(StrEnum):
     ANALYSIS_QUOTA_EXCEEDED = "analysis_quota_exceeded"
     ANALYSIS_SAVE_FAILED = "analysis_save_failed"
     ANALYSIS_INVALID_LEVEL = "analysis_invalid_level"
+
+    # M15 数据流转 (design §13)
+    ACTIVITY_STREAM_PROJECT_NOT_FOUND = "activity_stream_project_not_found"
+    ACTIVITY_STREAM_FORBIDDEN = "activity_stream_forbidden"
+    ACTIVITY_STREAM_INVALID_FILTER = "activity_stream_invalid_filter"
+
+    # M20 团队 (M15 sprint baseline-patch / design §13 / 未实装期 ErrorCode）
+    # M15 sprint 期仅注册 + R13-1 parity；生产路径 M20 sprint 期补 raise caller + e2e 回归
+    TEAM_NOT_FOUND = "team_not_found"
+    TEAM_NAME_DUPLICATE = "team_name_duplicate"
+    TEAM_HAS_PROJECTS = "team_has_projects"
+    TEAM_OWNER_REQUIRED = "team_owner_required"
+    TEAM_MEMBER_NOT_FOUND = "team_member_not_found"
+    TEAM_MEMBER_DUPLICATE = "team_member_duplicate"
+    TEAM_PERMISSION_DENIED = "team_permission_denied"
+    CROSS_TEAM_MOVE_FORBIDDEN = "cross_team_move_forbidden"
