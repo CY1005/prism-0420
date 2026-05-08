@@ -139,6 +139,23 @@ class ErrorCode(StrEnum):
     ACTIVITY_STREAM_FORBIDDEN = "activity_stream_forbidden"
     ACTIVITY_STREAM_INVALID_FILTER = "activity_stream_invalid_filter"
 
+    # M16 AI 快照 (design §13 / §12B 后台 fire-and-forget)
+    SNAPSHOT_NODE_NOT_FOUND = "snapshot_node_not_found"
+    SNAPSHOT_INSUFFICIENT_VERSIONS = "snapshot_insufficient_versions"
+    SNAPSHOT_PROVIDER_NOT_CONFIGURED = "snapshot_provider_not_configured"
+    SNAPSHOT_PROVIDER_ERROR = "snapshot_provider_error"
+    SNAPSHOT_TIMEOUT = "snapshot_timeout"
+    SNAPSHOT_QUOTA_EXCEEDED = "snapshot_quota_exceeded"
+    SNAPSHOT_SAVE_FAILED = "snapshot_save_failed"
+    SNAPSHOT_TASK_NOT_FOUND = "snapshot_task_not_found"
+    SNAPSHOT_NOT_READY = "snapshot_not_ready"
+    SNAPSHOT_TASK_FINALIZED = "snapshot_task_finalized"
+    SNAPSHOT_INVALID_STATE_TRANSITION = "snapshot_invalid_state_transition"
+    SNAPSHOT_ZOMBIE = "snapshot_zombie"
+    SNAPSHOT_PARSE_FAILED = "snapshot_parse_failed"
+    SNAPSHOT_INVALID_DIMENSION_KEY = "snapshot_invalid_dimension_key"
+    SNAPSHOT_TASK_PATH_MISMATCH = "snapshot_task_path_mismatch"
+
     # M20 团队 (M15 sprint baseline-patch / design §13 / 未实装期 ErrorCode）
     # M15 sprint 期仅注册 + R13-1 parity；生产路径 M20 sprint 期补 raise caller + e2e 回归
     TEAM_NOT_FOUND = "team_not_found"

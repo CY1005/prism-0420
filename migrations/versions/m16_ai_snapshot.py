@@ -34,6 +34,23 @@ def _quoted_in_list(values: tuple[str, ...]) -> str:
 
 
 def upgrade() -> None:
+    # 闸门 2.6 mini-sprint scaffold：插入 SYSTEM_USER_UUID 种子行（ADR-002 §1.1）。
+    # cron / Queue 系统任务写 activity_log 必须落此 user_id；不与真 user.id 撞。
+    op.execute(
+        """
+        INSERT INTO users (id, email, name, password_hash, status, role)
+        VALUES (
+            '00000000-0000-0000-0000-00000000fe00',
+            'system@internal.prism0420.local',
+            '系统',
+            '__system_no_login__',
+            'active',
+            'platform_admin'
+        )
+        ON CONFLICT (id) DO NOTHING
+        """
+    )
+
     op.create_table(
         "ai_snapshot_tasks",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -135,3 +152,5 @@ def downgrade() -> None:
     op.drop_index("ix_ai_snapshot_user_created", table_name="ai_snapshot_tasks")
     op.drop_index("ix_ai_snapshot_node_status", table_name="ai_snapshot_tasks")
     op.drop_table("ai_snapshot_tasks")
+
+    op.execute("DELETE FROM users WHERE id = '00000000-0000-0000-0000-00000000fe00'")

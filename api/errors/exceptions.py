@@ -681,3 +681,92 @@ class TeamPermissionDeniedError(AppError):
 class CrossTeamMoveForbiddenError(ValidationError):
     code = ErrorCode.CROSS_TEAM_MOVE_FORBIDDEN
     message = "Cannot move project across teams in single update"
+
+
+# ─── M16 AI 快照 (design §13 / §12B 后台 fire-and-forget) ───
+
+
+class SnapshotNodeNotFoundError(NotFoundError):
+    code = ErrorCode.SNAPSHOT_NODE_NOT_FOUND
+    message = "Node not found or not in project"
+
+
+class SnapshotInsufficientVersionsError(ValidationError):
+    code = ErrorCode.SNAPSHOT_INSUFFICIENT_VERSIONS
+    message = "At least 3 version records required to generate snapshot"
+
+
+class SnapshotProviderNotConfiguredError(ValidationError):
+    code = ErrorCode.SNAPSHOT_PROVIDER_NOT_CONFIGURED
+    message = "AI provider is not configured for this project"
+
+
+class SnapshotProviderError(AppError):
+    code = ErrorCode.SNAPSHOT_PROVIDER_ERROR
+    http_status = 503
+    message = "AI provider call failed"
+
+
+class SnapshotTimeoutError(AppError):
+    code = ErrorCode.SNAPSHOT_TIMEOUT
+    http_status = 504
+    message = "Snapshot generation exceeded server timeout (10min)"
+
+
+class SnapshotQuotaExceededError(AppError):
+    code = ErrorCode.SNAPSHOT_QUOTA_EXCEEDED
+    http_status = 429
+    message = "AI quota exceeded"
+
+
+class SnapshotSaveFailedError(AppError):
+    code = ErrorCode.SNAPSHOT_SAVE_FAILED
+    http_status = 500
+    message = "Failed to save snapshot to dimension records"
+
+
+class SnapshotTaskNotFoundError(NotFoundError):
+    code = ErrorCode.SNAPSHOT_TASK_NOT_FOUND
+    message = "Snapshot task not found or not accessible"
+
+
+class SnapshotNotReadyError(ConflictError):
+    code = ErrorCode.SNAPSHOT_NOT_READY
+    message = "Snapshot task is not ready for save (status != succeeded)"
+
+
+class SnapshotTaskFinalizedError(ConflictError):
+    code = ErrorCode.SNAPSHOT_TASK_FINALIZED
+    message = "Snapshot task is in final state and cannot be modified"
+
+
+class SnapshotInvalidStateTransitionError(ConflictError):
+    code = ErrorCode.SNAPSHOT_INVALID_STATE_TRANSITION
+    message = "Invalid state transition"
+
+
+class SnapshotZombieError(AppError):
+    """audit M2 修复：cron 兜底标记的 zombie 用，service 不实际 raise；前端通过
+    error_code='snapshot_zombie' 区分用户文案。R13-1 parity 守护需此类存在。"""
+
+    code = ErrorCode.SNAPSHOT_ZOMBIE
+    http_status = 504
+    message = "Task abnormally exited (zombie); please retry"
+
+
+class SnapshotParseFailedError(AppError):
+    code = ErrorCode.SNAPSHOT_PARSE_FAILED
+    http_status = 502
+    message = "AI output cannot be parsed as expected JSON schema"
+
+
+class SnapshotInvalidDimensionKeyError(ValidationError):
+    code = ErrorCode.SNAPSHOT_INVALID_DIMENSION_KEY
+    message = "selected_dimension_keys contains key not in task review_data"
+
+
+class SnapshotTaskPathMismatchError(ValidationError):
+    """audit M5 修复：防跨 node 攻击（save 时 task.project_id/node_id 与 URL path 不一致）。"""
+
+    code = ErrorCode.SNAPSHOT_TASK_PATH_MISMATCH
+    message = "task does not belong to the project/node in URL path"
