@@ -328,6 +328,35 @@ async def test_set_current_not_found_returns_404(auth_client, make_user):
 # ─────────────── tenant 越权 ───────────────
 
 
+async def test_create_version_viewer_role_returns_403(auth_client, make_user, db_session):
+    """R2 P1-01 立修：B 是 A 项目 viewer → POST 应 403 不是 404。"""
+    from api.models.project import MemberRole, ProjectMember
+
+    userA = await make_user(email="m05-vA@example.com")
+    userB = await make_user(email="m05-vB@example.com")
+    pidA = await _create_project(auth_client, userA.id)
+    nidA = await _create_node(auth_client, userA.id, pidA, name="A")
+
+    # A 把 B 加为 viewer
+    db_session.add(
+        ProjectMember(
+            project_id=pidA,
+            user_id=userB.id,
+            role=MemberRole.VIEWER.value,
+        )
+    )
+    await db_session.commit()
+
+    # viewer 写 → 403
+    r = await auth_client.post(
+        f"/api/projects/{pidA}/nodes/{nidA}/versions",
+        json={"version_label": "v1", "summary": "hack"},
+        headers=_bearer(userB.id),
+    )
+    assert r.status_code == 403
+    assert r.json()["code"] == "permission_denied"
+
+
 async def test_create_version_cross_tenant_returns_404(auth_client, make_user):
     """B 用户无 A 项目权限 → check_project_access 拦截返 404 不暴露项目存在性。"""
     userA = await make_user(email="m05-tA@example.com")
