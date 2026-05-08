@@ -18,12 +18,14 @@ from api.routers import (
     comparison_router,
     competitor_router,
     dimension_router,
+    embedding_admin_router,
     industry_news_router,
     issue_router,
     module_relation_router,
     node_router,
     overview_router,
     project_router,
+    search_router,
     version_router,
 )
 from api.routers import auth as auth_router
@@ -125,6 +127,8 @@ app.include_router(activity_stream_router.activity_stream_router)
 app.include_router(ai_snapshot_router.ai_snapshot_node_router)
 app.include_router(ai_snapshot_router.ai_snapshot_task_router)
 app.include_router(import_router_mod.import_router)
+app.include_router(search_router.router)
+app.include_router(embedding_admin_router.router)
 
 
 @app.get("/health")
