@@ -310,7 +310,7 @@ class NewsNodeLink(Base):
 | DELETE | `/api/news/{news_id}` | 删除动态 | — | 204 |
 | POST | `/api/news/{news_id}/links` | 关联功能项 | `NewsNodeLinkCreate` | `NewsNodeLinkResponse` |
 | DELETE | `/api/news/{news_id}/links/{node_id}` | 解除关联 | — | 204 |
-| GET | `/api/nodes/{node_id}/news` | 某功能项的相关动态 | — | `NewsListResponse` |
+| GET | `/api/nodes/{node_id}/news` | 某功能项的相关动态（**不分页：page=1 / page_size=total / 空列表 page_size=0；YAGNI 关联动态 <20 条不引入分页参数。R2 P1-3 立修 disambiguation 2026-05-08**）| — | `NewsListResponse` |
 
 ### Pydantic schema 草案
 

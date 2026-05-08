@@ -246,6 +246,7 @@ async def list_news_by_node(
     svc = IndustryNewsService()
     items = await svc.list_news_by_node(db, node_id=node_id)
     responses = [await _to_response(db, n) for n in items]
-    return NewsListResponse(
-        items=responses, total=len(responses), page=1, page_size=len(responses) or 1
-    )
+    # R2 P1-3 立修（2026-05-08）：list_by_node **不分页** — design §7 NewsListResponse
+    # 复用 disambiguation：page=1 / page_size=total（单页全量语义）；空列表 page_size=0。
+    # YAGNI：节点关联动态通常 < 20 条，不引入分页参数。
+    return NewsListResponse(items=responses, total=len(responses), page=1, page_size=len(responses))

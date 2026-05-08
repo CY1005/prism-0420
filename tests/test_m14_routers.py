@@ -376,6 +376,149 @@ async def test_unauthenticated_write_returns_401(auth_client):
 # ─────────────── M14-NodeReverse 节点级反查 ───────────────
 
 
+async def test_list_news_by_node_empty_returns_zero_page_size(auth_client, make_user):
+    """R2 P1-3 立修 design §7 disambiguation：空列表 page_size=0（不再 ``or 1`` fallback）。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="x")
+    r = await auth_client.get(f"/api/nodes/{nid}/news", headers=_bearer(user.id))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["items"] == []
+    assert body["total"] == 0
+    assert body["page_size"] == 0
+
+
+async def test_create_news_propagates_write_event_failure_e2e(auth_client, make_user, monkeypatch):
+    """R2 P1-1 立修 元教训 e2e：write_event raise → 端点 500（M04+ 范式 5 写路径首条）。"""
+    import api.services.industry_news_service as mod
+
+    async def boom(**kwargs):
+        raise RuntimeError("activity log failed")
+
+    monkeypatch.setattr(mod, "write_event", boom)
+    user = await make_user()
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    assert r.status_code == 500
+
+
+async def test_link_node_propagates_write_event_failure_e2e(auth_client, make_user, monkeypatch):
+    """R2 P1-1 立修：link 端点 write_event raise → 500（M04+ 范式 5 写路径覆盖第 2 条）。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="x")
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    import api.services.industry_news_service as mod
+
+    async def boom(**kwargs):
+        if kwargs.get("action_type") == "link":
+            raise RuntimeError("activity log failed")
+
+    monkeypatch.setattr(mod, "write_event", boom)
+    r = await auth_client.post(
+        f"/api/news/{news_id}/links",
+        json={"node_id": nid},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 500
+
+
+async def test_create_news_activity_log_metadata_matches_design(
+    auth_client, make_user, monkeypatch
+):
+    """R2 P1-2 立修 元教训：design §10 字面 metadata 字段集 e2e 验
+    （M13 NEW 失效信号 design metadata 字段集每条都必须实装）。"""
+    import api.services.industry_news_service as mod
+
+    captured: list[dict] = []
+
+    async def fake(**kwargs):
+        captured.append(kwargs)
+
+    monkeypatch.setattr(mod, "write_event", fake)
+    user = await make_user()
+    r = await auth_client.post(
+        "/api/news",
+        json={"title": "AI 监管", "tags": ["AI", "监管"]},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 201
+    assert len(captured) == 1
+    ev = captured[0]
+    assert ev["action_type"] == "create"
+    # design §10 字面 metadata = {source_type, tags_count}
+    assert set(ev["metadata"].keys()) == {"source_type", "tags_count"}
+    assert ev["metadata"]["source_type"] == "manual"
+    assert ev["metadata"]["tags_count"] == 2
+    assert ev["target_type"] == "industry_news"
+    assert ev["project_id"] is None  # M14 全局豁免
+
+
+async def test_link_node_activity_log_metadata_matches_design(auth_client, make_user, monkeypatch):
+    """R2 P1-2 立修：design §10 link metadata 必须含 node_id 字面（实装额外含 news_title）。"""
+    from api.services import industry_news_service as mod
+    from api.services.activity_log_service import write_event as real_write_event
+
+    captured: list[dict] = []
+
+    async def fake(**kwargs):
+        if kwargs.get("action_type") == "link":
+            captured.append(kwargs)
+        else:
+            await real_write_event(**kwargs)
+
+    monkeypatch.setattr(mod, "write_event", fake)
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="x")
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    r = await auth_client.post(
+        f"/api/news/{news_id}/links",
+        json={"node_id": nid},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 201
+    assert len(captured) == 1
+    ev = captured[0]
+    assert ev["action_type"] == "link"
+    assert ev["target_type"] == "news_node_link"
+    assert "node_id" in ev["metadata"]
+    assert ev["metadata"]["node_id"] == nid
+
+
+# ─────────────── M14-source_type 服务端强制（R2 P1-4）───────────────
+
+
+async def test_create_news_ignores_user_supplied_source_type(auth_client, make_user):
+    """R2 P1-4 立修 design §3 灰区 1 字面：service 层拒绝非 manual；用户传 source_type='rss' 被静默 fallback 到 manual。"""
+    user = await make_user()
+    r = await auth_client.post(
+        "/api/news", json={"title": "t", "source_type": "rss"}, headers=_bearer(user.id)
+    )
+    assert r.status_code == 201
+    assert r.json()["source_type"] == "manual"
+
+
+async def test_update_news_silently_drops_source_type(auth_client, make_user):
+    """R2 P1-4 立修：update 路径用户传 source_type='rss' 被 service 层 sanitize 滤掉。"""
+    user = await make_user()
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    r = await auth_client.put(
+        f"/api/news/{news_id}",
+        json={"source_type": "rss", "title": "t2"},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 200
+    assert r.json()["source_type"] == "manual"
+    assert r.json()["title"] == "t2"
+
+
+# ─────────────── 原 list_news_by_node 测试（保留）───────────────
+
+
 async def test_list_news_by_node(auth_client, make_user):
     user = await make_user()
     pid = await _create_project(auth_client, user.id)
