@@ -15,6 +15,7 @@ from api.routers import (
     competitor_router,
     dimension_router,
     issue_router,
+    module_relation_router,
     node_router,
     project_router,
     version_router,
@@ -102,6 +103,8 @@ app.include_router(competitor_router.competitor_router)
 app.include_router(competitor_router.competitor_ref_router)
 app.include_router(issue_router.issue_router)
 app.include_router(issue_router.issue_node_router)
+app.include_router(module_relation_router.relation_router)
+app.include_router(module_relation_router.relation_node_router)
 
 
 @app.get("/health")
