@@ -97,3 +97,8 @@ class ErrorCode(StrEnum):
     RELATION_SELF_LOOP = "relation_self_loop"
     RELATION_NODE_NOT_IN_PROJECT = "relation_node_not_in_project"
     RELATION_TYPE_INVALID = "relation_type_invalid"
+
+    # M10 项目全景图 (design §13；纯读聚合)
+    OVERVIEW_PROJECT_NOT_FOUND = "overview_project_not_found"
+    OVERVIEW_NODE_NOT_FOUND = "overview_node_not_found"
+    OVERVIEW_NO_DIMENSIONS = "overview_no_dimensions"

@@ -451,3 +451,24 @@ class RelationTypeInvalidError(ValidationError):
     code = ErrorCode.RELATION_TYPE_INVALID
     http_status = 422
     message = "Invalid relation_type value"
+
+
+# ─────────────── M10 项目全景图 ───────────────
+
+
+class OverviewProjectNotFoundError(NotFoundError):
+    code = ErrorCode.OVERVIEW_PROJECT_NOT_FOUND
+    http_status = 404
+    message = "Project not found or access denied"
+
+
+class OverviewNodeNotFoundError(NotFoundError):
+    code = ErrorCode.OVERVIEW_NODE_NOT_FOUND
+    http_status = 404
+    message = "Node not found in this project"
+
+
+class OverviewNoDimensionsError(ValidationError):
+    code = ErrorCode.OVERVIEW_NO_DIMENSIONS
+    http_status = 422
+    message = "Project has no enabled dimensions configured; completion rate cannot be calculated"

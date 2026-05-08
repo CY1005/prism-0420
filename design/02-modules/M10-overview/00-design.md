@@ -512,6 +512,29 @@ class OverviewNoDimensionsError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M08 七数据点稳定后默认范式复用）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md) L1 总则要求落本 sprint review 计划。
+> M02-M08 七数据点稳定（详见 `../../audit/m08-pilot-template-validation.md`），M10+ 复用默认范式。
+> **M10 简化范式**（纯读聚合无 model/migration）：4 子片代替 5 子片：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 2 完成（OverviewService + folder 均值算法 + 3 ErrorCode）| 子片 1 + 2 合并（DAO + Service）| spec + quality + reuse + efficiency 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| 七数据点稳定 |
+| **R2** | 子片 3 完成（3 endpoints + check_project_access viewer-only）| 子片 3 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| 七数据点稳定 |
+
+**子片 4 关闸不单跑** + **schema 子片禁单跑**（≥80% SKIP 例外 + 七数据点稳定结论）。
+
+**M10 sprint 特定关注点**：
+- **纯读聚合范式首次实证**（无自有表 / ADR-003 规则 2 豁免 / 跨 M02+M03+M04 LEFT JOIN 计算 completion_rate）
+- folder 均值"迭代后序遍历"算法（design §3 决策 D-1）— Python 默认递归栈深度 1000，深层树用 deque 后序避免栈溢出
+- 分母=0 早返回（design M10-B3）：count_enabled_dimensions 返 0 → OverviewNoDimensionsError(422) 不进节点聚合查询
+- M10 无写端点 — 元教训防御 actionable：cross-tenant 404 / 401 unauth / viewer 读 200（**写端点不适用** — viewer 读全景图属正常权限）
+
+**L3 实证回写承诺**：sprint 结束时回写 `../../audit/m10-pilot-template-validation.md`（L1 第八数据点 + 纯读聚合首次实证 + 闸门 2.5 三栏 A 5 / B 0 / C 7）。
+
+---
+
 ## 15. 完成度判定 checklist + CY 决策记录
 
 ### checklist
