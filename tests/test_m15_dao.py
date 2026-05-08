@@ -207,6 +207,9 @@ async def test_list_stream_order_by_created_at_desc(
         target_id=str(proj.id),
         summary="first",
     )
+    # 强制 ev1 created_at 在过去，避免与 ev2 同一 timestamp 触发 id 二次排序歧义
+    ev1.created_at = datetime.now(UTC) - timedelta(seconds=10)
+    await db_session.flush()
     ev2 = await make_activity_log(
         project_id=proj.id,
         user_id=user.id,
@@ -217,7 +220,6 @@ async def test_list_stream_order_by_created_at_desc(
     )
     rows, _ = await dao.list_stream(db_session, proj.id)
     assert [ev.summary for ev, _ in rows] == ["second", "first"]
-    # explicit anchor: ev2 before ev1
     assert rows[0][0].id == ev2.id
     assert rows[1][0].id == ev1.id
 

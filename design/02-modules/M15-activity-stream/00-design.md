@@ -879,8 +879,15 @@ class ActivityStreamInvalidFilterError(ValidationError):
 
 ### sprint 范式参数
 
-- R1 = 3 subagent 并行（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）
-- R2 = 1 合并 Opus subagent endpoint 单审
+> **2026-05-08 子片 3→R1 切换时 self-correct（重审 M10 纯读模块实证）**：M10 audit
+> 已锁"纯读聚合范式 4 子片简化 / R1 三 subagent 合并为 1 Opus"。M15 是 M10 同款纯读
+> 模块（ADR-003 规则 3 横切表豁免 / 1 endpoint 查询 / 无写自表 / 无跨模块写依赖）→
+> R1 走 M10 实证范式而非业务模块默认。
+
+- **R1 = 1 合并 Opus subagent**（纯读模块特化 / M10 + M15 / 子片 1+2+3 合并审）
+  - 业务模块对照：M02-M09 / M11 / M12 / M14 R1 = 3 subagent 并行（spec+quality Opus
+    + reuse Sonnet + quality+efficiency Sonnet）
+- R2 = 1 合并 Opus subagent endpoint 单审（M02-M14 默认 / M15 复用）
 - 子片 5 不单跑（≥80% SKIP 例外）
 - schema 子片合并到 R1（≥80% SKIP 例外）
 

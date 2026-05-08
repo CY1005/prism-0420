@@ -14,6 +14,8 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
+from api.errors.codes import ErrorCode
+from api.errors.exceptions import ActivityStreamInvalidFilterError
 from api.models.activity_log import _ACTION_TYPES, _TARGET_TYPES
 from api.schemas.activity_stream_schema import (
     ActionType,
@@ -23,10 +25,15 @@ from api.schemas.activity_stream_schema import (
 )
 
 
-def test_filter_from_dt_after_to_dt_raises():
+def test_filter_from_dt_after_to_dt_raises_business_error():
+    """R1 P1-1：raise 业务 code ActivityStreamInvalidFilterError（非裸 ValueError）。"""
     now = datetime.now(UTC)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ActivityStreamInvalidFilterError) as ei:
         ActivityStreamFilter(from_dt=now, to_dt=now - timedelta(days=1))
+    err = ei.value
+    assert err.code == ErrorCode.ACTIVITY_STREAM_INVALID_FILTER
+    assert err.http_status == 422
+    assert "from_dt" in err.details and "to_dt" in err.details
 
 
 def test_filter_equal_from_to_dt_ok():

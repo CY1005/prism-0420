@@ -143,8 +143,22 @@ class ActivityStreamFilter(BaseModel):
 
     @model_validator(mode="after")
     def check_time_range(self) -> ActivityStreamFilter:
+        """R1 P1-1 立修（2026-05-08）：原裸 ``ValueError`` → 业务 code
+        ``ActivityStreamInvalidFilterError``。
+
+        design §13 把 ``ACTIVITY_STREAM_INVALID_FILTER`` 列为 M15 own ErrorCode 之一；
+        裸 ValueError 经 FastAPI 转 422 但响应 code 字段是通用 ``validation_error``，
+        丢失业务语义。改用自定义 Error → AppError 子类 → 响应 ``code`` 字段为
+        ``activity_stream_invalid_filter``（与 design §13 字面一致）。
+        """
         if self.from_dt and self.to_dt and self.from_dt > self.to_dt:
-            raise ValueError("from_dt must be <= to_dt")
+            # 局部 import 避循环：errors → schemas 不能反向（schemas → errors 单向）
+            from api.errors.exceptions import ActivityStreamInvalidFilterError
+
+            raise ActivityStreamInvalidFilterError(
+                from_dt=self.from_dt.isoformat(),
+                to_dt=self.to_dt.isoformat(),
+            )
         return self
 
 
