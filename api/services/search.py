@@ -17,6 +17,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.errors.exceptions import (
+    AppError,
     EmbeddingProviderFailedError,
     EmbeddingProviderTimeoutError,
     PgvectorUnavailableError,
@@ -42,6 +43,10 @@ _SEARCH_EVAL_SAMPLE_RATE = float(os.getenv("SEARCH_EVAL_SAMPLE_RATE", "0.01"))
 
 # RRF k 默认值（从 ProjectSettings 读；此处作 fallback）
 _RRF_K_DEFAULT: int = 60
+
+# R1 fix #7：与 ProjectSettings default 0.3 一致，避免污染评估日志
+# TODO 子片 4+ 接 ProjectSettings.similarity_threshold（从 project 配置读，不再硬编码）
+_SIMILARITY_THRESHOLD_DEFAULT: float = 0.3
 
 
 class SearchService:
@@ -167,13 +172,15 @@ class SearchService:
             except PgvectorUnavailableError:
                 # 降级 keyword_only（AC4）— 不抛 HTTP 错误
                 actual_search_mode = "keyword_only"
-            except (EmbeddingProviderFailedError, EmbeddingProviderTimeoutError):
+            except (EmbeddingProviderFailedError, EmbeddingProviderTimeoutError) as exc:
                 # provider 失败 → 降级 keyword_only（不中断用户搜索）
                 actual_search_mode = "keyword_only"
-                log.warning("embed_query failed, fallback to keyword_only")
-            except Exception as exc:  # noqa: BLE001
-                actual_search_mode = "keyword_only"
-                log.warning("semantic search failed: %s", exc)
+                log.warning("embed_query failed, fallback to keyword_only: %s", exc)
+            except AppError:
+                # R1 fix #6（R13-2 audit M2）：透传上游 AppError（含 ErrorCode + metadata['from_module']）
+                # 调用方可从 exc.metadata['from_module'] 区分来源模块（M03/M04 等）
+                raise
+            # 注意：不再有 broad except Exception 兜底（让其他未预期异常自然冒泡，而非静默降级）
 
         # ─── RRF 融合（hybrid 模式）──────────────────────────────────
         if mode == "hybrid" and actual_search_mode == "hybrid":
@@ -259,7 +266,7 @@ class SearchService:
                 semantic_top5=_items_to_dicts(semantic_results),
                 hybrid_top5=_items_to_dicts(merged_results),
                 rrf_k=rrf_k,
-                similarity_threshold=0.0,
+                similarity_threshold=_SIMILARITY_THRESHOLD_DEFAULT,
             )
             db.add(log_entry)
             await db.flush()

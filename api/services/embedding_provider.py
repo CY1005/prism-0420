@@ -276,6 +276,7 @@ def get_embedding_provider(
     provider_name: str | None,
     model_name: str | None = None,
     dim: int | None = None,
+    api_key: str | None = None,
 ) -> EmbeddingProvider:
     """工厂：按 provider_name 字段值返回对应 EmbeddingProvider 实例。
 
@@ -283,13 +284,15 @@ def get_embedding_provider(
         provider_name: ∈ SUPPORTED_PROVIDERS = {'openai', 'bge', 'mock'}；None / "" → 'mock'
         model_name: 模型名（mock 必须 ``mock-*`` 前缀；openai 'text-embedding-3-small' 等）
         dim: 向量维度，必须 ∈ SUPPORTED_DIMS
+        api_key: OpenAI api_key（R1 fix #13：caller 从 ProjectSettings.embedding_api_key_enc + AES decrypt 传入；
+                 未传时 fallback 到 os.getenv OPENAI_API_KEY + DeprecationWarning）
 
     Raises:
         EmbeddingProviderConfigError: 未知 provider / mock 前缀违反 / dim 档位非法
 
     子片 0 prep（2026-05-09）：实装 ``mock``。
     子片 3（2026-05-09）：OpenAI + bge skeleton（embed_single/batch 暂 NotImplementedError）。
-    子片 4+：pgvector 装后接通 OpenAI + bge 真实现。
+    子片 4+：pgvector 装后接通 OpenAI + bge 真实现；EmbeddingService._get_provider 接 ProjectSettings 解密后传 api_key。
     """
     name = (provider_name or "mock").strip().lower()
 
@@ -306,10 +309,22 @@ def get_embedding_provider(
 
     if name == "openai":
         import os
+        import warnings
 
-        api_key = os.getenv("OPENAI_API_KEY", "")
+        # R1 fix #13：api_key 接受 caller 传入（子片 4+ 从 ProjectSettings.embedding_api_key_enc + AES decrypt 传）
+        # os.getenv fallback 仅在 api_key 未传时用，且加 deprecation warning
+        # TODO 子片 4+：caller EmbeddingService._get_provider 必须从 ProjectSettings.embedding_api_key_enc
+        # + AES decrypt 后传入 api_key，不再走 os.getenv fallback
+        resolved_api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            warnings.warn(
+                "get_embedding_provider: api_key 未传入，fallback 到 os.getenv OPENAI_API_KEY。"
+                "子片 4+ 必须从 ProjectSettings.embedding_api_key_enc + AES decrypt 传入 api_key。",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         return OpenAIEmbeddingProvider(
-            api_key=api_key,
+            api_key=resolved_api_key,
             model_name=model_name or "text-embedding-3-small",
             dim=dim if dim is not None else 1536,
         )

@@ -227,15 +227,24 @@ class EmbeddingTaskDAO:
         self,
         db: AsyncSession,
     ) -> list[EmbeddingTask]:
-        """fix v4.1 R5'=B startup recovery：列出 status='pending' 残留任务。
+        """fix v4.1 R5'=B startup recovery：列出 backfill 来源的 stale pending 残留任务。
+
+        design line 1133-1136 字面两条件（R1 fix #4）：
+        1. enqueued_by == "backfill"（仅 backfill 来源需要 recovery，incremental 有 debounce 自保）
+        2. created_at < NOW() - 1h（stale 谓词，避免把刚入队的 pending 误 recovery）
 
         startup 钩子 + backfill_recovery cron 每小时调，防 arq 重启后丢失任务
         (design §6 Lifespan + Cron embedding_backfill_recovery.py)。
         全局查（startup 恢复不限 project）。
         """
+        stale_threshold = datetime.now(UTC) - timedelta(hours=1)
         result = await db.execute(
             select(EmbeddingTask)
-            .where(EmbeddingTask.status == EmbeddingTaskStatus.pending.value)
+            .where(
+                EmbeddingTask.status == EmbeddingTaskStatus.pending.value,
+                EmbeddingTask.enqueued_by == "backfill",
+                EmbeddingTask.created_at < stale_threshold,
+            )
             .order_by(EmbeddingTask.created_at.asc())
         )
         return list(result.scalars().all())

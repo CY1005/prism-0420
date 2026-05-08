@@ -34,7 +34,8 @@ _ZOMBIE_TIMEOUT_S = int(os.getenv("EMBEDDING_TASK_TIMEOUT_S", "60")) + 60
 # 清理保留天数（design §12D §⑦ cron 矩阵）
 _TERMINAL_CLEANUP_DAYS = 30
 _FAILURE_CLEANUP_DAYS = 90
-_SEARCH_EVAL_CLEANUP_DAYS = 90
+# R1 fix #5：design line 462 字面"1 年保留（评估目的）"，改为 365 天（原误设 90）
+_SEARCH_EVAL_CLEANUP_DAYS = 365
 
 
 async def cron_backfill_daily(ctx: dict) -> None:
@@ -127,10 +128,13 @@ async def cron_failure_monitor(ctx: dict) -> None:
                 _FAILURE_THRESHOLD_ABS,
             )
 
-        # PCT 阈值检查——需要 embedding_tasks 总数估算；使用简单比率（total_tasks 估值）
-        # 占位：子片 4+ 接真实 total_tasks 查询
-        # 若 total_failures > 0 且无法取 total_tasks，按绝对值告警已足够
-        # TODO 子片 4+：接 task_dao.count_completed_in_window(db, hours=1) 真做 PCT
+        # PCT 阈值检查——需要 embedding_tasks 总数估算（R1 fix #15）
+        # design line 1043 "三维设计避免 5%/h 单维死参数"：PCT 维度需 task_dao.count_completed_in_window 才能算。
+        # 占位期：当前两维（ABS + PER_PROJECT）已能告警，PCT 留 TODO 待子片 4+ 实施。
+        # 子片 4+ 实施：task_dao.count_completed_in_window(db, hours=1) 返回完成数，
+        #   pct = total_failures / (total_completed + total_failures) * 100
+        #   if pct >= _FAILURE_THRESHOLD_PCT: logger.error(...)
+        # TODO 子片 4+：接 task_dao.count_completed_in_window(db, hours=1) 真做 PCT 维度告警
 
         # PER_PROJECT 阈值检查——需要按 project 分组，当前 DAO 提供按 project_id 查询
         # 此处扫取全部失败行按 project_id 分组（设计 §12D cron 矩阵）
@@ -193,10 +197,10 @@ async def cron_old_terminal_cleanup(ctx: dict) -> None:
 
 
 async def cron_search_eval_cleanup(ctx: dict) -> None:
-    """每日：90 天清理 search_evaluation_log（design §12D §⑦ + §15.1 cron 矩阵）。
+    """每日：365 天清理 search_evaluation_log（design §12D §⑦ + §15.1 cron 矩阵）。
 
-    search_evaluation_log 保留策略：设计文档 §3 line 432-462 = 1 年保留（评估目的）；
-    本函数清理 90 天前数据（保守实现；可调整为 1 年）。
+    search_evaluation_log 保留策略：design line 462 字面"1 年保留（评估目的）"；
+    R1 fix #5：_SEARCH_EVAL_CLEANUP_DAYS 从 90 改为 365 与 design 字面对齐。
     """
     from api.core.db import SessionLocal as AsyncSessionLocal  # type: ignore[import]
 

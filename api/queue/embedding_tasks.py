@@ -86,6 +86,13 @@ async def embed_single(
         # ─── advisory_xact_lock 双 namespace（design §11 line 878 字面）────
         # pg_advisory_xact_lock(hashtext('m18_text_embedding'), hashtext(project_id||'/'||target_id))
         # 占位：pgvector 未安装时跳过真实 lock（子片 4+ 接真实 PG advisory lock）
+        #
+        # R1 fix #11 — Race window 说明：
+        # SELECT pending → cas_start_running 之间，并发 worker 可同时 SELECT 同一 pending task。
+        # CAS 兜底：cas_start_running 返 None 时表示 CAS race，静默 skip（见下方 logger.info）。
+        # 数据正确性靠 content_hash 7字段PK 兜底（embeddings 表 ON CONFLICT DO UPDATE）。
+        # 子片 4+ 加 advisory_xact_lock 双 namespace + project_id+target_id 复合 key 后 race 消除。
+        #
         # TODO 子片 4+：
         # await db.execute(text(
         #     "SELECT pg_advisory_xact_lock("
@@ -122,10 +129,11 @@ async def embed_single(
             return
 
         # CAS start running
+        # R1 fix #11：CAS miss 路径 logger.info（Race window 可见 / 不再 silent return）
         running_task = await task_dao.cas_start_running(db, task.id)
         if running_task is None:
-            log.debug(
-                "embed_single: CAS start_running failed (already taken): task_id=%s",
+            log.info(
+                "embed_single: CAS race, skip task=%s (another worker already started it)",
                 task.id,
             )
             return

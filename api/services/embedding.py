@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from collections import OrderedDict
 from typing import Any
 from uuid import UUID
 
@@ -23,7 +24,6 @@ from api.dao.embedding_dao import EmbeddingDAO
 from api.dao.embedding_failure_dao import EmbeddingFailureDAO
 from api.dao.embedding_task_dao import EmbeddingTaskDAO
 from api.errors.exceptions import (
-    EmbeddingDeleteFailedError,
     EmbeddingProviderFailedError,
     EmbeddingTargetNotFoundError,
 )
@@ -53,12 +53,20 @@ _BACKFILL_BATCH_TIMEOUT_S = int(os.getenv("BACKFILL_BATCH_TIMEOUT_S", "900"))
 # ─── 内存 debounce 占位（子片 4+ 接 Redis Pool 后真做）─────────────────────────
 # TODO 子片 4+ 接 Redis Pool 后真做 Redis SET debounce（TTL=60s）
 # 当前 key = f"embedding:debounce:{project_id}:{target_type}:{target_id}"
-_DEBOUNCE_CACHE: dict[str, float] = {}
+#
+# R1 fix #14：OrderedDict + size cap 防止长跑 worker 内存无界增长
+# 占位期单进程内存有限 OK；多 worker 接 Redis 后才真正正确（进程不共享 OrderedDict）
+_DEBOUNCE_CACHE_MAX: int = 1000
+_DEBOUNCE_CACHE: OrderedDict[str, float] = OrderedDict()
 _DEBOUNCE_TTL_S: float = 60.0
 
 # ─── 内存 query embedding cache 占位（子片 4+ 接 Redis Pool 后真做）─────────────
 # TODO 子片 4+ 接 Redis Pool 后真做 Redis 短缓存（TTL=5min）
-_QUERY_EMBED_CACHE: dict[str, tuple[list[float], int, str, str, str]] = {}
+#
+# R1 fix #14：OrderedDict + size cap 防止长跑 worker 内存无界增长
+# 占位期单进程内存有限 OK；多 worker 接 Redis 后才真正正确（进程不共享 OrderedDict）
+_QUERY_EMBED_CACHE_MAX: int = 1000
+_QUERY_EMBED_CACHE: OrderedDict[str, tuple[list[float], int, str, str, str]] = OrderedDict()
 _QUERY_CACHE_TTL_S: float = 300.0
 
 
@@ -77,10 +85,13 @@ def _is_debounced(key: str) -> bool:
 
 
 def _set_debounce(key: str) -> None:
-    """设置内存 debounce。子片 4+ 改为 Redis SET EX 60。"""
+    """设置内存 debounce（OrderedDict LRU 淘汰 / cap=1000）。子片 4+ 改为 Redis SET EX 60。"""
     import time
 
     _DEBOUNCE_CACHE[key] = time.monotonic()
+    # LRU 淘汰：超过 cap 从最早（last=False）弹出
+    while len(_DEBOUNCE_CACHE) > _DEBOUNCE_CACHE_MAX:
+        _DEBOUNCE_CACHE.popitem(last=False)
 
 
 class EmbeddingService:
@@ -139,16 +150,29 @@ class EmbeddingService:
 
         provider = self._get_provider()
         # 创建 EmbeddingTask 行（status=pending）
-        await self._task_dao.create(
-            db,
-            project_id=project_id,
-            target_type=target_type,
-            target_id=target_id,
-            provider=provider.provider_name,
-            model_name=provider.model_name,
-            model_version=_EMBEDDING_MODEL_VERSION,
-            enqueued_by=enqueued_by,
-        )
+        # R1 fix #10：catch IntegrityError（CHECK 约束违反会原始 IntegrityError 穿透 500）
+        from sqlalchemy.exc import IntegrityError
+
+        from api.errors.exceptions import EmbeddingTaskInvalidTransitionError
+
+        try:
+            await self._task_dao.create(
+                db,
+                project_id=project_id,
+                target_type=target_type,
+                target_id=target_id,
+                provider=provider.provider_name,
+                model_name=provider.model_name,
+                model_version=_EMBEDDING_MODEL_VERSION,
+                enqueued_by=enqueued_by,
+            )
+        except IntegrityError as err:
+            if "ck_embedding_tasks_" in str(err.orig):
+                raise EmbeddingTaskInvalidTransitionError(
+                    f"CHECK constraint violated on embedding_tasks for "
+                    f"project={project_id} target={target_type}/{target_id}: {err.orig}"
+                ) from err
+            raise
         # TODO 子片 4+ 真接 arq pool：
         # await arq_pool.enqueue_job("embed_single", ...)
         log.debug(
@@ -170,8 +194,10 @@ class EmbeddingService:
     ) -> None:
         """commit 后异步 delete enqueue（design §9 B1 修复 + C2=A）。
 
-        失败抛 EmbeddingDeleteFailedError(SilentFailure)——不阻塞业务删除主路径。
-        调用方必须 except SilentFailure（禁 except Exception）。
+        占位期（子片 4+ 前）：同步直删；失败仅 logger.warning，不 raise。
+        原因：SilentFailure(BaseException) 在业务 worker 的 except Exception 外冒泡
+        会导致进程崩溃（R1 fix #2）。
+        子片 4+ 接 arq 异步后再启用 SilentFailure 语义（届时改回 raise EmbeddingDeleteFailedError）。
         """
         try:
             # TODO 子片 4+ 真接 arq pool enqueue delete_embedding task
@@ -189,18 +215,15 @@ class EmbeddingService:
                 target_id,
             )
         except Exception as exc:
+            # 占位期同步直删失败仅日志，不 raise SilentFailure（避免 BaseException 冒泡崩 worker）
+            # 子片 4+ 接 arq 异步后再启用 SilentFailure 语义
             log.warning(
-                "enqueue_delete failed (non-blocking): project=%s target=%s/%s error=%s",
+                "enqueue_delete failed (non-blocking, placeholder): project=%s target=%s/%s error=%s",
                 project_id,
                 target_type,
                 target_id,
                 exc,
             )
-            raise EmbeddingDeleteFailedError(
-                target_type=target_type,
-                target_id=target_id,
-                project_id=project_id,
-            ) from exc
 
     # ─── get_or_compute_embedding（worker 内调）────────────────────────────
 
@@ -240,9 +263,20 @@ class EmbeddingService:
             return existing
 
         # 调 provider.embed_single 获取向量
+        # R1 fix #9：包 asyncio.timeout 防 provider 挂起导致 session 泄露 + zombie（同 embed_query 范式）
         embed_provider = self._get_provider()
         try:
-            vector = await embed_provider.embed_single(source_text)
+            import asyncio
+
+            async with asyncio.timeout(_EMBEDDING_TASK_TIMEOUT_S):
+                vector = await embed_provider.embed_single(source_text)
+        except TimeoutError as exc:
+            from api.errors.exceptions import EmbeddingProviderTimeoutError
+
+            raise EmbeddingProviderTimeoutError(
+                f"provider={provider} timeout after {_EMBEDDING_TASK_TIMEOUT_S}s "
+                f"computing embedding for {target_type}:{target_id}"
+            ) from exc
         except ProviderTimeoutError as exc:
             from api.errors.exceptions import EmbeddingProviderTimeoutError
 
@@ -285,15 +319,20 @@ class EmbeddingService:
         """
         import time
 
-        cache_key = f"query_embed:{hashlib.sha256(query.encode()).hexdigest()}"
+        # R1 fix #16：cache_key 含 provider+model_name+model_version
+        # 防切 model 后旧缓存命中返回旧维度向量 → vector_search 维度不匹配
+        # design line 103 字面"Redis 5min (query+model→vector)"
+        provider = self._get_provider()
+        cache_key = (
+            f"query_embed:{hashlib.sha256(query.encode()).hexdigest()}"
+            f":{provider.provider_name}:{provider.model_name}:{_EMBEDDING_MODEL_VERSION}"
+        )
         cached_ts_and_val = _QUERY_EMBED_CACHE.get(cache_key)
         if cached_ts_and_val is not None:
             ts, val = cached_ts_and_val  # type: ignore[misc]
             if (time.monotonic() - ts) < _QUERY_CACHE_TTL_S:
                 log.debug("query_embed cache hit: query_prefix=%s", query[:20])
                 return val  # type: ignore[return-value]
-
-        provider = self._get_provider()
         try:
             import asyncio
 
@@ -317,6 +356,9 @@ class EmbeddingService:
             _EMBEDDING_MODEL_VERSION,
         )
         _QUERY_EMBED_CACHE[cache_key] = (time.monotonic(), result)  # type: ignore[assignment]
+        # LRU 淘汰：超过 cap 从最早（last=False）弹出
+        while len(_QUERY_EMBED_CACHE) > _QUERY_EMBED_CACHE_MAX:
+            _QUERY_EMBED_CACHE.popitem(last=False)
         return result
 
     # ─── batch_backfill（backfill path）──────────────────────────────────────
@@ -335,6 +377,12 @@ class EmbeddingService:
 
         整批 timeout=BACKFILL_BATCH_TIMEOUT_S（15min）。
         返回成功 enqueue 数量。
+
+        R1 fix #12 — N+1 影响边界说明：
+        占位期 for-loop 逐条 enqueue() = N+1 INSERT pattern（名曰"batch"但实现非 batch）。
+        5 万条回填 = 5 万次 DB 往返；当前仅适用 mock provider 测试（provider 不真调 OpenAI）。
+        子片 4+ 改 INSERT INTO embedding_tasks SELECT FROM unnest(:ids) 批量 INSERT，
+        或 EmbeddingTaskDAO.batch_create(ids) 批量形态。
         """
         import asyncio
 

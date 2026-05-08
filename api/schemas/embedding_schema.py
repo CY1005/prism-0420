@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict
 
 from api.queue.base import TaskPayload
 from api.schemas.search_schema import EmbeddingTargetType
@@ -55,8 +55,11 @@ class BackfillRequest(TaskPayload):
     model_version: str | None = None
 
 
-class BackfillResponse(TaskPayload):
-    """POST /api/admin/embedding/backfill 响应（202 Accepted）。"""
+class BackfillResponse(BaseModel):
+    """POST /api/admin/embedding/backfill 响应（202 Accepted）。
+
+    继承 BaseModel（非 TaskPayload）：HTTP 响应无需强制 user_id + project_id（R1 fix #1）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -76,8 +79,11 @@ class ModelUpgradeRequest(TaskPayload):
     new_model_version: str
 
 
-class ModelUpgradeResponse(TaskPayload):
-    """POST /api/admin/embedding/model-upgrade 响应（202 Accepted）。"""
+class ModelUpgradeResponse(BaseModel):
+    """POST /api/admin/embedding/model-upgrade 响应（202 Accepted）。
+
+    继承 BaseModel（非 TaskPayload）：HTTP 响应无需强制 user_id + project_id（R1 fix #1）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -89,8 +95,11 @@ class ModelUpgradeResponse(TaskPayload):
     message: str = "Model upgrade enqueued"
 
 
-class EmbeddingStatsResponse(TaskPayload):
-    """GET /api/admin/embedding/stats 响应（platform_admin only）。"""
+class EmbeddingStatsResponse(BaseModel):
+    """GET /api/admin/embedding/stats 响应（platform_admin only）。
+
+    继承 BaseModel（非 TaskPayload）：HTTP 响应无需强制 user_id + project_id（R1 fix #1）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 

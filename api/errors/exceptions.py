@@ -864,10 +864,13 @@ class EmbeddingProviderTimeoutError(AppError):
 
 
 class EmbeddingTargetNotFoundError(AppError):
-    """noop 路径——worker 内捕获后跳过，不写 failures。"""
+    """noop 路径——worker 内捕获后跳过，不写 failures。
+
+    design line 1247 字面"noop 路径不写 failures"；worker 内部 wrap 不走 HTTP（R1 fix #3）。
+    http_status 不设置：arq Queue 形态非 HTTP，middleware 不渲染此异常。
+    """
 
     code = ErrorCode.EMBEDDING_TARGET_NOT_FOUND
-    http_status = 404
     message = "Embedding target not found in business table (noop)"
 
 

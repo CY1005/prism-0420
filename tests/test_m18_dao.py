@@ -22,7 +22,6 @@ from api.dao.embedding_failure_dao import EmbeddingFailureDAO
 from api.dao.embedding_task_dao import EmbeddingTaskDAO
 from api.dao.search_evaluation_log_dao import SearchEvaluationLogDAO
 from api.models.embedding import (
-    Embedding,
     EmbeddingTaskStatus,
 )
 
@@ -61,36 +60,9 @@ def backfill_dao():
     return EmbeddingBackfillDAO()
 
 
-def _emb_kwargs(*, project_id, target_type="node", target_id=None, **overrides):
-    """最小 Embedding 构造参数（dim=512 / mock provider）。"""
-    return {
-        "project_id": project_id,
-        "modality": _MODALITY,
-        "target_type": target_type,
-        "target_id": target_id or uuid4(),
-        "provider": _PROVIDER,
-        "model_name": _MODEL_NAME,
-        "model_version": _MODEL_VERSION,
-        "dim": _DIM,
-        "embedding_512": _VEC,
-        "embedding_1536": None,
-        "embedding_3072": None,
-        "content_hash": uuid4().hex,
-        **overrides,
-    }
-
-
-def _task_kwargs(*, project_id, target_type="node", target_id=None, **overrides):
-    return {
-        "project_id": project_id,
-        "target_type": target_type,
-        "target_id": target_id or uuid4(),
-        "provider": _PROVIDER,
-        "model_name": _MODEL_NAME,
-        "model_version": _MODEL_VERSION,
-        "enqueued_by": "incremental",
-        **overrides,
-    }
+# R1 fix #8：删除内联 _emb_kwargs / _task_kwargs 模块级 helper
+# 改用 conftest 已有 make_embedding / make_embedding_task fixture（跨文件 helper 十三连规则）
+# 调用处已全部迁移为 await make_embedding(...) / await make_embedding_task(...)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -101,13 +73,13 @@ def _task_kwargs(*, project_id, target_type="node", target_id=None, **overrides)
 # ─────────── E-T1 find_by_target（7 字段 PK / tenant 过滤）───────────
 
 
-async def test_embedding_find_by_target_hit(db_session, embedding_dao, make_project):
+async def test_embedding_find_by_target_hit(
+    db_session, embedding_dao, make_project, make_embedding
+):
     """7 字段 PK 精确查找命中。"""
     _u, proj = await make_project()
     target_id = uuid4()
-    e = Embedding(**_emb_kwargs(project_id=proj.id, target_id=target_id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_id=target_id)
 
     got = await embedding_dao.find_by_target(
         db_session, proj.id, "node", target_id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -116,12 +88,12 @@ async def test_embedding_find_by_target_hit(db_session, embedding_dao, make_proj
     assert got.target_id == target_id
 
 
-async def test_embedding_find_by_target_miss_wrong_target(db_session, embedding_dao, make_project):
+async def test_embedding_find_by_target_miss_wrong_target(
+    db_session, embedding_dao, make_project, make_embedding
+):
     """target_id 不匹配返 None。"""
     _u, proj = await make_project()
-    e = Embedding(**_emb_kwargs(project_id=proj.id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id)
 
     got = await embedding_dao.find_by_target(
         db_session, proj.id, "node", uuid4(), _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -130,15 +102,13 @@ async def test_embedding_find_by_target_miss_wrong_target(db_session, embedding_
 
 
 async def test_embedding_find_by_target_cross_project_returns_none(
-    db_session, embedding_dao, make_project
+    db_session, embedding_dao, make_project, make_embedding
 ):
     """跨 project 强 tenant 过滤：返 None（service 层转 404）。"""
     _u, p1 = await make_project()
     _u2, p2 = await make_project()
     target_id = uuid4()
-    e = Embedding(**_emb_kwargs(project_id=p1.id, target_id=target_id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=p1.id, target_id=target_id)
 
     got = await embedding_dao.find_by_target(
         db_session, p2.id, "node", target_id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -150,16 +120,11 @@ async def test_embedding_find_by_target_cross_project_returns_none(
 
 
 async def test_embedding_find_by_project_and_provider_returns_list(
-    db_session, embedding_dao, make_project
+    db_session, embedding_dao, make_project, make_embedding
 ):
     _u, proj = await make_project()
-    db_session.add_all(
-        [
-            Embedding(**_emb_kwargs(project_id=proj.id, target_id=uuid4())),
-            Embedding(**_emb_kwargs(project_id=proj.id, target_id=uuid4())),
-        ]
-    )
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_id=uuid4())
+    await make_embedding(project_id=proj.id, target_id=uuid4())
 
     rows = await embedding_dao.find_by_project_and_provider(
         db_session, proj.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -168,14 +133,13 @@ async def test_embedding_find_by_project_and_provider_returns_list(
 
 
 async def test_embedding_find_by_project_and_provider_excludes_other_project(
-    db_session, embedding_dao, make_project
+    db_session, embedding_dao, make_project, make_embedding
 ):
     """强 tenant 过滤：不同 project 的 embedding 不回来。"""
     _u, p1 = await make_project()
     _u2, p2 = await make_project()
-    db_session.add(Embedding(**_emb_kwargs(project_id=p1.id)))
-    db_session.add(Embedding(**_emb_kwargs(project_id=p2.id)))
-    await db_session.flush()
+    await make_embedding(project_id=p1.id)
+    await make_embedding(project_id=p2.id)
 
     rows = await embedding_dao.find_by_project_and_provider(
         db_session, p1.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -206,27 +170,25 @@ async def test_embedding_vector_search_raises_not_implemented(
 # ─────────── E-T4 delete_by_target ───────────────────────────────
 
 
-async def test_embedding_delete_by_target_returns_rowcount(db_session, embedding_dao, make_project):
+async def test_embedding_delete_by_target_returns_rowcount(
+    db_session, embedding_dao, make_project, make_embedding
+):
     _u, proj = await make_project()
     target_id = uuid4()
-    e = Embedding(**_emb_kwargs(project_id=proj.id, target_id=target_id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_id=target_id)
 
     n = await embedding_dao.delete_by_target(db_session, proj.id, "node", target_id)
     assert n == 1
 
 
 async def test_embedding_delete_by_target_cross_project_noop(
-    db_session, embedding_dao, make_project
+    db_session, embedding_dao, make_project, make_embedding
 ):
     """跨 project 强 tenant 过滤：不删对方 project 的行。"""
     _u, p1 = await make_project()
     _u2, p2 = await make_project()
     target_id = uuid4()
-    e = Embedding(**_emb_kwargs(project_id=p1.id, target_id=target_id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=p1.id, target_id=target_id)
 
     n = await embedding_dao.delete_by_target(db_session, p2.id, "node", target_id)
     assert n == 0
@@ -235,15 +197,12 @@ async def test_embedding_delete_by_target_cross_project_noop(
 # ─────────── E-T5 count_by_project_and_provider ──────────────────
 
 
-async def test_embedding_count_by_project_and_provider(db_session, embedding_dao, make_project):
+async def test_embedding_count_by_project_and_provider(
+    db_session, embedding_dao, make_project, make_embedding
+):
     _u, proj = await make_project()
-    db_session.add_all(
-        [
-            Embedding(**_emb_kwargs(project_id=proj.id, target_id=uuid4())),
-            Embedding(**_emb_kwargs(project_id=proj.id, target_id=uuid4())),
-        ]
-    )
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_id=uuid4())
+    await make_embedding(project_id=proj.id, target_id=uuid4())
 
     n = await embedding_dao.count_by_project_and_provider(
         db_session, proj.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -539,10 +498,12 @@ async def test_task_create_returns_pending(db_session, task_dao, make_project):
 # ─────────── T-T2 cas_start_running（pending → running）──────────────
 
 
-async def test_task_cas_start_running_pending_to_running(db_session, task_dao, make_project):
+async def test_task_cas_start_running_pending_to_running(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """pending → running CAS 命中。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     updated = await task_dao.cas_start_running(db_session, task.id)
@@ -551,11 +512,11 @@ async def test_task_cas_start_running_pending_to_running(db_session, task_dao, m
 
 
 async def test_task_cas_start_running_already_running_returns_none(
-    db_session, task_dao, make_project
+    db_session, task_dao, make_project, make_embedding_task
 ):
     """已经 running 的 task，再次 cas_start_running 返 None（CAS miss）。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -567,9 +528,11 @@ async def test_task_cas_start_running_already_running_returns_none(
 # ─────────── T-T3 cas_complete（running → succeeded/failed/dead_letter）────────
 
 
-async def test_task_cas_complete_running_to_succeeded(db_session, task_dao, make_project):
+async def test_task_cas_complete_running_to_succeeded(
+    db_session, task_dao, make_project, make_embedding_task
+):
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -579,10 +542,12 @@ async def test_task_cas_complete_running_to_succeeded(db_session, task_dao, make
     assert done.completed_at is not None
 
 
-async def test_task_cas_complete_succeeded_cannot_run_again(db_session, task_dao, make_project):
+async def test_task_cas_complete_succeeded_cannot_run_again(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """succeeded → running 反向不允许（CAS WHERE status='pending'）。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -592,10 +557,12 @@ async def test_task_cas_complete_succeeded_cannot_run_again(db_session, task_dao
     assert result is None
 
 
-async def test_task_cas_complete_invalid_status_raises(db_session, task_dao, make_project):
+async def test_task_cas_complete_invalid_status_raises(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """pending 目标不允许（只允许终态 succeeded/failed/dead_letter）。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -603,10 +570,12 @@ async def test_task_cas_complete_invalid_status_raises(db_session, task_dao, mak
         await task_dao.cas_complete(db_session, task.id, EmbeddingTaskStatus.pending)
 
 
-async def test_task_cas_complete_with_error_fields(db_session, task_dao, make_project):
+async def test_task_cas_complete_with_error_fields(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """failed 终态带 error_code + error_message。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -626,11 +595,11 @@ async def test_task_cas_complete_with_error_fields(db_session, task_dao, make_pr
 
 
 async def test_task_cas_zombie_transition_running_timeout_to_dead_letter(
-    db_session, task_dao, make_project
+    db_session, task_dao, make_project, make_embedding_task
 ):
     """running 超时 → dead_letter（模拟 updated_at 超 timeout）。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -648,10 +617,12 @@ async def test_task_cas_zombie_transition_running_timeout_to_dead_letter(
     assert result.status == EmbeddingTaskStatus.dead_letter.value
 
 
-async def test_task_cas_zombie_not_timeout_returns_none(db_session, task_dao, make_project):
+async def test_task_cas_zombie_not_timeout_returns_none(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """running 但未超时 → cas_zombie_transition 返 None。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -663,10 +634,12 @@ async def test_task_cas_zombie_not_timeout_returns_none(db_session, task_dao, ma
 # ─────────── T-T5 find_zombie_tasks ──────────────────────────────────────────
 
 
-async def test_task_find_zombie_tasks_returns_timed_out_running(db_session, task_dao, make_project):
+async def test_task_find_zombie_tasks_returns_timed_out_running(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """find_zombie_tasks 列出 running 且 updated_at < threshold 的任务。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -684,10 +657,12 @@ async def test_task_find_zombie_tasks_returns_timed_out_running(db_session, task
     assert task.id in ids
 
 
-async def test_task_find_zombie_tasks_excludes_fresh_running(db_session, task_dao, make_project):
+async def test_task_find_zombie_tasks_excludes_fresh_running(
+    db_session, task_dao, make_project, make_embedding_task
+):
     """updated_at 刚更新的 running task 不列为 zombie。"""
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -700,10 +675,22 @@ async def test_task_find_zombie_tasks_excludes_fresh_running(db_session, task_da
 # ─────────── T-T6 find_pending_for_recovery ─────────────────────────────────
 
 
-async def test_task_find_pending_for_recovery(db_session, task_dao, make_project):
-    """startup recovery：列出 status=pending 的残留任务。"""
+async def test_task_find_pending_for_recovery(
+    db_session, task_dao, make_project, make_embedding_task
+):
+    """startup recovery：列出 enqueued_by=backfill + stale (created_at < NOW-1h) 的 pending 任务。
+
+    R1 fix #4：design line 1133-1136 两条件：enqueued_by=="backfill" + created_at < NOW()-1h。
+    """
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id, enqueued_by="backfill")
+    # 把 created_at 设成 2 小时前（stale 谓词：created_at < NOW() - 1h）
+    await db_session.execute(
+        __import__("sqlalchemy").text(
+            "UPDATE embedding_tasks SET created_at = NOW() - INTERVAL '2 hours' WHERE id = :id"
+        ),
+        {"id": task.id},
+    )
     await db_session.flush()
 
     rows = await task_dao.find_pending_for_recovery(db_session)
@@ -711,12 +698,47 @@ async def test_task_find_pending_for_recovery(db_session, task_dao, make_project
     assert task.id in ids
 
 
+async def test_task_find_pending_for_recovery_excludes_incremental(
+    db_session, task_dao, make_project, make_embedding_task
+):
+    """enqueued_by=incremental 的 pending task 不被 recovery（仅 backfill 来源需要 recovery）。"""
+    _u, proj = await make_project()
+    task = await make_embedding_task(project_id=proj.id, enqueued_by="incremental")
+    await db_session.execute(
+        __import__("sqlalchemy").text(
+            "UPDATE embedding_tasks SET created_at = NOW() - INTERVAL '2 hours' WHERE id = :id"
+        ),
+        {"id": task.id},
+    )
+    await db_session.flush()
+
+    rows = await task_dao.find_pending_for_recovery(db_session)
+    ids = {r.id for r in rows}
+    assert task.id not in ids
+
+
+async def test_task_find_pending_for_recovery_excludes_fresh_backfill(
+    db_session, task_dao, make_project, make_embedding_task
+):
+    """backfill 来源但 created_at 不满足 stale 谓词（< 1h）的 pending task 不被 recovery。"""
+    _u, proj = await make_project()
+    task = await make_embedding_task(project_id=proj.id, enqueued_by="backfill")
+    # 不修改 created_at → 刚创建，不满足 stale 谓词
+    await db_session.flush()
+
+    rows = await task_dao.find_pending_for_recovery(db_session)
+    ids = {r.id for r in rows}
+    assert task.id not in ids
+
+
 # ─────────── T-T7 delete_old_terminal ────────────────────────────────────────
 
 
-async def test_task_delete_old_terminal_removes_expired(db_session, task_dao, make_project):
+async def test_task_delete_old_terminal_removes_expired(
+    db_session, task_dao, make_project, make_embedding_task
+):
     _u, proj = await make_project()
-    task = await task_dao.create(db_session, **_task_kwargs(project_id=proj.id))
+    task = await make_embedding_task(project_id=proj.id)
     await db_session.commit()
 
     await task_dao.cas_start_running(db_session, task.id)
@@ -863,15 +885,13 @@ async def test_backfill_list_pending_node_ids_returns_missing(
 
 
 async def test_backfill_list_pending_node_ids_excludes_existing(
-    db_session, backfill_dao, make_project, make_node
+    db_session, backfill_dao, make_project, make_node, make_embedding
 ):
     """embeddings 表已有对应行 → 不再列出（LEFT JOIN IS NULL 过滤）。"""
     _u, proj = await make_project()
     node = await make_node(proj.id, name="n2")
     # 插入 embedding（node 已有 embedding）
-    e = Embedding(**_emb_kwargs(project_id=proj.id, target_type="node", target_id=node.id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_type="node", target_id=node.id)
 
     ids = await backfill_dao.list_pending_node_ids(
         db_session, proj.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -909,13 +929,11 @@ async def test_backfill_list_pending_competitor_ids_returns_missing(
 
 
 async def test_backfill_list_pending_competitor_ids_excludes_existing(
-    db_session, backfill_dao, make_project, make_competitor
+    db_session, backfill_dao, make_project, make_competitor, make_embedding
 ):
     _u, proj = await make_project()
     c = await make_competitor(project=proj, user=_u)
-    e = Embedding(**_emb_kwargs(project_id=proj.id, target_type="competitor", target_id=c.id))
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_type="competitor", target_id=c.id)
 
     ids = await backfill_dao.list_pending_competitor_ids(
         db_session, proj.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION
@@ -956,17 +974,19 @@ async def test_backfill_list_pending_dimension_record_ids_returns_missing(
 
 
 async def test_backfill_list_pending_dimension_record_ids_excludes_existing(
-    db_session, backfill_dao, make_project, make_node, make_dim_type, make_dim_record
+    db_session,
+    backfill_dao,
+    make_project,
+    make_node,
+    make_dim_type,
+    make_dim_record,
+    make_embedding,
 ):
     user, proj = await make_project()
     node = await make_node(proj.id)
     dt_id = await make_dim_type(key="t-backfill-e", project_id=proj.id)
     dr = await make_dim_record(user=user, project=proj, node=node, dim_type_id=dt_id)
-    e = Embedding(
-        **_emb_kwargs(project_id=proj.id, target_type="dimension_record", target_id=dr.id)
-    )
-    db_session.add(e)
-    await db_session.flush()
+    await make_embedding(project_id=proj.id, target_type="dimension_record", target_id=dr.id)
 
     ids = await backfill_dao.list_pending_dimension_record_ids(
         db_session, proj.id, _PROVIDER, _MODEL_NAME, _MODEL_VERSION

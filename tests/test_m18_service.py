@@ -12,7 +12,6 @@ from uuid import uuid4
 import pytest
 
 from api.errors.exceptions import (
-    EmbeddingDeleteFailedError,
     EmbeddingProviderFailedError,
     EmbeddingTargetNotFoundError,
     SilentFailure,
@@ -117,34 +116,32 @@ async def test_enqueue_delete_calls_dao():
     mock_embedding_dao.delete_by_target.assert_called_once()
 
 
-async def test_enqueue_delete_raises_silent_failure_on_dao_error():
+async def test_enqueue_delete_does_not_raise_on_dao_error():
+    """R1 fix #2：占位期同步直删失败仅 logger.warning，不 raise SilentFailure。
+
+    原因：SilentFailure(BaseException) 在业务 worker 的 except Exception 外冒泡会导致进程崩溃。
+    子片 4+ 接 arq 异步后再启用 SilentFailure 语义。
+    """
     mock_embedding_dao = AsyncMock()
     mock_embedding_dao.delete_by_target = AsyncMock(side_effect=RuntimeError("DB down"))
     svc = EmbeddingService(embedding_dao=mock_embedding_dao)
     db = _mock_db()
 
-    with pytest.raises(EmbeddingDeleteFailedError):
-        await svc.enqueue_delete(db, uuid4(), "node", uuid4())
+    # 占位期：失败不 raise，仅 log.warning（不影响调用方）
+    await svc.enqueue_delete(db, uuid4(), "node", uuid4())  # should not raise
 
 
 async def test_enqueue_delete_error_is_silent_failure():
-    """EmbeddingDeleteFailedError 是 SilentFailure — 验证类型层次。"""
+    """EmbeddingDeleteFailedError 是 SilentFailure — 验证类型层次（类定义不变）。
+
+    R1 fix #2：占位期 enqueue_delete 失败不 raise（仅 warning），但 EmbeddingDeleteFailedError
+    类定义本身仍是 SilentFailure 子类（子片 4+ 真 arq 接入后再启用 raise 语义）。
+    """
     from api.errors.exceptions import EmbeddingDeleteFailedError
 
-    mock_embedding_dao = AsyncMock()
-    mock_embedding_dao.delete_by_target = AsyncMock(side_effect=RuntimeError("err"))
-    svc = EmbeddingService(embedding_dao=mock_embedding_dao)
-    db = _mock_db()
-
-    # 验证抛出的是 SilentFailure 子类（不是 Exception 子类）
-    caught_as_silent_failure = False
-    try:
-        await svc.enqueue_delete(db, uuid4(), "node", uuid4())
-    except SilentFailure:
-        caught_as_silent_failure = True
-    assert caught_as_silent_failure
-    # SilentFailure 不是 Exception 子类
+    # SilentFailure 类型层次不变：EmbeddingDeleteFailedError 仍继承 SilentFailure(BaseException)
     assert not issubclass(EmbeddingDeleteFailedError, Exception)
+    assert issubclass(EmbeddingDeleteFailedError, SilentFailure)
 
 
 # ─── EmbeddingService.embed_query ────────────────────────────────────────────
