@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
@@ -34,6 +36,19 @@ from api.services.cold_start_service import (
     MAX_FILE_BYTES,
     ColdStartOrchestratorService,
 )
+
+_FILENAME_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f\r\n]")
+
+
+def _sanitize_filename(raw: str | None) -> str:
+    """R2 P1-03 立修：去 path traversal + CRLF 注入；basename + 控制字符 strip + 长度截断。"""
+    if not raw:
+        return "upload.csv"
+    base = os.path.basename(raw.replace("\\", "/"))
+    base = _FILENAME_CONTROL_RE.sub("", base)
+    base = base.strip(" .") or "upload.csv"
+    return base[:255]
+
 
 cold_start_router = APIRouter(
     prefix="/api/projects/{project_id}/cold-start",
@@ -79,13 +94,22 @@ async def upload_cold_start_csv(
     - 413 文件过大 → ColdStartFileTooLargeError
     - 422 CSV 格式 / 行级校验 → ColdStartCsvInvalidError / ColdStartRowValidationFailedError
     - 500 batch 入库失败 → ColdStartBatchInsertFailedError
-    任一失败时：service 已 dao.update task=failed + error_report；router commit 该状态后 re-raise。
+    R2 P1-01 punt（audit 登记）：
+    当前实装下"task=failed 元数据"和"部分业务 INSERT"共享同一 commit boundary，
+    与 design §1 G6 + §4 全量回滚契约存在轻微违反（用户看 task=failed 时 DB 里可能挂着
+    部分孤儿业务数据）。R2 reviewer 已识别。彻底修复需独立 connection 或显式
+    SAVEPOINT 重构（与测试 fixture join_transaction_mode='create_savepoint' 不兼容）；
+    punt 到 M17 sprint（异步 zip 导入将 reuse orchestrator helper，届时一并立独立 helper）。
     """
+    # R2 P1-02：file.size 预检（attacker 不能用 chunked encoding 把全部 body 灌进 SpooledTemporaryFile）
+    if file.size is not None and file.size > MAX_FILE_BYTES:
+        raise ColdStartFileTooLargeError(max_bytes=MAX_FILE_BYTES, actual_bytes=file.size)
     raw = await file.read()
-    # design §1 G6：> 10MB 直接拒（router 早 check / service 也兜底防绕过）
     if len(raw) > MAX_FILE_BYTES:
         raise ColdStartFileTooLargeError(max_bytes=MAX_FILE_BYTES, actual_bytes=len(raw))
 
+    # R2 P1-03 立修：filename sanitize（path traversal / CRLF 注入）
+    safe_filename = _sanitize_filename(file.filename)
     svc = ColdStartOrchestratorService()
     try:
         task = await svc.process_csv(
@@ -93,12 +117,12 @@ async def upload_cold_start_csv(
             project_id=access.project.id,
             actor_user_id=access.user.id,
             content_bytes=raw,
-            source_filename=file.filename or "upload.csv",
+            source_filename=safe_filename,
         )
         await db.commit()
         return ColdStartTaskResponse.model_validate(task, from_attributes=True)
     except Exception:
-        # service 已 dao.update task=failed + error_report；commit 失败状态后 re-raise
+        # service 已 dao.update task=failed + error_report；commit 该状态后 re-raise
         # 让上层 exception handler 转 typed JSON error response
         try:
             await db.commit()

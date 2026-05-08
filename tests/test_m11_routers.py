@@ -177,6 +177,44 @@ async def test_cross_tenant_returns_404(auth_client, make_user):
     assert r.json()["code"] == "project_not_found"
 
 
+async def test_upload_filename_sanitized_against_path_traversal(auth_client, make_user):
+    """R2 P1-03 立修：filename 含 path traversal / CRLF 字符 → router 必须 sanitize 落 basename。"""
+    user = await make_user(email="m11-fnsan@example.com")
+    pid = await _create_project(auth_client, user.id)
+    r = await auth_client.post(
+        f"/api/projects/{pid}/cold-start/upload",
+        files={
+            "file": (
+                "../../../etc/passwd\r\nHack: yes",
+                BytesIO(b"node_path\n/A\n"),
+                "text/csv",
+            )
+        },
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    # 不含 / \ \r \n 控制字符；basename 提取
+    assert "/" not in body["source_filename"]
+    assert "\\" not in body["source_filename"]
+    assert "\r" not in body["source_filename"]
+    assert "\n" not in body["source_filename"]
+    assert body["source_filename"].startswith("passwd")
+
+
+async def test_upload_filename_only_dots_falls_back(auth_client, make_user):
+    """R2 P1-03 立修：filename 只含 dot/space → strip 后空 → fallback 'upload.csv'。"""
+    user = await make_user(email="m11-fndots@example.com")
+    pid = await _create_project(auth_client, user.id)
+    r = await auth_client.post(
+        f"/api/projects/{pid}/cold-start/upload",
+        files={"file": ("...   ", BytesIO(b"node_path\n/A\n"), "text/csv")},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["source_filename"] == "upload.csv"
+
+
 async def test_viewer_write_upload_returns_403(auth_client, make_user, db_session):
     """**M02-M10 元教训防御 actionable** viewer 写 upload 必须 403（M07 P1-01 范式延续）。"""
     from api.models.project import MemberRole, ProjectMember
