@@ -116,3 +116,9 @@ class Node(Base, TimestampMixin):
         back_populates="node",
         cascade="all, delete-orphan",
     )
+    # M06 sprint 加：design §3 ER 双向链（A1 闸门 2.5 reconcile）
+    competitor_refs: Mapped[list["CompetitorRef"]] = relationship(  # noqa: F821
+        "CompetitorRef",
+        back_populates="node",
+        cascade="all, delete-orphan",
+    )
