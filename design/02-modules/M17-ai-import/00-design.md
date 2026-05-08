@@ -863,6 +863,41 @@ class ImportTaskDuplicateError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L2 强制 / 2026-05-09 M17 启动 prep）
+
+> 闸门 3.4 L2 sprint 级声明字面要求：每业务模块 design 必有「Sprint Review 拆分计划」段
+> （位置：§14.5 或末尾），声明本 sprint「拆 N 次 review，每次覆盖哪些子片，
+> 合并子片的 SKIP 比例理由」。**闸门 2.5 reconcile pass 必须验证该段存在**
+> （缺失 → reconcile pass 不通过 / 本段 M17 sprint 启动子片 0 prep 内补齐）。
+
+### 计划
+
+**M17 sprint = R-X1 第二实例（Queue 异步形态）+ 闸门 2.6 mini-sprint 合并**，规模 5+ 子片，技术复杂度上台阶（commit boundary 重构 / TaskPayload 基类 / Redis worker 部署 / WebSocket / arq）。**bypass log #2 配套承诺：必恢复 spawn subagent，不再 self-审**。
+
+| 子片 | 内容 | review 安排 | SKIP 理由 |
+|---|---|---|---|
+| 0 prep | §14.5 补完（本段）+ 闸门 2.6 Queue Scaffold（TaskPayload + dummy + tests）+ R-X1 失败补偿 helper（compensation_session）+ M11 ColdStartOrchestratorService 迁移到 helper + design §10 失败补偿 commit boundary 字面回写 + cross-sprint punt #4/#7/#11 处理 | 合并到 R1 | scaffold + helper 抽出 = simplify 22 条中 frontend/Server Action/契约漂移类大部分 SKIP |
+| 1 model + alembic | `import_tasks` + `import_task_items` + ActionType+N + TargetType+N + 同步 4 处（model tuple + schema StrEnum + CHECK constraint + Alembic）+ model tests | 合并到 R1 | schema 子片对 simplify ≥80% SKIP（M02-M16 十四数据点稳定） |
+| 2 DAO | ImportTaskDAO + ImportTaskItemDAO + tenant filter + idempotency hash 查找 + zombie cron orphan + unit tests | 合并到 R1 | DAO 子片 simplify SKIP 中等（≥60%） |
+| 3 Service + Schema + Queue tasks + WebSocket handler | ImportService + AIOrchestrationService + Pydantic schema + ErrorCode + queue/import_tasks.py（arq @task）+ ws/import_progress.py + R-X1 第二实例 + AI Provider 接通 + service unit tests | **R1 = 3 subagent 并行**（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）覆盖子片 1+2+3 合并审 | 业务核心子片，simplify 22 条命中率 >50% |
+| 4 Router + WS endpoint + e2e | 4 REST endpoints + 1 WS endpoint + multipart file 上传（file.size 预检 + sanitize / M11 范式复用）+ idempotency 命中 200 + e2e 含 17+ 元教训 actionable 主动复制 | **R2 = 1 合并 Opus subagent endpoint 单审** | endpoint 子片是元教训命中重灾区，单审 |
+| 5 关闸 | design §3 disambiguation 回写 + audit/m17-pilot-template-validation.md 元教训沉淀 + handoff §0 状态快照 + roadmap 进度 + cross-sprint Punt 池 DONE 标记 + bypass log #2 配套承诺验收 | 不单跑 review | 全是 design/audit/handoff 文档回写，无业务代码 |
+
+### L3 实证子选项（R-X5 风格留空待实证 / sprint 实证后回写本段）
+
+- **R-X1 第二实例对照**：M11 ColdStart 同步 orchestrator vs M17 AI 异步 Queue orchestrator；接口共享 batch_create_in_transaction 4 参签名；行为契约分化（同步立 commit vs Queue retry + 死信 + compensation_session helper）
+- **闸门 2.6 mini-sprint 是否单独 commit**：M17 子片 0 prep 内合并实证后回写
+- **Queue task @task 装饰器 + arq worker 部署 docker-compose 段落地形态**
+
+### 合规性
+
+- ✅ L1 总则：sprint ≥1 次（R1+R2 各 1 次 = 2 次）
+- ✅ L2 sprint 级声明：本段
+- ✅ bypass log #2 配套：R1 = 3 subagent 并行 + R2 = 1 合并 Opus endpoint 单审 / spawn prompt 必含 ls/find 穷举要求（T6 NEW）
+- ✅ 子片 5 不单跑（≥80% SKIP 例外 / 14 数据点延续）
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 1：业务说明 + 引 PRD US-B1.8 + Q3.1 + in/out scope + 边界灰区

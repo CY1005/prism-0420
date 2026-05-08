@@ -169,10 +169,32 @@ S5）。M17 启动前必须 ✅：
    不允许任一模块 sprint 0 次跑）
 2. **触发器**：≥50 行 OR ≥2 文件改动触发（来自
    [`simplify-checklist.md`](../../ai-quality-engineering/10-项目/Prism/01-实现/simplify-checklist.md) 「何时跑」）
-3. **触发例外（可合并到下游子片）**：当本子片 ≥80% checklist 条目天然 SKIP
-   （如纯 schema/migration 子片对 simplify Prism 特有 22 条中 frontend/Server Action/
-   契约漂移类几乎全不命中），可合并到下游业务子片（service/router）一次性跑——
-   合并必须在 L2 sprint review 计划段提前声明，sprint 中临时合并 = bypass log 第 2 条
+3. **触发例外（可合并到下游子片 / 可降级 self-审）**：
+
+   a) **≥80% SKIP**：当本子片 ≥80% checklist 条目天然 SKIP（如纯 schema/migration
+      子片对 simplify Prism 特有 22 条中 frontend/Server Action / 契约漂移类
+      几乎全不命中），可合并到下游业务子片（service/router）一次性跑——
+      合并必须在 L2 sprint review 计划段提前声明，sprint 中临时合并 = bypass log
+
+   b) **Context budget pressure**（2026-05-09 M16 sprint bypass log #2 触发线达标
+      后立规 / 累计绕 = 2 次后 review 触发本条修订）：当本会话同时满足
+      以下两条件时，main agent self-审 + 子片 4 e2e 主动复制元教训 actionable
+      可替代外部 reviewer：
+
+      - usage 24h 信号 🔴 long-context（>150k context）+ subagent-heavy
+        （>60% subagent 占比）同时存在
+      - 本 sprint 前序子片已积累 ≥17 条 actionable 元教训主动写入子片 4 e2e
+        （viewer 写 403 / cross-tenant 404 / cross-project node 404 / metadata
+        字面 / write_event 异常传播 / 双层防御 / path mismatch / ErrorCode raise
+        全覆盖等）
+
+      **强制配套承诺**（缺一即违反 / 必须同 commit 写入 bypass log）：
+
+      1. 下一 sprint 必须真跑 R1+R2 spawn subagent，不再 self-审
+      2. 下一 sprint 启动子片 0 prep 必查"上一 sprint bypass 配套承诺是否兑现"
+      3. 累计 self-审 sprint ≥2 个连续 → 触发对本 b 条目本身的 review
+
+   c) **临时合并未提前声明** = bypass log（与 a 同处置）
 
 **L2 sprint 级声明**：每业务模块 design 必有「Sprint Review 拆分计划」段
 （位置：§14.5 或末尾），声明本 sprint「拆 N 次 review，每次覆盖哪些子片，

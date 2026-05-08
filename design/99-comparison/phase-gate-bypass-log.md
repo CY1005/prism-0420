@@ -18,7 +18,13 @@ purpose: |
 ## Review 触发线
 
 - 累计 ≥ 2 次绕闸 → 必须停下来 review 闸门规则本身（是不是闸门定错了 / 闸门项是否需要分级 / 是否需要"等价替代"明确写入）
-- 当前累计：**2 次** 🔴 已达触发线 → M17 sprint 启动子片 0 prep 必修订 00-phase-gate.md 闸门 3.4 L1 总则，把"context budget pressure"显式纳入触发例外段
+- 当前累计：**2 次** ✅ **已 review + 修订完成 2026-05-09**（M17 启动期）
+  - 修订内容：00-phase-gate.md 闸门 3.4 L1 总则"触发例外"段从 1 类（≥80% SKIP）
+    扩到 3 类（a ≥80% SKIP + b context budget pressure + c 临时合并 = bypass log）
+  - **b "context budget pressure" 条款双前置条件 + 3 配套承诺**（不是无条件降级）：
+    - 双前置：24h 🔴 long-context + 🔴 subagent-heavy 同时 + 本 sprint ≥17 条 actionable 元教训主动写入子片 4 e2e
+    - 配套：下一 sprint 必恢复 spawn / 启动期必查上一 sprint 配套承诺兑现 / 累计 self-审 ≥2 连续触发 review
+  - 触发线 **不复位**，继续累计；条款 b 第 3 条要求"累计 self-审 ≥2 连续"独立触发对 b 本身 review
 
 ## 维护
 

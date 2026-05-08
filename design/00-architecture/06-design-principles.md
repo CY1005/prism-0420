@@ -159,6 +159,49 @@
 
 ---
 
+### 清单 6：service 层 INSERT 凡 UNIQUE 必 catch IntegrityError 转业务异常（2026-05-09 立 / cross-sprint punt #11 元发现 #1 高耦合触发点 B）
+
+- **目的**：防止 service 层 INSERT 路径凡 UNIQUE constraint 在并发竞态下抛裸
+  `IntegrityError` → middleware 转 500，前端拿到通用 5xx 无法区分"用户输入冲突"
+  vs"系统故障"。**M02-M16 跨模块审计累计 ≥3 处缺口**（M02 project create 已修 /
+  M04 dimension B3 + M04 C7.1 仍缺）→ 升 P1 通用规则。
+
+- **执行**：service 层凡 INSERT 路径对应 DB 表含 UNIQUE constraint 的，**必须**：
+
+  ```python
+  try:
+      ...
+      await db.flush()  # 触发 UNIQUE 校验
+      return obj
+  except IntegrityError as e:
+      await db.rollback()  # 必显式 rollback
+      msg = str(e.orig) if e.orig else str(e)
+      if "<uq_constraint_name>" in msg:
+          raise <BusinessNameDuplicateError>(...) from e
+      raise  # 其他 IntegrityError 透传
+  ```
+
+- **检查**：
+  - service docstring 必标"UNIQUE constraint 列表 + 转换的业务 ErrorCode"
+  - ci-lint R15 grep（M17 sprint 内立 / 与 R14 同形态）：service 层 INSERT 后无
+    `except IntegrityError` 段 → 告警阻塞合并（豁免：DAO 已 catch / 表无 UNIQUE
+    constraint，需 docstring 显式声明）
+
+- **豁免条件**（必须显式声明）：
+  - 表无 UNIQUE constraint（仅 PK / FK）—— docstring 字面"无 UNIQUE 豁免"
+  - DAO 层已 catch IntegrityError → caller 不需重复（M14 link_node 范式）
+  - INSERT 路径前置 advisory_xact_lock 已串行化（M16 idempotent 范式）→ docstring
+    字面"advisory_lock 串行化豁免"
+
+- **跨模块漂移检测**：M17 sprint 启动期识别本规则后，反向回扫所有 M02-M16 service
+  INSERT 路径，缺口入 cross-sprint punt 池（修存量推迟到独立 cleanup sprint /
+  立规先行防御未来）
+
+- **配合原则**：与原则 5 清单 1（activity_log）+ 清单 4（idempotency_key）共同
+  保护写路径数据完整性
+
+---
+
 ## 原则间的优先级
 
 如果原则冲突，按序决策：
