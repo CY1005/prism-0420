@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M10-sprint-complete)
+last_updated: 2026-05-08 (post-M11-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,25 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M10-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M11-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 50%（M01-M08+M10 完成；下一站 M11 冷启动，M09 superseded by M18 不实装）
+- **Phase 2.1 业务模块**：⏳ 55%（M01-M08+M10+M11 完成；下一站 M12，M09 superseded by M18 不实装）
+- **2026-05-08 M11 sprint 完成**（8 commit + R1+R2 闭环 / L1 第九数据点 / 闸门 2.5 第六次 B 0 项 / **首个 R-X1 orchestrator 范式实证**）：
+  - commits: `8ef59b3` 子片 0 prep（§14.5 + 3 跨模块 batch_create_in_transaction 接通 M04 R1-A A6 + M06/M07 scaffold 全到期）+ `4ed8dbe` 子片 1 ColdStartTask model + alembic + 14 model tests + `090621a` 子片 2 ColdStartDAO + 12 unit tests + `e93057c` 子片 3 ColdStartOrchestratorService + 7 ErrorCode + 17 service tests + `2ccd579` R1 6 P1 立修（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet 三 subagent 并行；frontmatter 字面 / design §5 disambiguation / dimensions 显式抛错保护 R-X1 完整性 / _mark_failed write_event 兜底 / _make_task 进 conftest / ISSUE_CATEGORIES 跨模块导出）+ `aba873a` 子片 4 router + 4 endpoints + 11 e2e tests（POST /upload multipart / GET list / GET detail / GET /template）+ `2c39980` R2 2 P1 立修 + 1 punt（file.size 预检 + filename sanitize；commit-then-rollback boundary punt M17）
+  - **674 PASS / 0 fail / ruff 净 / R13-1 67→74（+7）+ L12 守护通过**
+  - **首个 R-X1 orchestrator 范式实证**：M11 不直 INSERT 跨模块表 / 调 NodeService + CompetitorService + IssueService 3 个 batch_create_in_transaction（DimensionService.batch_create 实装但 dim_key→type_id 解析延迟到下游 sprint）/ 4 service.batch_create_in_transaction 签名稳定 4 参（project_id + actor_user_id + xxx_data）
+  - **R-X1 首发新教训 2 条**：
+    1. **失败补偿 commit boundary**（R2 P1-01 punt）：M11 router commit-then-rollback 把 task=failed 元数据 + 部分业务 INSERT 一起 commit，违 design §1 G6 全量回滚契约。彻底修复需独立 connection 或显式 SAVEPOINT，与测试 fixture join_transaction_mode='create_savepoint' 不兼容；punt M17 sprint 抽独立 helper（异步 zip 导入将 reuse；与 R-X1 第二实例对照）。**修法 sink 候选立规**：「R-X1 orchestrator 失败补偿写入路径必须用独立 connection 或显式 SAVEPOINT，禁止与业务事务共享 commit boundary」
+    2. **multipart 攻击面**：M11 是首个文件上传 endpoint；R2 抓出 file.read() 整文件后才 size check + filename 无 sanitize。立修 file.size 预检 + _sanitize_filename(basename + 控制字符 strip + 长度截断)。**修法 sink 候选立规**：「文件上传 endpoint 必须 file.size 预检 + filename sanitize；禁止裸 file.read() + raw filename 直入 DB / response header / activity_log metadata」
+  - **元教训防御 actionable 应用**（M11 R1+R2 主动复制不等抓 / 首次 R-X1 模块）：
+    - viewer 写所有写端点 403 全覆盖（M07 立 / M08 应用 / M11 写端点只 1 → test_viewer_write_upload_returns_403 ✅）
+    - write_event 异常传播测试（M04+ 范式）✅
+    - cross-tenant 404（M02 范式）✅
+    - R1.5 reconcile checkpoint（M10 NEW）：R2 反向命中的不是 R1 撤销项 → 元教训不适用 / 但 R2 命中 R1 未抓的范式新教训（commit-then-rollback / 文件上传攻击面），属"R-X1 范式首发"非"反复"
+  - **R1 + R2 命中数据**：R1=6 P1（去重；3 subagent 并行）/ R2=2 P1 立修 + 1 punt + 4 P2（1 合并 Opus；M11 R2 命中超平均 → R-X1 endpoint 范式独有，9 数据点中第 9 仍稳定）
+  - **闸门 2.5 三栏第六次 B 栏 0 项**：M05+M06+M07+M08+M10+M11 六连稳定 → M12+ 默认范式可作模板
+
 - **2026-05-08 M10 sprint 完成**（6 commit + R1+R2 闭环 / L1 第八数据点 / 闸门 2.5 B 0 第五次 / **纯读聚合范式首次实证** / **元教训新增 2 条**）：
   - commits: `098a2ee` 子片 0+1+2 (DAO + Service + 21 tests) + `b018aad` 子片 3 + R1 P1 立修 + 子片 4 关闸 [hash]
   - **613 PASS / 0 fail / ruff 净 / R13-1 67=67 + L12 守护通过**
@@ -160,9 +175,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M11 sprint 子片 1+ 接续（**当前推荐 / 子片 0 prep 已落地**）
+### Prompt 0 — M12 sprint 启动（**当前推荐 / M11 已完整收官**）
 
-参 `_handoff/sprint-prompts-M05-M20.md` § "## M11 — 冷启动 / 项目模板（cold-start）" 段；启动当天从子片 1 开始（M11 子片 0 prep 本会话已 commit `8ef59b3` / 616 PASS / Phase 2.1 50%）。
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M12 ..." 段（M11 sprint 已收官 commit 子片 5 关闸 / 674 PASS / Phase 2.1 55%）。
+
+M12 sprint 启动 reconcile checkpoint（必查）：
+- **元教训防御 actionable 5 + R-X1 NEW 2 条**（M11 sprint 启动 reconcile A7 主动列入清单的延续）：
+  1. viewer 写**所有**写端点 403 全覆盖（M07 立 / M08+M11 应用）
+  2. write_event 异常传播测试（M04+ 范式）
+  3. cross-tenant 404（M02 范式）
+  4. cross-project node 422（M06+M07+M08 范式）
+  5. IntegrityError 区分约束名（M05 P1-01 立规延续）
+  6. **NEW from M10 纯读模块**：纯读模块 docstring 每字段 ≥1 unit test 断言（业务模块不适用，但"绿测 ≠ 范式正确"通用）
+  7. **NEW from M11 R-X1**：orchestrator 失败补偿独立 commit boundary（M17 sprint 实装；M12 若是 R-X1 第二实例则触发）
+  8. **NEW from M11 R-X1**：文件上传 endpoint file.size 预检 + filename sanitize（M17 异步 zip 导入实装时复用 _sanitize_filename）
+- **L1 review 节奏第九数据点稳定** → R1=3 subagent + R2=1 合并 Opus 默认范式作模板
+- **闸门 2.5 B 0 项第六次稳定** → M12+ 启动 reconcile 自审一问"这真有候选吗"已稳定，禁制造假决策
+
+### Prompt 0' — M11 sprint 已完成（仅供历史追溯）
+
+M11 sprint 完成 commits 见 §0 状态快照。**M11 子片 0 prep 已完成（commit `8ef59b3` 2026-05-08）**：
+- ✅ design §14.5 sprint review 拆分计划段补
 
 **M11 子片 0 prep 已完成（commit `8ef59b3` 2026-05-08）**：
 - ✅ design §14.5 sprint review 拆分计划段补
