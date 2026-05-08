@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from api.queue.base import TaskPayload
+from api.queue.base import TaskPayload  # EmbedSinglePayload 继承
 from api.schemas.search_schema import EmbeddingTargetType
 
 
@@ -42,8 +42,12 @@ class EmbedSinglePayload(TaskPayload):
 # ─── Admin endpoint schema ─────────────────────────────────────────────────
 
 
-class BackfillRequest(TaskPayload):
-    """POST /api/admin/embedding/backfill 请求（platform_admin only）。"""
+class BackfillRequest(BaseModel):
+    """POST /api/admin/embedding/backfill 请求（platform_admin only）。
+
+    继承 BaseModel（非 TaskPayload）：HTTP request body 不应含 user_id（来自 JWT）
+    + project_id 来自 body 显式传参（不来自 URL / 符合 ADR-002 + ADR-004 R1 fix #1）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -68,8 +72,12 @@ class BackfillResponse(BaseModel):
     message: str = "Backfill enqueued"
 
 
-class ModelUpgradeRequest(TaskPayload):
-    """POST /api/admin/embedding/model-upgrade 请求（platform_admin only）。"""
+class ModelUpgradeRequest(BaseModel):
+    """POST /api/admin/embedding/model-upgrade 请求（platform_admin only）。
+
+    继承 BaseModel（非 TaskPayload）：HTTP request body 不应含 user_id（来自 JWT）
+    （ADR-002 + ADR-004 R1 fix #1）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 

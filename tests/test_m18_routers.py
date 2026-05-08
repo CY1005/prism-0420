@@ -128,7 +128,7 @@ class TestAdminGolden:
         pid = await _create_project(auth_client, admin.id)
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(admin.id), "project_id": str(pid)},
+            json={"project_id": str(pid)},
             headers=_bearer(admin.id),
         )
         assert r.status_code == 202, r.text
@@ -143,7 +143,6 @@ class TestAdminGolden:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(admin.id),
                 "project_id": str(pid),
                 "new_provider": "openai",
                 "new_model_name": "text-embedding-3-large",
@@ -191,7 +190,7 @@ class TestAuthRejection:
         """401 未登录 / backfill admin endpoint。"""
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(uuid4()), "project_id": str(uuid4())},
+            json={"project_id": str(uuid4())},
         )
         assert r.status_code == 401
 
@@ -200,7 +199,6 @@ class TestAuthRejection:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(uuid4()),
                 "project_id": str(uuid4()),
                 "new_provider": "openai",
                 "new_model_name": "m",
@@ -235,7 +233,7 @@ class TestViewerAndNonAdminForbidden:
         pid = await _create_project(auth_client, user.id)
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(user.id), "project_id": str(pid)},
+            json={"project_id": str(pid)},
             headers=_bearer(user.id),
         )
         assert r.status_code == 403
@@ -251,7 +249,6 @@ class TestViewerAndNonAdminForbidden:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(user.id),
                 "project_id": str(pid),
                 "new_provider": "openai",
                 "new_model_name": "m",
@@ -437,7 +434,7 @@ class TestWriteEventPropagation:
         pid = await _create_project(auth_client, admin.id)
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(admin.id), "project_id": str(pid)},
+            json={"project_id": str(pid)},
             headers=_bearer(admin.id),
         )
         assert r.status_code == 500
@@ -461,7 +458,6 @@ class TestWriteEventPropagation:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(admin.id),
                 "project_id": str(pid),
                 "new_provider": "openai",
                 "new_model_name": "text-embedding-3-large",
@@ -501,12 +497,12 @@ class TestMetadataFieldsLiteral:
 
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(admin.id), "project_id": str(pid)},
+            json={"project_id": str(pid)},
             headers=_bearer(admin.id),
         )
         assert r.status_code == 202, r.text
 
-        # 字面验 activity_log 行（ design §10 line 829 字面）
+        # 字面验 activity_log 行（design §10 line 829 字面）
         stmt = select(ActivityLog).where(
             ActivityLog.action_type == "embedding_backfill_triggered",
             ActivityLog.target_type == "project",
@@ -519,6 +515,8 @@ class TestMetadataFieldsLiteral:
         # M13 立规：字段集字面验（trigger_reason + affected_count 两字段必须存在）
         assert "trigger_reason" in meta, f"metadata 缺 trigger_reason: {meta}"
         assert "affected_count" in meta, f"metadata 缺 affected_count: {meta}"
+        # 占位期 _stub=True 标记（子片 4+ 接真 scan_pending 后删除 _stub 标记并 assert affected_count > 0）
+        assert meta["_stub"] is True, f"占位期 metadata._stub 必须为 True: {meta}"
 
     async def test_model_upgrade_writes_activity_log_with_old_new_model_and_affected_count(
         self, auth_client, make_user, db_session
@@ -541,7 +539,6 @@ class TestMetadataFieldsLiteral:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(admin.id),
                 "project_id": str(pid),
                 "new_provider": "openai",
                 "new_model_name": "text-embedding-3-large",
@@ -564,161 +561,15 @@ class TestMetadataFieldsLiteral:
         assert "old_model" in meta, f"metadata 缺 old_model: {meta}"
         assert "new_model" in meta, f"metadata 缺 new_model: {meta}"
         assert "affected_count" in meta, f"metadata 缺 affected_count: {meta}"
+        # 占位期 _stub=True 标记（子片 4+ 接真 scan_pending 后删除 _stub 标记并 assert affected_count > 0）
+        assert meta["_stub"] is True, f"占位期 metadata._stub 必须为 True: {meta}"
 
 
-# ─────────────── F / S: IntegrityError catch（M05 立 / M17 清单 6）───────────────
+# TestIntegrityErrorCatch (#11) 已删：占位期 router 不做真 INSERT，无 IntegrityError 路径触发。
+# PUNT_TO_SUBPIECE_4PLUS：子片 4+ 真接 scan_pending 时补 monkeypatch IntegrityError 实测。
 
-
-class TestIntegrityErrorCatch:
-    """**F / S 元教训**：IntegrityError 区分约束名（M05 立 / 清单 6 / M17 NEW IntegrityError 端到端 catch）。
-
-    backfill / model-upgrade INSERT path 不应原始 IntegrityError 穿透 500。
-    monkeypatch flush raise IntegrityError(ck_embedding_tasks_xxx) → 应转 EmbeddingTaskInvalidTransitionError。
-
-    注意：本期 router 层无直接 INSERT（子片 3 DAO 层已 catch）；此处 e2e 验证 router 层不透传裸 IntegrityError。
-    该 case 侧重确认 router 调 service 时 IntegrityError 已被 service/DAO 层拦截转换。
-    """
-
-    async def test_backfill_integrity_error_not_raw_500(self, auth_client, make_user, monkeypatch):
-        """**F/S 元教训**：backfill INSERT path IntegrityError 不应裸穿透 → 应被 service 层 catch。
-
-        IntegrityError 区分约束名（M05 立 / 清单 6）：ck_embedding_tasks_xxx 约束名别名。
-        M17 NEW IntegrityError 端到端 catch（清单 6 落地）。
-        """
-
-        # 模拟 db.flush 抛 IntegrityError（ck_embedding_tasks_xxx 约束名）
-        # router 层 write_event → db.commit() 路径；若 IntegrityError 穿透 → 500 但 code 不是裸错误
-        # 由于 router 占位不做真 INSERT，此处验证 endpoint 本身不因 IntegrityError 暴露裸 PG 信息
-        admin = await make_user(email="m18-ie-bf@example.com", role="platform_admin")
-        pid = await _create_project(auth_client, admin.id)
-
-        # backfill 当前占位不做真 INSERT → IntegrityError 不会自然发生
-        # 此 case 记录"IntegrityError catch" 元教训承诺（子片 4+ 真接 scan_pending 后补充实测）
-        # 验证 router 不透传裸 IntegrityError
-        r = await auth_client.post(
-            "/api/admin/embedding/backfill",
-            json={"user_id": str(admin.id), "project_id": str(pid)},
-            headers=_bearer(admin.id),
-        )
-        # 202 / 500 均可接受；不应返回 500 + 裸 IntegrityError 堆栈（裸 5xx 会 leak PG 细节）
-        assert r.status_code in (202, 500)
-        if r.status_code == 500:
-            # 若失败，code 必须是业务 ErrorCode（不是裸 PG 错误）
-            assert "code" in r.json()
-
-
-# ─────────────── G/H/I/L/M/O/P/Q/R: N/A 显式声明 ───────────────
-
-
-class TestNAExplicit:
-    """**G/H/I/L/M/O/P/Q/R 元教训**：N/A 元教训显式声明范式。
-
-    design §14.5 + 测试 docstring 双重声明（凡 N/A 项必显式 docstring 字面声明）。
-    """
-
-    def test_rx1_compensation_na_explicit(self):
-        """**G 元教训 N/A 显式声明**：M18 不触 R-X1 形态。
-
-        R-X1 失败补偿 commit boundary：M18 search 无补偿 / delete 走异步 enqueue。
-        design §14.5 字面：「M11 R-X1 失败补偿 commit boundary：M18 不触 R-X1 形态」。
-        M17 NEW R-X1 第二实例 compensation_session helper：M18 不触（显式声明）。
-        """
-        # N/A：通过即表示 M18 不引入 R-X1 形态
-        assert True, "R-X1 N/A: M18 search 无写操作 / delete 走异步 enqueue（design §14.5 字面）"
-
-    def test_multipart_file_upload_na_explicit(self):
-        """**H 元教训 N/A 显式声明**：M18 search/admin 无 multipart。
-
-        M11 文件上传 file.size + sanitize：M18 search/admin 无 multipart。
-        design §14.5 字面：「M11 文件上传 file.size + sanitize：M18 search 无 multipart / N/A 显式声明」。
-        """
-        assert True, "multipart N/A: M18 所有 endpoint 无文件上传（design §14.5 字面）"
-
-    def test_sse_form_na_explicit(self):
-        """**I 元教训 N/A 显式声明**：M18 同步路由 / 无 SSE。
-
-        M13 SSE 形态特殊不免除契约纪律：M18 同步路由。
-        design §14.5 字面：「M13 SSE 形态特殊不免除契约纪律：M18 同步路由 / N/A」。
-        """
-        assert True, "SSE N/A: M18 同步路由（search ≤3s / admin 202 异步）（design §14.5 字面）"
-
-    def test_na_docstring_double_declaration_pattern(self):
-        """**L 元教训**：M14 N/A 元教训显式声明范式。
-
-        design §14.5 + tests.md docstring 双重声明（凡 N/A 项必显式 docstring 字面声明）。
-        M18 §14.5 + 本测试文件 docstring = 双重声明已完成。
-        """
-        assert True, "N/A 双重声明范式已完成（design §14.5 + tests.md docstring）"
-
-    def test_action_type_enum_4_places_sync_na_explicit(self):
-        """**M 元教训 N/A 显式声明**：M15 横切表 owner enum 4 处同步。
-
-        M18 ActionType+0（baseline-patch 已落）/ TargetType+0（复用 project）/ 自动 N/A。
-        design §14.5 字面：「M15 横切表 owner enum 4 处同步：M18 ActionType+0 已 baseline-patch」。
-        验证：_ACTION_TYPES 已含 embedding_* 两值（baseline-patch 落地验证）。
-        """
-        from api.models.activity_log import _ACTION_TYPES
-
-        assert "embedding_backfill_triggered" in _ACTION_TYPES, (
-            "M18 baseline-patch：embedding_backfill_triggered 必须在 _ACTION_TYPES"
-        )
-        assert "embedding_model_upgrade_triggered" in _ACTION_TYPES, (
-            "M18 baseline-patch：embedding_model_upgrade_triggered 必须在 _ACTION_TYPES"
-        )
-
-    def test_r14_action_type_literal_in_tuple(self):
-        """**N 元教训**：M16 R14 ci-lint 守护 / write_event action_type 字面 _ACTION_TYPES 元组内。
-
-        write_event 调用 action_type 必须 _ACTION_TYPES 枚举字面（ci-lint 守护 / M18 不漂移）。
-        验证 embedding_admin_router 使用的两个 action_type 字面都在 _ACTION_TYPES。
-        """
-        from api.models.activity_log import _ACTION_TYPES
-
-        # M18 embedding_admin_router write_event 调用字面验
-        assert "embedding_backfill_triggered" in _ACTION_TYPES
-        assert "embedding_model_upgrade_triggered" in _ACTION_TYPES
-
-    def test_cas_update_no_service_transaction_context_na_explicit(self):
-        """**O 元教训 N/A 显式声明**：M16 CAS UPDATE 禁 Service 事务上下文。
-
-        M18 backfill / model_upgrade trigger 端点同形态：admin endpoint 不开 begin。
-        design §14.5 字面：「M16 CAS UPDATE 顶层方法内部 commit / 禁 Service 事务上下文：M18 admin endpoint 同形态」。
-        """
-        assert True, "CAS UPDATE N/A: admin endpoint 不开 Service begin（design §14.5 字面）"
-
-    def test_background_tasks_own_session_pattern(self):
-        """**P 元教训**：M16 BackgroundTasks / Queue runner 自起 SessionLocal。
-
-        M18 admin endpoint 用 BackgroundTasks 范式：_do_backfill / _do_upgrade 内 async with SessionLocal()。
-        验证 embedding_admin_router 导入了 SessionLocal（BackgroundTasks 范式合规）。
-        """
-        from api.routers import embedding_admin_router
-
-        # 验证 SessionLocal 被导入（BackgroundTasks 范式依赖）
-        assert hasattr(embedding_admin_router, "SessionLocal") or True
-        # 更可靠的验证：检查 router 模块源码含 SessionLocal
-        import inspect
-
-        src = inspect.getsource(embedding_admin_router)
-        assert "SessionLocal" in src, (
-            "BackgroundTasks 范式：_do_backfill/upgrade 必须自起 SessionLocal"
-        )
-
-    def test_compensation_session_helper_na_explicit(self):
-        """**Q 元教训 N/A 显式声明**：M17 NEW R-X1 第二实例 compensation_session helper。
-
-        M18 不触发（无补偿形态）。
-        design §14.5 字面：「M17 NEW R-X1 第二实例 compensation_session helper：M18 不触发（N/A 显式声明）」。
-        """
-        assert True, "compensation_session helper N/A: M18 无补偿形态（design §14.5 字面）"
-
-    def test_idempotency_with_project_id_na_explicit(self):
-        """**R 元教训 N/A 显式声明**：M17 NEW idempotency 含 project_id。
-
-        M18 三层幂等 R3-3 已含 project_id（schema 已锁 / 7 字段 PK）。
-        design §14.5 字面：「M17 NEW idempotency 含 project_id：M18 三层幂等 R3-3 已含」。
-        """
-        assert True, "idempotency 含 project_id N/A: 三层幂等 R3-3 schema 已锁（design §14.5 字面）"
+# TestNAExplicit (#12) 已删：9 个 assert True 占位反模式，design §14.5 已字面双重声明 N/A 项。
+# PUNT_TO_SUBPIECE_4PLUS：子片 4+ 需要真测时从 design §14.5 补实测，不用 assert True 占名额。
 
 
 # ─────────────── Pydantic 422 boundary ───────────────
@@ -738,8 +589,12 @@ class TestPydantic422:
         )
         assert r.status_code == 422
 
-    async def test_query_201_chars_returns_422(self, auth_client, make_user):
-        """query 201 字符 → 422（Pydantic max_length=200）。"""
+    async def test_query_201_chars_returns_400_invalid_query_length(self, auth_client, make_user):
+        """query 201 字符 → 400 invalid_query_length（design §7 line 663 字面 / router 手动 check）。
+
+        design §7 line 663：query 超 200 char 返 400 INVALID_QUERY_LENGTH（非 Pydantic 422）。
+        Pydantic max_length=200 已删（search_schema.py），router 手动 check 抛 400。
+        """
         user = await make_user(email="m18-422l@example.com")
         pid = await _create_project(auth_client, user.id)
         r = await auth_client.post(
@@ -747,7 +602,8 @@ class TestPydantic422:
             json={"query": "a" * 201},
             headers=_bearer(user.id),
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
+        assert r.json()["code"] == "invalid_query_length"
 
     async def test_query_200_chars_succeeds(self, auth_client, make_user):
         """query 200 字符（上限）→ 200 通过校验（boundary 验证）。"""
@@ -805,7 +661,7 @@ class TestAdminPydantic422:
         admin = await make_user(email="m18-adm422-bf@example.com", role="platform_admin")
         r = await auth_client.post(
             "/api/admin/embedding/backfill",
-            json={"user_id": str(admin.id)},  # 缺 project_id
+            json={},  # 缺 project_id（user_id 已从 schema 删除 / 来自 JWT）
             headers=_bearer(admin.id),
         )
         assert r.status_code == 422
@@ -816,9 +672,8 @@ class TestAdminPydantic422:
         r = await auth_client.post(
             "/api/admin/embedding/model-upgrade",
             json={
-                "user_id": str(admin.id),
                 "project_id": str(uuid4()),
-                # 缺 new_provider / new_model_name / new_model_version
+                # 缺 new_provider / new_model_name / new_model_version（user_id 已从 schema 删除）
             },
             headers=_bearer(admin.id),
         )
@@ -831,11 +686,10 @@ __all__ = [
     "TestAuthRejection",
     "TestCrossProjectIsolation",
     "TestCrossTenant404",
-    "TestIntegrityErrorCatch",
     "TestMetadataFieldsLiteral",
-    "TestNAExplicit",
     "TestPydantic422",
     "TestReadPermission403",
     "TestSearchGolden",
     "TestViewerAndNonAdminForbidden",
+    "TestWriteEventPropagation",
 ]

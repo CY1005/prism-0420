@@ -33,7 +33,8 @@ class SearchRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(..., min_length=1, max_length=200)
+    query: str = Field(..., min_length=1)
+    """最大 200 字符由 router 手动 check 抛 400 INVALID_QUERY_LENGTH（design §7 line 663 字面）。"""
     target_types: list[EmbeddingTargetType] | None = None
     """None 表示全部 4 类（不过滤）。"""
     limit: int = Field(20, ge=1, le=100)

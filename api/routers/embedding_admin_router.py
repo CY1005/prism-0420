@@ -33,6 +33,7 @@ activity_log（design §10 line 828-829）：
 from __future__ import annotations
 
 import logging
+import os
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
@@ -60,6 +61,10 @@ async def require_platform_admin(user: User = Depends(current_user)) -> User:
 
     仿 api/routers/auth.py:185 require_admin 内联 check 模式（相同模式 / M18 admin router 首发）。
     非 platform_admin → 403 permission_denied。
+
+    注意：本函数与 api.auth.dependencies.require_platform_admin 同名但基于不同 Depends chain：
+    此处用 current_user（real DB-backed）/ dependencies 版用 require_user（Protocol stub）。
+    两者未合并——合并需 conftest set_auth_service fixture 支撑（PUNT_TO_SUBPIECE_5_OR_LATER）。
     """
     if user.role != "platform_admin":
         raise PermissionDeniedError()
@@ -118,21 +123,26 @@ async def trigger_backfill(
     affected_count = pending_count
 
     # ★ R14 守护：action_type 必须 _ACTION_TYPES 字面（"embedding_backfill_triggered"）
-    # write_event 异常传播：若 write_event raise → 事务回滚 → 500（M16 立规 / M18 backfill 路径复用）
-    await write_event(
-        db=db,
-        actor_user_id=admin.id,
-        project_id=body.project_id,
-        action_type="embedding_backfill_triggered",
-        target_type="project",
-        target_id=str(body.project_id),
-        summary=f"手动触发 embedding backfill（project_id={body.project_id}）",
-        metadata={
-            "trigger_reason": "manual_admin_trigger",
-            "affected_count": affected_count,
-        },
-    )
-    await db.commit()
+    # write_event 异常传播：若 write_event raise → 显式 rollback + 500（M16 立规 / M18 backfill 路径复用）
+    try:
+        await write_event(
+            db=db,
+            actor_user_id=admin.id,
+            project_id=body.project_id,
+            action_type="embedding_backfill_triggered",
+            target_type="project",
+            target_id=str(body.project_id),
+            summary=f"手动触发 embedding backfill（project_id={body.project_id}）",
+            metadata={
+                "trigger_reason": "manual_admin_trigger",
+                "affected_count": affected_count,
+                "_stub": True,  # 占位期标记：子片 4+ 接真 scan_pending 后删除 _stub 并 assert affected_count > 0
+            },
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # BackgroundTasks 范式（design §14.5 M16 M18 复用）：fire-and-forget 真实 enqueue
     # 子片 4+ 接真实 arq enqueue；当前占位 pass（不阻塞 202 响应）
@@ -200,8 +210,6 @@ async def trigger_model_upgrade(
     - SSE N/A：admin endpoint 同步 202（M13 N/A 显式声明）
     - M17 compensation_session helper N/A：M18 不触（显式声明）
     """
-    import os
-
     # 获取当前 (old) model triple（从 env 读；upgrade 前的值）
     old_provider = os.getenv("EMBEDDING_PROVIDER", "mock")
     old_model_name = os.getenv("EMBEDDING_MODEL_NAME", "mock-default")
@@ -215,22 +223,27 @@ async def trigger_model_upgrade(
 
     # ★ R14 守护：action_type 必须 _ACTION_TYPES 字面（"embedding_model_upgrade_triggered"）
     # M13 立规：metadata 字段集必须完整（old_model, new_model, affected_count）
-    # write_event 异常传播：若 write_event raise → 事务回滚 → 500（M16 立规 / M18 model-upgrade 路径复用）
-    await write_event(
-        db=db,
-        actor_user_id=admin.id,
-        project_id=body.project_id,
-        action_type="embedding_model_upgrade_triggered",
-        target_type="project",
-        target_id=str(body.project_id),
-        summary=f"触发模型升级回填 {old_triple} → {new_triple}（project_id={body.project_id}）",
-        metadata={
-            "old_model": f"{old_provider}/{old_model_name}/{old_model_version}",
-            "new_model": f"{body.new_provider}/{body.new_model_name}/{body.new_model_version}",
-            "affected_count": affected_count,
-        },
-    )
-    await db.commit()
+    # write_event 异常传播：若 write_event raise → 显式 rollback + 500（M16 立规 / M18 model-upgrade 路径复用）
+    try:
+        await write_event(
+            db=db,
+            actor_user_id=admin.id,
+            project_id=body.project_id,
+            action_type="embedding_model_upgrade_triggered",
+            target_type="project",
+            target_id=str(body.project_id),
+            summary=f"触发模型升级回填 {old_triple} → {new_triple}（project_id={body.project_id}）",
+            metadata={
+                "old_model": f"{old_provider}/{old_model_name}/{old_model_version}",
+                "new_model": f"{body.new_provider}/{body.new_model_name}/{body.new_model_version}",
+                "affected_count": affected_count,
+                "_stub": True,  # 占位期标记：子片 4+ 接真 scan_pending 后删除 _stub 并 assert affected_count > 0
+            },
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # BackgroundTasks 范式（design §14.5 M16 M18 复用）
     async def _do_upgrade(

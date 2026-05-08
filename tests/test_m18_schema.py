@@ -64,9 +64,14 @@ def test_search_request_max_length_200():
     assert len(req.query) == 200
 
 
-def test_search_request_query_too_long_raises():
-    with pytest.raises(ValidationError):
-        SearchRequest(query="a" * 201)
+def test_search_request_query_201_chars_passes_schema():
+    """query 201 字符 → Pydantic 不拦（max_length 已删）。
+
+    design §7 line 663：query 超 200 char 由 router 手动 check 抛 400 INVALID_QUERY_LENGTH。
+    Pydantic 只负责 min_length=1（空串 422）；超长校验在 router 层。
+    """
+    req = SearchRequest(query="a" * 201)
+    assert len(req.query) == 201
 
 
 def test_search_request_empty_query_raises():
@@ -238,17 +243,26 @@ def test_embed_single_payload_target_type_enum():
 
 
 def test_backfill_request_valid():
+    """BackfillRequest 继承 BaseModel（非 TaskPayload）— user_id 不再是字段（R1 fix #1 / ADR-002）。"""
     req = BackfillRequest(
-        user_id=uuid4(),
         project_id=uuid4(),
     )
     assert req.provider is None
     assert req.model_name is None
 
 
+def test_backfill_request_rejects_user_id():
+    """BackfillRequest extra='forbid'：传 user_id 应 ValidationError（HTTP body 不应含 user_id）。"""
+    with pytest.raises(ValidationError):
+        BackfillRequest(
+            user_id=uuid4(),  # 已删字段 / extra='forbid' 应拒绝
+            project_id=uuid4(),
+        )
+
+
 def test_model_upgrade_request_valid():
+    """ModelUpgradeRequest 继承 BaseModel（非 TaskPayload）— user_id 不再是字段（R1 fix #1）。"""
     req = ModelUpgradeRequest(
-        user_id=uuid4(),
         project_id=uuid4(),
         new_provider="openai",
         new_model_name="text-embedding-3-large",
@@ -256,3 +270,15 @@ def test_model_upgrade_request_valid():
     )
     assert req.new_provider == "openai"
     assert req.new_model_version == "v2"
+
+
+def test_model_upgrade_request_rejects_user_id():
+    """ModelUpgradeRequest extra='forbid'：传 user_id 应 ValidationError。"""
+    with pytest.raises(ValidationError):
+        ModelUpgradeRequest(
+            user_id=uuid4(),  # 已删字段 / extra='forbid' 应拒绝
+            project_id=uuid4(),
+            new_provider="openai",
+            new_model_name="m",
+            new_model_version="v1",
+        )
