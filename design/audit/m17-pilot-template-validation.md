@@ -102,11 +102,42 @@ cross-sprint punt 池 / bypass log），命中任一 → A 或 C 栏。**B 栏 =
 
 ---
 
-## M17 sprint 实施期（待 sprint 内回写）
+## M17 sprint 实施期
+
+### 子片 0 prep（2026-05-09）
+
+**A 栏机械落项**：
+
+| # | 项 | 状态 |
+|---|---|---|
+| P1 | M11 ColdStartOrchestratorService._mark_failed 迁移到 compensation_session：drop `db` 形参 / 内部 `async with compensation_session() as comp_db:` 写 task=FAILED + cold_start_failed 事件 + comp_db.commit()；service `process_csv` 在 dao.create + write_event(cold_start_created) 后立即 `await db.commit()` 让 task 行脱离批量入库事务（独立 connection 可见前提） | DONE |
+| P2 | cold_start_router upload_cold_start_csv 失败分支精简为 `await db.rollback()` + raise（移除原"双 commit 试探 + rollback fallback"），R2 P1-01 punt 注释替换为新事务边界声明（cross-sprint punt #7 标 DONE）| DONE |
+| P3 | tests/conftest.py autouse fixture `_patch_compensation_session_for_tests` 把 orchestrator_helpers + cold_start_service 两模块的 `compensation_session` 名字 monkeypatch 成 yield 同一 db_session 的实现（生产路径独立 connection 留生产/集成 e2e 验；测试期间靠 savepoint 模拟立即可见 + outer rollback 隔离）| DONE |
+| P4 | cross-sprint punt 池触发点 A 4 项预查：M04-1（联合索引仍缺仅 project_id+updated_at 在用）/ M04-8（db.get(DimensionType) 3 处仍直调）/ M04-9（target_type='dimension_record' 5 处 hard-code）/ M04-10（delete_by_node_id race continue 仍跳 activity_log）—— 全 STILL_PUNT；M17 不触 dimension_service 范围，本子片不顺手清，punt 池注解打"M17 子片 0 prep 验证"戳 | DONE |
+| P5 | cross-sprint punt 池 #7（R-X1 失败补偿 commit boundary）从 PARTIAL 升 ✅ DONE，引证 commit hash | DONE |
+
+**回归数据**：1079 PASS / 4 skipped / 0 fail / ruff 净 / ci-lint R13-1 116 + L12 + L13 + R14 全过
+
+**R-X1 第二实例对照表**（首个非 M11 caller 的 helper 实证）：
+
+| 维度 | M11 ColdStart（第一实例 / 子片 0 prep 完成迁移）| M17 AI 导入（第二实例 / 子片 1-4 落地）|
+|---|---|---|
+| 形态 | 同步 HTTP（router → service / 单请求生命周期）| 异步 arq Queue（worker → service / 跨 Queue 任务生命周期）|
+| 业务 session | `Depends(get_db)` 请求级 | Queue worker 自起 SessionLocal |
+| 失败补偿 session | `compensation_session()` 独立 connection | 同 |
+| 任务行 commit 时机 | service 内 dao.create 后立即 `await db.commit()` | 同范式（待子片 3 落地）|
+| 失败响应路径 | router 异常分支 db.rollback() + raise / typed JSON 中间件转换 | Queue retry + 死信；compensation_session 写 task=failed/partial_failed |
+| 测试 fixture | conftest autouse monkeypatch `compensation_session` ← yield db_session | 同 fixture 复用 |
+
+**启动期元教训新教训沉淀**：
+
+- 在 SQLAlchemy create_savepoint 测试 fixture 下叠加第二个 AsyncSession 在同一 db_connection 上会触发 greenlet 桥接冲突（asyncpg 一连接一活跃操作 / SAVEPOINT 嵌套被两个 session 各自管理）。妥协做法：测试 fixture 把 `compensation_session` 函数本身 monkeypatch 成 yield 同一 db_session（共享 session）。生产路径独立 commit boundary 的真实隔离留生产或专门集成 e2e 验证。
+- 同一 service 函数内不要在 `await db.commit()` 失败补偿前再插一次 `await db.rollback()`：listener `_restart_savepoint` 触发的 `sync_session.begin_nested()` 会跑出 greenlet 上下文，下一次 dao.update 抛 MissingGreenlet。范式：service 触发失败补偿时不主动 rollback 业务 session，业务 session rollback 由 router/Queue worker 异常分支兜底。
+
+### 子片 1-5 实施期（待 sprint 内回写）
 
 待 R1 + R2 spawn subagent 跑完后填充：
 
 - R1 命中数据 / R2 命中数据
-- R-X1 第二实例 vs 第一实例对照表实证（同步 vs 异步 / commit boundary helper 复用）
 - 闸门 2.5 三栏第十二次 B 栏 0 项实证（M05-M17 十二连）
 - §14.5 L3 实证子选项回写

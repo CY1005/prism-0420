@@ -6,12 +6,23 @@ R-X1 orchestrator 模式：M11 **不直 INSERT 跨模块表**，调 4 个 servic
   - M06 CompetitorService.batch_create_in_transaction
   - M07 IssueService.batch_create_in_transaction
 
-事务边界（design §5 多表事务 / 简化范式）：
-- service 不主动 begin/commit/rollback；caller（router）负责事务管理
-- 失败路径：service 在抛异常前先 dao.update task → status=failed + error_report
-- router 期望套路：成功 commit / 失败 commit task 失败状态 + rollback batch 数据 后 re-raise
-  （"全量事务回滚"语义由 router 实现；service 只保证 task 元数据已尝试落盘）
-- 兼容测试 fixture（join_transaction_mode='create_savepoint'）：service 不调 begin_nested
+事务边界（design §5 多表事务 + R-X1 失败补偿 commit boundary 隔离 / M17 sprint
+子片 0 prep 重构 2026-05-09）：
+- 业务路径（task 创建 + batch_create_in_transaction × 4 + 状态扭转）共享 router 注入的
+  request-scope db；router 成功 commit / 失败 rollback。
+- task 创建后立即 commit（service 内 await db.commit()）—— 把 task 行从批量入库事务里
+  解耦出去，让失败补偿能从独立 connection 看到任务。后续状态扭转 / batch INSERT 走
+  自动起的新 txn，失败时 rollback 只丢业务写入，不丢任务身份。
+- 失败补偿走独立 connection（compensation_session helper）：service 在抛异常前用
+  comp_db 写 task=failed + error_report + cold_start_failed 事件，comp_db.commit()
+  立即可见。caller（router）catches 后只需 db.rollback() 丢业务事务（task=failed 状态
+  已由 comp_db 落盘，无需 router 再次 commit 失败状态——R2 P1-01 punt 关闭）。
+- 立规来源：feedback_rx1_orchestrator_design L1 字面 + design/00-architecture/
+  06-design-principles.md 清单 6（commit boundary 隔离）+
+  api/services/orchestrator_helpers.py 第二实例 docstring 对照表。
+- 兼容测试 fixture（join_transaction_mode='create_savepoint'）：tests/conftest.py
+  autouse fixture 把 orchestrator_helpers.SessionLocal monkeypatch 成共享 test
+  connection 的 sessionmaker（savepoint 模拟独立 commit boundary）。
 
 CSV 模板（G6 决策 / 固定列 / 不支持自定义映射）：
   ``node_path,node_type,dimension_key,dimension_content,competitor_name,
@@ -49,6 +60,7 @@ from api.services.competitor_service import CompetitorService
 from api.services.dimension_service import DimensionService
 from api.services.issue_service import IssueService
 from api.services.node_service import NodeService
+from api.services.orchestrator_helpers import compensation_session
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10MB（design §1 G6）
 MAX_ROWS = 1000  # design §1 G6 同步阈值
@@ -316,6 +328,10 @@ class ColdStartOrchestratorService:
             },
         )
 
+        # ★ 任务创建立即 commit（M17 sprint 子片 0 prep 重构 2026-05-09）
+        # 让 task 行脱离批量入库事务，失败补偿走独立 connection 时能看到。
+        await db.commit()
+
         # ---- validating：解析 + 行校验 ----
         await self.dao.update(
             db, task.id, project_id, fields={"status": ColdStartStatus.VALIDATING.value}
@@ -324,7 +340,6 @@ class ColdStartOrchestratorService:
             parsed = parse_csv(content_bytes)
         except (ColdStartCsvInvalidError, ColdStartFileTooLargeError) as e:
             await self._mark_failed(
-                db,
                 task,
                 project_id,
                 actor_user_id,
@@ -353,7 +368,6 @@ class ColdStartOrchestratorService:
                 for d in parsed.dimensions_pending
             ]
             await self._mark_failed(
-                db,
                 task,
                 project_id,
                 actor_user_id,
@@ -370,7 +384,6 @@ class ColdStartOrchestratorService:
 
         if parsed.errors:
             await self._mark_failed(
-                db,
                 task,
                 project_id,
                 actor_user_id,
@@ -437,9 +450,10 @@ class ColdStartOrchestratorService:
                     issues_data=issues_data,
                 )
         except Exception as e:
-            # savepoint 已自动 rollback；task 记录仍存活在 outer txn
+            # 业务事务由 router 异常分支 rollback；service 抛之前先把 task=FAILED 通过
+            # 独立 connection（compensation_session）落盘，让 outer rollback 仍保留任务
+            # 最终状态。
             await self._mark_failed(
-                db,
                 task,
                 project_id,
                 actor_user_id,
@@ -490,7 +504,6 @@ class ColdStartOrchestratorService:
 
     async def _mark_failed(
         self,
-        db: AsyncSession,
         task: ColdStartTask,
         project_id: UUID,
         actor_user_id: UUID,
@@ -501,45 +514,54 @@ class ColdStartOrchestratorService:
         total_rows: int,
         failed_rows: int,
     ) -> None:
-        """task 元数据落盘 + activity_log 失败事件（R1-A P1-04 + R1-C P1-01 立修）：
+        """task 元数据落盘 + activity_log 失败事件（R-X1 失败补偿 commit boundary）。
 
-        write_event 抛异常不能遮盖 task 状态落盘 / 不能吞调用方原始异常。task 状态落盘
-        是 R-X1 失败补偿契约的核心；activity_log 是 nice-to-have。
+        立规来源（M17 sprint 子片 0 prep 重构 2026-05-09）：feedback_rx1_orchestrator_design L1
+        + design/00-architecture/06-design-principles.md 清单 6（commit boundary 隔离）。
+
+        - 走 compensation_session() 独立 connection；与 caller request-scope db 隔离
+        - comp_db.commit() 立即可见；caller 可继续 rollback 业务事务而不影响补偿写入
+        - write_event 抛异常不遮盖 task 状态落盘（R1-A P1-04 + R1-C P1-01 立修保留）
+
+        前置契约：caller 必须保证 task 行已 commit 到 DB（process_csv 在 dao.create 后立即
+        await db.commit()），否则 comp_db 这个独立 connection 看不到任务。
         """
-        await self.dao.update(
-            db,
-            task.id,
-            project_id,
-            fields={
-                "status": ColdStartStatus.FAILED.value,
-                "total_rows": total_rows,
-                "failed_rows": failed_rows,
-                "error_report": error_report,
-            },
-        )
-        try:
-            await write_event(
-                db=db,
-                actor_user_id=actor_user_id,
-                project_id=project_id,
-                action_type="cold_start_failed",
-                target_type="cold_start_task",
-                target_id=str(task.id),
-                summary="冷启动导入失败",
-                metadata={
-                    "stage": stage,
+        async with compensation_session() as comp_db:
+            await self.dao.update(
+                comp_db,
+                task.id,
+                project_id,
+                fields={
+                    "status": ColdStartStatus.FAILED.value,
+                    "total_rows": total_rows,
                     "failed_rows": failed_rows,
-                    "error_code": error_code,
+                    "error_report": error_report,
                 },
             )
-        except Exception as log_err:
-            # activity_log 失败降级 log；不让它遮盖原始异常 chain
-            log.warning(
-                "cold_start._mark_failed.write_event_failed",
-                task_id=str(task.id),
-                error_code=error_code,
-                log_error=str(log_err),
-            )
+            try:
+                await write_event(
+                    db=comp_db,
+                    actor_user_id=actor_user_id,
+                    project_id=project_id,
+                    action_type="cold_start_failed",
+                    target_type="cold_start_task",
+                    target_id=str(task.id),
+                    summary="冷启动导入失败",
+                    metadata={
+                        "stage": stage,
+                        "failed_rows": failed_rows,
+                        "error_code": error_code,
+                    },
+                )
+            except Exception as log_err:
+                # activity_log 失败降级 log；不让它遮盖原始异常 chain
+                log.warning(
+                    "cold_start._mark_failed.write_event_failed",
+                    task_id=str(task.id),
+                    error_code=error_code,
+                    log_error=str(log_err),
+                )
+            await comp_db.commit()
 
 
 __all__ = [

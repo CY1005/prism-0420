@@ -94,12 +94,14 @@ async def upload_cold_start_csv(
     - 413 文件过大 → ColdStartFileTooLargeError
     - 422 CSV 格式 / 行级校验 → ColdStartCsvInvalidError / ColdStartRowValidationFailedError
     - 500 batch 入库失败 → ColdStartBatchInsertFailedError
-    R2 P1-01 punt（audit 登记）：
-    当前实装下"task=failed 元数据"和"部分业务 INSERT"共享同一 commit boundary，
-    与 design §1 G6 + §4 全量回滚契约存在轻微违反（用户看 task=failed 时 DB 里可能挂着
-    部分孤儿业务数据）。R2 reviewer 已识别。彻底修复需独立 connection 或显式
-    SAVEPOINT 重构（与测试 fixture join_transaction_mode='create_savepoint' 不兼容）；
-    punt 到 M17 sprint（异步 zip 导入将 reuse orchestrator helper，届时一并立独立 helper）。
+
+    事务边界（M17 sprint 子片 0 prep 重构 2026-05-09 / R2 P1-01 punt 关闭）：
+    - 成功路径：service 在 task 创建后立即 commit；后续 status 扭转 + batch INSERT
+      共享 request-scope db；router 调 db.commit() 把这些落盘。
+    - 失败路径：service 已 await db.rollback() 丢业务写入，并通过 compensation_session
+      helper 独立 connection 写 task=failed + cold_start_failed 事件并 commit；
+      router 只需 db.rollback()（无需再 commit 失败状态——与 design §1 G6 + §4
+      全量回滚契约一致；feedback_rx1_orchestrator_design L1）。
     """
     # R2 P1-02：file.size 预检（attacker 不能用 chunked encoding 把全部 body 灌进 SpooledTemporaryFile）
     if file.size is not None and file.size > MAX_FILE_BYTES:
@@ -122,12 +124,9 @@ async def upload_cold_start_csv(
         await db.commit()
         return ColdStartTaskResponse.model_validate(task, from_attributes=True)
     except Exception:
-        # service 已 dao.update task=failed + error_report；commit 该状态后 re-raise
-        # 让上层 exception handler 转 typed JSON error response
-        try:
-            await db.commit()
-        except Exception:
-            await db.rollback()
+        # service 已通过 compensation_session 独立 connection 落盘 task=failed + 事件；
+        # 这里只需 rollback 业务事务，让 typed exception 正常向 handler 传播。
+        await db.rollback()
         raise
 
 

@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-09
+last_updated: 2026-05-09 (M17 sprint 子片 0 prep)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -52,14 +52,14 @@ policy:
 | 4 | ~~**SSE generator 占 AsyncSession 300s**~~ ✅ **RE-EVALUATE 2026-05-09 / M16 sprint 已用 BackgroundTasks + 自起 SessionLocal 替代长持 SSE 范式** | M13-B13 | M16/M17 立异步 SSE 策略 | ~~high~~ | **M16 §12B 后台 fire-and-forget 子模板 + 自起 SessionLocal 隔离请求级 Depends(get_db) 已沉淀**（commit 2273f90 + 043e3e2 / audit/m16 元贡献 #5）；M13 `analyze_service.py` SSE generator 仍存量未迁但**新模块（M16/M17）已不触发同款** → 标 STATUS_CHANGE：从"M17 必查"降为"M13 后续重构 sprint 顺手迁"low |
 | 5 | ~~**M02 Project.ai_model 字段未实装**~~ ✅ **DONE 2026-05-09 / 子片 3 验证字段已存在不需 alembic add**（M02 model 字面已含 ai_model 列；M13-B16 punt 误判） | M13-B16 | M14+ baseline-patch | ~~medium~~ | **M16 sprint 子片 3 验证关闭** |
 | 6 | **M07 update 不支持 detach (None→NULL)** | M07 R1-A P2-2 | design §3/§7 reconcile + 产品决策 | medium — issue 节点关联无法解除；M14 link/unlink 已支持但 M07 主表残缺 | M16 启动让 CY 拍是否补 |
-| 7 | **M11-B1 R-X1 失败补偿 commit boundary** ⏳ **PARTIAL 2026-05-09 / M17 启动期**：`api/services/orchestrator_helpers.py:compensation_session` helper 已抽 + 4 pytest pass + design 字面回写；M11 ColdStart 迁移留 M17 sprint 子片 0 prep | M11 R2 P1-01 punt | M17 异步 zip 导入时 | critical | M17 sprint 子片 0 prep 内 M11 service.py + cold_start_router.py 迁移到 compensation_session helper + 测试 fixture monkeypatch SessionLocal 改造 |
+| 7 | ~~**M11-B1 R-X1 失败补偿 commit boundary**~~ ✅ **DONE 2026-05-09 / M17 子片 0 prep**：cold_start_service._mark_failed 改用 compensation_session 独立 commit boundary（task 创建立即 commit / 失败补偿 comp_db 独立写 task=FAILED+activity_log）；router 失败分支只剩 db.rollback() / R2 P1-01 punt 关闭；conftest autouse fixture monkeypatch compensation_session yield db_session 兼容 savepoint；1079 PASS 不破 | M11 R2 P1-01 punt | M17 异步 zip 导入时 | ~~critical~~ | M17 子片 1+2+3 直接复用 helper（首个非 M11 caller） |
 | 8 | **M14-B12 update/delete/unlink write_event 异常传播 e2e** | M14 R2 punt | M14 baseline-patch | medium — M02+ 元教训纪律 3 写路径无 e2e 覆盖 | 与 #1+#2 同 sprint 做 |
 | 9 | **M05-2/14 + M06-1 + M07-7 + M08-1 多模块 `if rows == 0: continue` race window** | 多 sprint | M15 升级 INSERT 时复审 | medium — B1 落地后必须一并复审；不复审会 silently 改变行为 | 与 #1 同 sprint 联动复审 |
 | 10 | **M10-5 viewer /overview/stats 测试缺** | M10 R2 P2 #3 | M11 启动前补 | low — endpoint 行为正确，仅测试覆盖度 | M16 启动顺手补 |
 | **11** | **IntegrityError → 500 跨模块 3 处（M02 project create ✅ DONE / M04-4 dimension B3 / M04-17 C7.1）** ⏳ **PARTIAL 2026-05-09 / M17 启动期**：通用规则已立（`design/00-architecture/06-design-principles.md` 清单 6 + ci-lint R15 grep 守护立规防御未来 + 3 类豁免显式声明）；M02 project create 已实装（project_service.py:102/302）；**M04 dimension 修存量推迟到独立 cleanup sprint** | M04 R1-A B3 + R1-C C7.1 | M05 sprint 顺修（已过） / M17 启动期立规 | ~~high~~ → medium（立规已落 / 存量保留 / 后续 sprint 自然推动） | M04 dimension_service.create + create_dimension_record 加 IntegrityError handler；ci-lint R15 实装由后续 sprint 落 |
-| **12** | **M04-9 target_type 4 处 hard-code（service:327/378/436/482）** | M04 R1-B B6 | M15 启动前 const 化（已过）| medium — 与 #1+#2 同根因（命名规约一致性）；若 #1 先升 schema 不 const 化会冲突 | M16 启动 reconcile A 栏首条 / 与 #2 同 batch |
-| **13** | **M04-1 dimension_records (updated_by, updated_at) 联合索引未建** | M04 R1-A A2 | M15/M19 | medium — dimension_records 是 M13/M14 写大量行的源表，缺联合索引会让 activity_stream 时间线查询慢 | 与 #1 同 sprint 评估是否提前建 |
-| **14** | **M04-8 db.get(DimensionType) 三处未走 DAO** | M04 R1-B B2.4 | M15 启动前（已过）| low — 风格统一性；service:349/428/474 三处 | M16 启动顺手清 |
+| **12** | **M04-9 target_type 5 处 hard-code（service:327/378/436/482/516）** ⏳ 2026-05-09 M17 子片 0 prep 验证仍 STILL_PUNT；服务 M17 不触动 dimension_service 范围，本期不顺手清 | M04 R1-B B6 | M15 启动前 const 化（已过）| medium — 与 #1+#2 同根因（命名规约一致性）；若 #1 先升 schema 不 const 化会冲突 | M16 启动 reconcile A 栏首条 / 与 #2 同 batch |
+| **13** | **M04-1 dimension_records (updated_by, updated_at) 联合索引未建** ⏳ 2026-05-09 M17 子片 0 prep 验证：现仅有 (project_id, updated_at) 索引（model:52），(updated_by, updated_at) 仍缺 / STILL_PUNT | M04 R1-A A2 | M15/M19 | medium — dimension_records 是 M13/M14 写大量行的源表，缺联合索引会让 activity_stream 时间线查询慢 | 与 #1 同 sprint 评估是否提前建 |
+| **14** | **M04-8 db.get(DimensionType) 三处未走 DAO** ⏳ 2026-05-09 M17 子片 0 prep 验证仍 STILL_PUNT（service:349/428/474）；M17 不触 dimension_service，本期不清 | M04 R1-B B2.4 | M15 启动前（已过）| low — 风格统一性；service:349/428/474 三处 | M16 启动顺手清 |
 | **15** | **M04-R2 A1 DimensionResponse 缺 dimension_type_key/updated_by_name join 字段** | M04 R2 A1 | 前端真用时补 join | medium — 与 #3 IssueResponse 同款契约缺口；前端真用时必补 selectinload | 与 #3 一并 M16 启动拍 |
 
 ---

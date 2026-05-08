@@ -113,6 +113,62 @@ async def db_session(db_connection: AsyncConnection) -> AsyncIterator[AsyncSessi
         await session.close()
 
 
+# ─────────────── M17 子片 0 prep：compensation_session 测试 fixture ───────────────
+#
+# 立规来源：design/audit/m17-pilot-template-validation.md 启动期 A6 + memory
+# feedback_rx1_orchestrator_design L1 字面"失败补偿 commit boundary 必独立 connection
+# 与业务事务隔离"。
+#
+# 生产路径：api.services.orchestrator_helpers.compensation_session 自起 SessionLocal
+# → 独立 connection；commit 立即可见，与请求级 / Queue worker 业务 session 不共享 txn。
+#
+# 测试路径：直接走真实 SessionLocal 会绕过 db_connection 的 outer test txn → 测试
+# 期间真实写入 prism_test 库 → 测试结束 outer rollback 不能撤销 → 测试相互污染。
+#
+# 范式：autouse fixture 把 orchestrator_helpers.SessionLocal monkeypatch 成共享
+# db_connection 的 async_sessionmaker(join_transaction_mode='create_savepoint')，
+# 让 compensation_session() 在测试期间走 savepoint 模拟独立 commit boundary。
+
+
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
+async def _patch_compensation_session_for_tests(
+    db_session: AsyncSession,
+) -> AsyncIterator[None]:
+    """compensation_session 在测试期间 yield 同一 db_session 实例。
+
+    生产路径走真实 SessionLocal → 独立 connection；测试期间在 db_connection 上叠加
+    第二个 AsyncSession 会触发 SQLAlchemy greenlet 桥接冲突（asyncpg 一连接一活跃
+    操作 / SAVEPOINT 嵌套被两个 session 各自管理）。
+
+    妥协：让 comp_db == db_session（共享 session 与连接）。db_session 已经处于
+    nested savepoint 模式，session.commit() = 释放 savepoint，相当于"测试范畴内
+    立即可见 + outer test txn 还能 rollback"。验证目标退化为：补偿写入路径会跑
+    （dao.update + write_event 不被遮盖 + commit 调用形态正确），独立 commit
+    boundary 的真实隔离留给生产 / 集成 e2e 验证。
+
+    使用场景：M11 cold_start / M17 import / 任何 R-X1 失败补偿路径。新 service
+    importer 加入 helper 时必须把 module 名加进 _MODULES。
+    """
+    from contextlib import asynccontextmanager
+
+    from api.services import cold_start_service, orchestrator_helpers
+
+    _MODULES = (orchestrator_helpers, cold_start_service)
+
+    @asynccontextmanager
+    async def _test_compensation_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    originals = {mod: mod.compensation_session for mod in _MODULES}
+    for mod in _MODULES:
+        mod.compensation_session = _test_compensation_session  # type: ignore[attr-defined]
+    try:
+        yield
+    finally:
+        for mod, orig in originals.items():
+            mod.compensation_session = orig  # type: ignore[attr-defined]
+
+
 # ─────────────── M01 fixtures ────────────────
 
 
