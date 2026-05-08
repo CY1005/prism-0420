@@ -111,3 +111,10 @@ class ErrorCode(StrEnum):
     COLD_START_TASK_FINALIZED = "cold_start_task_finalized"
     COLD_START_INVALID_STATE_TRANSITION = "cold_start_invalid_state_transition"
     COLD_START_FILE_TOO_LARGE = "cold_start_file_too_large"
+
+    # M12 功能对比矩阵 (design §13)
+    COMPARISON_SNAPSHOT_NOT_FOUND = "comparison_snapshot_not_found"
+    COMPARISON_SNAPSHOT_NAME_EMPTY = "comparison_snapshot_name_empty"
+    COMPARISON_NODE_NOT_FOUND = "comparison_node_not_found"
+    COMPARISON_EMPTY_SELECTION = "comparison_empty_selection"
+    COMPARISON_SNAPSHOT_CONFLICT = "comparison_snapshot_conflict"

@@ -523,3 +523,31 @@ class ColdStartFileTooLargeError(AppError):
     code = ErrorCode.COLD_START_FILE_TOO_LARGE
     http_status = 413
     message = "CSV file exceeds maximum allowed size"
+
+
+# ─────────────── M12 功能对比矩阵（design §13）───────────────
+
+
+class ComparisonSnapshotNotFoundError(NotFoundError):
+    code = ErrorCode.COMPARISON_SNAPSHOT_NOT_FOUND
+    message = "Comparison snapshot not found"
+
+
+class ComparisonSnapshotNameEmptyError(ValidationError):
+    code = ErrorCode.COMPARISON_SNAPSHOT_NAME_EMPTY
+    message = "Snapshot name cannot be empty"
+
+
+class ComparisonNodeNotFoundError(ValidationError):
+    code = ErrorCode.COMPARISON_NODE_NOT_FOUND
+    message = "One or more selected nodes do not belong to this project"
+
+
+class ComparisonEmptySelectionError(ValidationError):
+    code = ErrorCode.COMPARISON_EMPTY_SELECTION
+    message = "Must select at least one node and one dimension for comparison"
+
+
+class ComparisonSnapshotConflictError(ConflictError):
+    code = ErrorCode.COMPARISON_SNAPSHOT_CONFLICT
+    message = "Snapshot was modified by someone else; please refresh and retry"
