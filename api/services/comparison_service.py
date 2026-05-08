@@ -310,7 +310,7 @@ class ComparisonService:
             summary=f"删除快照：{snap.name}",
             metadata={
                 "name": snap.name,
-                "nodes_count": len(snap.nodes_ref or []),
+                "node_ids_count": len(snap.nodes_ref or []),
             },
         )
 

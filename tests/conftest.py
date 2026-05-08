@@ -580,3 +580,29 @@ async def make_cold_start_task(db_session):
         return task
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_snapshot(db_session):
+    """工厂 fixture：建一行 comparison_snapshots（M12）。
+
+    M12 sprint R1-B P1 立修（2026-05-08）：内联 _mk_snap 在 test_m12_dao.py 16 次 +
+    test_m12_service.py 8 处裸构造 → 迁 conftest（M03 R1-B C1 跨文件 helper 规则延续）。
+
+    用法：snap = await make_snapshot(project_id=p.id, user_id=u.id, name="x")
+    """
+    from api.models.comparison_snapshot import ComparisonSnapshot
+
+    async def _make(
+        *,
+        project_id,
+        user_id,
+        name: str = "x",
+        **extra,
+    ) -> ComparisonSnapshot:
+        snap = ComparisonSnapshot(project_id=project_id, user_id=user_id, name=name, **extra)
+        db_session.add(snap)
+        await db_session.flush()
+        return snap
+
+    yield _make

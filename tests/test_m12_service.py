@@ -286,17 +286,10 @@ async def test_create_snapshot_write_event_failure_propagates(
 # ─────────────── M12-SVC-T3 list_snapshots ───────────────
 
 
-async def test_list_snapshots_returns_tuple(db_session, svc, make_project):
+async def test_list_snapshots_returns_tuple(db_session, svc, make_project, make_snapshot):
     user, proj = await make_project()
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    db_session.add_all(
-        [
-            ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="a"),
-            ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="b"),
-        ]
-    )
-    await db_session.flush()
+    await make_snapshot(project_id=proj.id, user_id=user.id, name="a")
+    await make_snapshot(project_id=proj.id, user_id=user.id, name="b")
     items, total = await svc.list_snapshots(db_session, project_id=proj.id)
     assert total == 2
     assert len(items) == 2
@@ -305,20 +298,16 @@ async def test_list_snapshots_returns_tuple(db_session, svc, make_project):
 # ─────────────── M12-SVC-T4 get_snapshot_detail ───────────────
 
 
-async def test_get_snapshot_detail_404_for_unknown(db_session, svc, make_project):
+async def test_get_snapshot_detail_404_for_unknown(db_session, svc, make_project, make_snapshot):
     _, proj = await make_project()
     with pytest.raises(ComparisonSnapshotNotFoundError):
         await svc.get_snapshot_detail(db_session, project_id=proj.id, snapshot_id=uuid4())
 
 
-async def test_get_snapshot_detail_cross_tenant_404(db_session, svc, make_project):
+async def test_get_snapshot_detail_cross_tenant_404(db_session, svc, make_project, make_snapshot):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(owner=user, name_suffix="-B")
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=projA.id, user_id=user.id, name="x")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=projA.id, user_id=user.id, name="x")
     with pytest.raises(ComparisonSnapshotNotFoundError):
         await svc.get_snapshot_detail(db_session, project_id=projB.id, snapshot_id=snap.id)
 
@@ -326,13 +315,9 @@ async def test_get_snapshot_detail_cross_tenant_404(db_session, svc, make_projec
 # ─────────────── M12-SVC-T5 rename_snapshot ───────────────
 
 
-async def test_rename_snapshot_increments_version(db_session, svc, make_project):
+async def test_rename_snapshot_increments_version(db_session, svc, make_project, make_snapshot):
     user, proj = await make_project()
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="old")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="old")
     updated = await svc.rename_snapshot(
         db_session,
         project_id=proj.id,
@@ -346,13 +331,9 @@ async def test_rename_snapshot_increments_version(db_session, svc, make_project)
     assert updated.version == 2
 
 
-async def test_rename_snapshot_conflict_409(db_session, svc, make_project):
+async def test_rename_snapshot_conflict_409(db_session, svc, make_project, make_snapshot):
     user, proj = await make_project()
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="old")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="old")
     with pytest.raises(ComparisonSnapshotConflictError):
         await svc.rename_snapshot(
             db_session,
@@ -365,13 +346,9 @@ async def test_rename_snapshot_conflict_409(db_session, svc, make_project):
         )
 
 
-async def test_rename_snapshot_name_empty_422(db_session, svc, make_project):
+async def test_rename_snapshot_name_empty_422(db_session, svc, make_project, make_snapshot):
     user, proj = await make_project()
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="old")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="old")
     with pytest.raises(ComparisonSnapshotNameEmptyError):
         await svc.rename_snapshot(
             db_session,
@@ -426,7 +403,7 @@ async def test_delete_snapshot_removes_and_cascades_items(
         await svc.get_snapshot_detail(db_session, project_id=proj.id, snapshot_id=snap.id)
 
 
-async def test_delete_snapshot_404_for_unknown(db_session, svc, make_project):
+async def test_delete_snapshot_404_for_unknown(db_session, svc, make_project, make_snapshot):
     user, proj = await make_project()
     with pytest.raises(ComparisonSnapshotNotFoundError):
         await svc.delete_snapshot(
@@ -434,14 +411,10 @@ async def test_delete_snapshot_404_for_unknown(db_session, svc, make_project):
         )
 
 
-async def test_delete_snapshot_cross_tenant_404(db_session, svc, make_project):
+async def test_delete_snapshot_cross_tenant_404(db_session, svc, make_project, make_snapshot):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(owner=user, name_suffix="-B")
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=projA.id, user_id=user.id, name="x")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=projA.id, user_id=user.id, name="x")
     with pytest.raises(ComparisonSnapshotNotFoundError):
         await svc.delete_snapshot(
             db_session, project_id=projB.id, snapshot_id=snap.id, actor_user_id=user.id
@@ -449,15 +422,11 @@ async def test_delete_snapshot_cross_tenant_404(db_session, svc, make_project):
 
 
 async def test_delete_snapshot_write_event_failure_propagates(
-    db_session, svc, make_project, monkeypatch
+    db_session, svc, make_project, make_snapshot, monkeypatch
 ):
     """write_event 异常传播（M04+ 范式）。"""
     user, proj = await make_project()
-    from api.models.comparison_snapshot import ComparisonSnapshot
-
-    snap = ComparisonSnapshot(project_id=proj.id, user_id=user.id, name="x")
-    db_session.add(snap)
-    await db_session.flush()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="x")
 
     async def _boom(**_kwargs):
         raise RuntimeError("activity boom on delete")
@@ -467,3 +436,84 @@ async def test_delete_snapshot_write_event_failure_propagates(
         await svc.delete_snapshot(
             db_session, project_id=proj.id, snapshot_id=snap.id, actor_user_id=user.id
         )
+
+
+# ─────────────── R1 P1 覆盖补 ───────────────
+
+
+async def test_rename_snapshot_write_event_failure_propagates(
+    db_session, svc, make_project, make_snapshot, monkeypatch
+):
+    """R1-C P1-02 立修：rename write_event 异常传播测试（三写端点全覆盖）。"""
+    user, proj = await make_project()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="old")
+
+    async def _boom(**_kwargs):
+        raise RuntimeError("rename boom")
+
+    monkeypatch.setattr("api.services.comparison_service.write_event", _boom)
+    with pytest.raises(RuntimeError, match="rename boom"):
+        await svc.rename_snapshot(
+            db_session,
+            project_id=proj.id,
+            snapshot_id=snap.id,
+            actor_user_id=user.id,
+            name="new",
+            description=None,
+            expected_version=1,
+        )
+
+
+async def test_rename_snapshot_cross_tenant_404(db_session, svc, make_project, make_snapshot):
+    """R1-C 覆盖空白：rename cross-tenant 404（M02 范式）。"""
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(owner=user, name_suffix="-B")
+    snap = await make_snapshot(project_id=projA.id, user_id=user.id, name="x")
+    with pytest.raises(ComparisonSnapshotNotFoundError):
+        await svc.rename_snapshot(
+            db_session,
+            project_id=projB.id,
+            snapshot_id=snap.id,
+            actor_user_id=user.id,
+            name="y",
+            description=None,
+            expected_version=1,
+        )
+
+
+async def test_rename_snapshot_multi_increment(db_session, svc, make_project, make_snapshot):
+    """R1-C 覆盖空白：rename 连续 N 次 version=N+1。"""
+    user, proj = await make_project()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="v0")
+    for i in range(1, 4):
+        updated = await svc.rename_snapshot(
+            db_session,
+            project_id=proj.id,
+            snapshot_id=snap.id,
+            actor_user_id=user.id,
+            name=f"v{i}",
+            description=None,
+            expected_version=i,
+        )
+        assert updated.version == i + 1
+        assert updated.name == f"v{i}"
+
+
+async def test_rename_snapshot_updates_updated_at(db_session, svc, make_project, make_snapshot):
+    """R1-C P1-03 立修验证：Core UPDATE 显式 updated_at 刷新。"""
+    user, proj = await make_project()
+    snap = await make_snapshot(project_id=proj.id, user_id=user.id, name="old")
+    old_ts = snap.updated_at
+    import asyncio
+
+    await asyncio.sleep(0.01)
+    updated = await svc.rename_snapshot(
+        db_session,
+        project_id=proj.id,
+        snapshot_id=snap.id,
+        actor_user_id=user.id,
+        name="new",
+        description=None,
+        expected_version=1,
+    )
+    assert updated.updated_at > old_ts

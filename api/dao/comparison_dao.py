@@ -14,6 +14,7 @@ G2/G4 决策：
 """
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -135,6 +136,7 @@ class ComparisonDAO:
         """
         if not fields:
             raise ValueError("update_snapshot_with_version 至少需要一个 field")
+        # R1-C P1-03 立修：Core UPDATE 不触发 ORM onupdate，必须显式刷 updated_at
         stmt = (
             update(ComparisonSnapshot)
             .where(
@@ -142,7 +144,11 @@ class ComparisonDAO:
                 ComparisonSnapshot.project_id == project_id,
                 ComparisonSnapshot.version == expected_version,
             )
-            .values(**fields, version=ComparisonSnapshot.version + 1)
+            .values(
+                **fields,
+                version=ComparisonSnapshot.version + 1,
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await db.execute(stmt)
         return int(result.rowcount or 0)
