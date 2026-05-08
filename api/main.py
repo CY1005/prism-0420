@@ -14,6 +14,7 @@ from api.routers import auth as auth_router
 from api.routers import (
     competitor_router,
     dimension_router,
+    issue_router,
     node_router,
     project_router,
     version_router,
@@ -95,6 +96,8 @@ app.include_router(dimension_router.completion_router)
 app.include_router(version_router.router)
 app.include_router(competitor_router.competitor_router)
 app.include_router(competitor_router.competitor_ref_router)
+app.include_router(issue_router.issue_router)
+app.include_router(issue_router.issue_node_router)
 
 
 @app.get("/health")
