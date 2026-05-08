@@ -553,6 +553,30 @@ class ComparisonSnapshotConflictError(ConflictError):
     message = "Snapshot was modified by someone else; please refresh and retry"
 
 
+# ─── M14 行业动态 (design §13) ───
+
+
+class NewsNotFoundError(NotFoundError):
+    code = ErrorCode.NEWS_NOT_FOUND
+    message = "Industry news not found"
+
+
+class NewsLinkDuplicateError(ConflictError):
+    code = ErrorCode.NEWS_LINK_DUPLICATE
+    message = "This node is already linked to the news"
+
+
+class NewsLinkNotFoundError(NotFoundError):
+    code = ErrorCode.NEWS_LINK_NOT_FOUND
+    message = "News-node link not found"
+
+
+class NewsForbiddenError(AppError):
+    code = ErrorCode.NEWS_FORBIDDEN
+    http_status = 403
+    message = "Only the creator or platform admin can modify this news"
+
+
 # ─── M13 AI 需求分析 (design §13) ───
 
 

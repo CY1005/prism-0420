@@ -119,6 +119,12 @@ class ErrorCode(StrEnum):
     COMPARISON_EMPTY_SELECTION = "comparison_empty_selection"
     COMPARISON_SNAPSHOT_CONFLICT = "comparison_snapshot_conflict"
 
+    # M14 行业动态 (design §13)
+    NEWS_NOT_FOUND = "news_not_found"
+    NEWS_LINK_DUPLICATE = "news_link_duplicate"
+    NEWS_LINK_NOT_FOUND = "news_link_not_found"
+    NEWS_FORBIDDEN = "news_forbidden"
+
     # M13 AI 需求分析 (design §13)
     ANALYSIS_NODE_NOT_FOUND = "analysis_node_not_found"
     ANALYSIS_PROVIDER_NOT_CONFIGURED = "analysis_provider_not_configured"
