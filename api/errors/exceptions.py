@@ -826,3 +826,136 @@ class SnapshotTaskPathMismatchError(ValidationError):
 
     code = ErrorCode.SNAPSHOT_TASK_PATH_MISMATCH
     message = "task does not belong to the project/node in URL path"
+
+
+# ─── M18 语义搜索 (design §13 line 1226-1309) ───
+
+
+class InvalidQueryLengthError(AppError):
+    code = ErrorCode.INVALID_QUERY_LENGTH
+    http_status = 400
+    message = "Query length is invalid (must be 1-200 characters)"
+
+
+class SearchTimeoutError(AppError):
+    code = ErrorCode.SEARCH_TIMEOUT
+    http_status = 504
+    message = "Search exceeded server timeout"
+
+
+class PgvectorUnavailableError(AppError):
+    """不抛 HTTP，仅记录——search 路由捕获后降级 keyword_only 返 200。"""
+
+    code = ErrorCode.PGVECTOR_UNAVAILABLE
+    http_status = 503
+    message = "pgvector extension unavailable; falling back to keyword search"
+
+
+class EmbeddingProviderFailedError(AppError):
+    code = ErrorCode.EMBEDDING_PROVIDER_FAILED
+    http_status = 503
+    message = "Embedding provider call failed"
+
+
+class EmbeddingProviderTimeoutError(AppError):
+    code = ErrorCode.EMBEDDING_PROVIDER_TIMEOUT
+    http_status = 504
+    message = "Embedding provider timed out"
+
+
+class EmbeddingTargetNotFoundError(AppError):
+    """noop 路径——worker 内捕获后跳过，不写 failures。"""
+
+    code = ErrorCode.EMBEDDING_TARGET_NOT_FOUND
+    http_status = 404
+    message = "Embedding target not found in business table (noop)"
+
+
+class EmbeddingZombieError(AppError):
+    code = ErrorCode.EMBEDDING_ZOMBIE
+    http_status = 504
+    message = "Embedding task abnormally exited (zombie); marked dead_letter"
+
+
+class EmbeddingTaskTerminalViolationError(AppError):
+    code = ErrorCode.EMBEDDING_TASK_TERMINAL_VIOLATION
+    http_status = 500
+    message = "Attempted transition from terminal state"
+
+
+class EmbeddingTaskInvalidTransitionError(AppError):
+    code = ErrorCode.EMBEDDING_TASK_INVALID_TRANSITION
+    http_status = 500
+    message = "Invalid embedding task state transition"
+
+
+class EmbeddingBackfillAlreadyRunningError(AppError):
+    code = ErrorCode.EMBEDDING_BACKFILL_ALREADY_RUNNING
+    http_status = 409
+    message = "A backfill is already running for this project"
+
+
+class EmbeddingModelUpgradeInvalidError(AppError):
+    code = ErrorCode.EMBEDDING_MODEL_UPGRADE_INVALID
+    http_status = 400
+    message = "Model upgrade target is invalid or not configured"
+
+
+class SilentFailure(BaseException):
+    """audit m6 + verify L1+N4 + fix v2 决策 3=B：非 AppError 内部失败基类。
+
+    继承 BaseException 而非 Exception 是 by-design——使其不被通用 except Exception 捕获，
+    避免业务代码无意中"吞"掉本应在调用方显式处理的失败路径。
+
+    使用约束（必读，否则会导致进程崩溃）：
+    1. 调用方必须显式 except SilentFailure 或 except (Exception, SilentFailure) 才能捕获
+    2. 在跨 await 边界（如 enqueue / cron）使用，避免污染主业务调用栈
+    3. 若 except 未处理，会冒泡到 asyncio event loop 顶层导致 worker / task 异常退出
+       —— 这是有意行为：派生数据失败必须可见而非静默吞错
+
+    使用场景：业务删除尾调 enqueue_delete 失败、cleanup cron 局部失败等"内部不阻塞主路径但需可见"的失败
+    禁用场景：业务路径主流程（应用 AppError）/ 跨 HTTP 边界（FastAPI 不渲染 BaseException）
+    """
+
+    def __init__(self, code: "ErrorCode", message: str, **metadata: Any) -> None:
+        self.code = code
+        self.message = message
+        self.metadata = metadata
+        super().__init__(message)
+
+
+class EmbeddingDeleteFailedError(SilentFailure):
+    """fix v2 决策 3=B 保留：从 AppError 移到 SilentFailure 基类。
+
+    使用场景：业务删除 commit 后 enqueue_delete 失败 → 调用方必须 except SilentFailure。
+    示例正确用法::
+
+        try:
+            self.embedding_service.enqueue_delete(...)
+        except SilentFailure as e:
+            logger.warning(f"enqueue_delete failed (non-blocking): {e}")
+            # SilentFailure 已自带写 embedding_failures 副作用
+
+    错误用法（会导致 worker 崩溃）::
+
+        try:
+            self.embedding_service.enqueue_delete(...)
+        except Exception as e:    # ❌ SilentFailure 不被捕获，冒泡崩溃
+            ...
+    """
+
+    def __init__(
+        self,
+        target_type: str,
+        target_id: "Any",
+        project_id: "Any",
+        **kw: Any,
+    ) -> None:
+        super().__init__(
+            code=ErrorCode.EMBEDDING_DELETE_FAILED,
+            message=f"failed to enqueue delete for {target_type}:{target_id}",
+            target_type=target_type,
+            target_id=target_id,
+            project_id=project_id,
+            **kw,
+        )

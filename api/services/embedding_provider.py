@@ -184,6 +184,94 @@ def _deterministic_vector(text: str, dim: int) -> list[float]:
     return [x / norm for x in raw]
 
 
+class OpenAIEmbeddingProvider(EmbeddingProvider):
+    """OpenAI embedding provider skeleton（子片 3 范围）。
+
+    embed_single / embed_batch 暂 raise NotImplementedError（子片 4+ pgvector 装后真做）。
+    provider_name / model_name / dim 属性正常——工厂、schema、配置 sanity check 可用。
+
+    子片 4+ 集成 TODO：
+      - httpx 直连 api.openai.com/v1/embeddings 或 openai SDK
+      - 超时 = EMBEDDING_TASK_TIMEOUT_S（single）/ BACKFILL_BATCH_TIMEOUT_S（batch）
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "text-embedding-3-small",
+        dim: int = 1536,
+    ) -> None:
+        if dim not in SUPPORTED_DIMS:
+            raise EmbeddingProviderConfigError(
+                "openai",
+                f"dim_must_be_in_{SUPPORTED_DIMS}_got_{dim}",
+            )
+        self._api_key = api_key
+        self._model_name = model_name
+        self._dim = dim
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def dim(self) -> int:
+        return self._dim
+
+    async def embed_single(self, text: str) -> list[float]:
+        raise NotImplementedError("OpenAI integration TODO 子片 4+ / pgvector 装后真做")
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        raise NotImplementedError("OpenAI integration TODO 子片 4+ / pgvector 装后真做")
+
+
+class BgeEmbeddingProvider(EmbeddingProvider):
+    """BGE (BAAI General Embedding) provider skeleton（子片 3 范围）。
+
+    embed_single / embed_batch 暂 raise NotImplementedError（子片 4+ 真做）。
+    provider_name / model_name / dim 属性正常。
+
+    子片 4+ 集成 TODO：
+      - sentence-transformers 加载 BAAI/bge-small-zh-v1.5 本地模型
+      - 支持 CPU / GPU 推理
+    """
+
+    def __init__(
+        self,
+        model_name: str = "bge-small-zh-v1.5",
+        dim: int = 512,
+    ) -> None:
+        if dim not in SUPPORTED_DIMS:
+            raise EmbeddingProviderConfigError(
+                "bge",
+                f"dim_must_be_in_{SUPPORTED_DIMS}_got_{dim}",
+            )
+        self._model_name = model_name
+        self._dim = dim
+
+    @property
+    def provider_name(self) -> str:
+        return "bge"
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def dim(self) -> int:
+        return self._dim
+
+    async def embed_single(self, text: str) -> list[float]:
+        raise NotImplementedError("BGE integration TODO 子片 4+ / pgvector 装后真做")
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        raise NotImplementedError("BGE integration TODO 子片 4+ / pgvector 装后真做")
+
+
 def get_embedding_provider(
     provider_name: str | None,
     model_name: str | None = None,
@@ -197,10 +285,11 @@ def get_embedding_provider(
         dim: 向量维度，必须 ∈ SUPPORTED_DIMS
 
     Raises:
-        EmbeddingProviderConfigError: 未知 provider / mock 前缀违反 / dim 档位非法 /
-            openai-bge 子片 3 未实装
+        EmbeddingProviderConfigError: 未知 provider / mock 前缀违反 / dim 档位非法
 
-    子片 0 prep（2026-05-09）：仅实装 ``mock``。openai / bge 子片 3 EmbeddingService 落地时补。
+    子片 0 prep（2026-05-09）：实装 ``mock``。
+    子片 3（2026-05-09）：OpenAI + bge skeleton（embed_single/batch 暂 NotImplementedError）。
+    子片 4+：pgvector 装后接通 OpenAI + bge 真实现。
     """
     name = (provider_name or "mock").strip().lower()
 
@@ -215,11 +304,20 @@ def get_embedding_provider(
             dim=dim if dim is not None else 1536,
         )
 
-    if name == "openai" or name == "bge":
-        # Scaffold 简化决策（2026-05-09 / 子片 0 prep mini-sprint）— 详见模块顶部 4 字段注释
-        raise EmbeddingProviderConfigError(
-            name,
-            f"provider_{name}_not_yet_implemented_see_M18_sprint_subpiece_3",
+    if name == "openai":
+        import os
+
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        return OpenAIEmbeddingProvider(
+            api_key=api_key,
+            model_name=model_name or "text-embedding-3-small",
+            dim=dim if dim is not None else 1536,
+        )
+
+    if name == "bge":
+        return BgeEmbeddingProvider(
+            model_name=model_name or "bge-small-zh-v1.5",
+            dim=dim if dim is not None else 512,
         )
 
     # 不可达（above branches exhaustive over SUPPORTED_PROVIDERS）

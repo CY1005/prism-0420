@@ -23,7 +23,9 @@ BUSINESS_CODES=$((ERROR_CODES - INTERNAL_COUNT))
 # AppError 子类：任何 *Error 类，继承自 AppError 或其 *Error 子类（中间继承允许，
 # design §9 / §13 例：OldPasswordMismatchError(ValidationError)、
 # UserNotFoundError(NotFoundError)）。基类 AppError 不计。
-APP_ERRORS=$(grep -cE '^class [A-Z][A-Za-z]*Error\([A-Z][A-Za-z]*Error\):' "$EXC_FILE")
+# SilentFailure 子类（M18 R13-1 豁免：EmbeddingDeleteFailedError 继承 SilentFailure
+# 而非 AppError，因 SilentFailure 是 BaseException 子类、不被 except Exception 捕获）。
+APP_ERRORS=$(grep -cE '^class [A-Z][A-Za-z]*Error\([A-Z][A-Za-z]*(Error|Failure)\):' "$EXC_FILE")
 
 if [ "$BUSINESS_CODES" -ne "$APP_ERRORS" ]; then
   echo "ERROR (R13-1): 业务 ErrorCode 数 ($BUSINESS_CODES, INTERNAL_ERROR 除外)" \

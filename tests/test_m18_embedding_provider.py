@@ -20,11 +20,13 @@ from api.services.embedding_provider import (
     MOCK_MODEL_NAME_PREFIX,
     SUPPORTED_DIMS,
     SUPPORTED_PROVIDERS,
+    BgeEmbeddingProvider,
     EmbeddingProvider,
     EmbeddingProviderConfigError,
     EmbeddingProviderError,
     EmbeddingProviderTimeoutError,
     MockEmbeddingProvider,
+    OpenAIEmbeddingProvider,
     get_embedding_provider,
 )
 
@@ -158,11 +160,24 @@ def test_factory_mock_rejects_non_mock_prefix():
 
 
 @pytest.mark.parametrize("provider", ["openai", "bge"])
-def test_factory_openai_and_bge_not_yet_implemented_subpiece_3(provider: str):
-    """子片 0 prep mini-sprint：openai/bge 留子片 3 / 工厂应抛 ConfigError 而非 ValueError。"""
-    with pytest.raises(EmbeddingProviderConfigError) as exc:
-        get_embedding_provider(provider_name=provider)
-    assert "subpiece_3" in exc.value.reason
+async def test_factory_openai_and_bge_not_yet_implemented_subpiece_3(provider: str):
+    """子片 3 更新：factory 返回 provider 实例（不再 ConfigError），
+    但 embed_single / embed_batch 调用时抛 NotImplementedError（pgvector 装后真做）。"""
+
+    import os
+
+    with __import__("unittest.mock", fromlist=["patch"]).patch.dict(
+        os.environ, {"OPENAI_API_KEY": "test-key"}
+    ):
+        p = get_embedding_provider(provider_name=provider)
+    # 工厂返回实例（不再 ConfigError）
+    if provider == "openai":
+        assert isinstance(p, OpenAIEmbeddingProvider)
+    else:
+        assert isinstance(p, BgeEmbeddingProvider)
+    # embed_single 仍是 NotImplementedError（子片 4+ 真做）
+    with pytest.raises(NotImplementedError):
+        await p.embed_single("test")
 
 
 @pytest.mark.parametrize("bad", ["unknown", "anthropic", "cohere", "azure"])

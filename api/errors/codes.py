@@ -176,3 +176,24 @@ class ErrorCode(StrEnum):
     TEAM_MEMBER_DUPLICATE = "team_member_duplicate"
     TEAM_PERMISSION_DENIED = "team_permission_denied"
     CROSS_TEAM_MOVE_FORBIDDEN = "cross_team_move_forbidden"
+
+    # M18 语义搜索 (design §13 line 1195-1221)
+    # M18 search
+    INVALID_QUERY_LENGTH = "invalid_query_length"
+    SEARCH_TIMEOUT = "search_timeout"
+    PGVECTOR_UNAVAILABLE = "pgvector_unavailable"
+
+    # M18 embedding worker
+    EMBEDDING_PROVIDER_FAILED = "embedding_provider_failed"
+    EMBEDDING_PROVIDER_TIMEOUT = "embedding_provider_timeout"
+    EMBEDDING_TARGET_NOT_FOUND = "embedding_target_not_found"
+    EMBEDDING_ZOMBIE = "embedding_zombie"
+    EMBEDDING_TASK_TERMINAL_VIOLATION = "embedding_task_terminal_violation"
+    EMBEDDING_TASK_INVALID_TRANSITION = "embedding_task_invalid_transition"
+
+    # M18 admin
+    EMBEDDING_BACKFILL_ALREADY_RUNNING = "embedding_backfill_already_running"
+    EMBEDDING_MODEL_UPGRADE_INVALID = "embedding_model_upgrade_invalid"
+
+    # M18 删除一致性（baseline-patch 决策 5）
+    EMBEDDING_DELETE_FAILED = "embedding_delete_failed"
