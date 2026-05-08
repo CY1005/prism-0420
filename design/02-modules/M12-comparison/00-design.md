@@ -317,6 +317,11 @@ erDiagram
 | **Model** | `api/models/comparison_snapshot.py` | SQLAlchemy 模型 |
 | **Schema** | `api/schemas/comparison_schema.py` | Pydantic 请求/响应 |
 
+> M12 sprint 关闸回写（2026-05-08）：节 6 + 节 9 同步代码示例（`db.query` / `Session`）
+> 写于 2026-04-21（预 M02 async 范式）；实装按 M02-M11 既有 async 范式落地
+> （`async def` / `AsyncSession` / `select` + `await db.execute`）；事务边界 router 管 commit
+> service 接外部 session 不主动 begin。详 `api/services/comparison_service.py` + `api/dao/comparison_dao.py`。
+
 **Service 层快照保存流程（G4=B 值快照）**：
 ```python
 # comparison_service.py
@@ -385,9 +390,17 @@ class MatrixCell(BaseModel):
     content: dict[str, Any] | None  # None = 未填写
 
 class ComparisonMatrixResponse(BaseModel):
-    """实时矩阵渲染结果"""
-    nodes: list[dict[str, Any]]             # [{id, name, path}]
-    dimension_types: list[dict[str, Any]]   # [{id, key, name}]
+    """实时矩阵渲染结果（cells-only / R-X3 不嵌跨模块 metadata）
+
+    Scaffold 简化决策（2026-05-08，M12 sprint R2 P1-01 裁决）
+    ① 决策内容：仅返 cells；nodes / dimension_types metadata 由前端独立调
+       M03 list_tree + M04 list_dim_types_for_project 拿（缓存复用）
+    ② 简化理由：与 M02-M11 + ADR-003 规则 1 R-X3 范式一致（跨模块读走上游
+       service / 不在本 endpoint response 嵌跨模块 metadata，避免字段类型重复维护）
+    ③ 由谁扩齐：本期不扩齐；若未来前端 round-trip 优化诉求强烈，再开
+       新 endpoint /matrix/full（含 metadata），本 endpoint 保持 cells-only
+    ④ 触发回写动作：N/A（裁决已锁）
+    """
     cells: list[MatrixCell]                 # N×M cells
 
 class SnapshotCreateRequest(BaseModel):
@@ -583,9 +596,13 @@ class ComparisonSnapshotItemDAO:
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
-| `snapshot.create` | `comparison_snapshot` | snapshot_id | 创建对比矩阵快照：{name} | `{node_ids_count, dimension_type_ids_count, nodes_ref, dimensions_ref, items_count}` |
-| `snapshot.rename` | `comparison_snapshot` | snapshot_id | 重命名快照：{old_name}→{new_name} | `{old_name, new_name, old_version, new_version}` |
-| `snapshot.delete` | `comparison_snapshot` | snapshot_id | 删除快照：{name} | `{name, node_ids_count}` |
+| `comparison_snapshot_created` | `comparison_snapshot` | snapshot_id | 创建对比矩阵快照：{name} | `{node_ids_count, dimension_type_ids_count, nodes_ref, dimensions_ref, items_count}` |
+| `comparison_snapshot_renamed` | `comparison_snapshot` | snapshot_id | 重命名快照：{old_name}→{new_name} | `{old_name, new_name, old_version, new_version}` |
+| `comparison_snapshot_deleted` | `comparison_snapshot` | snapshot_id | 删除快照：{name} | `{name, node_ids_count}` |
+
+> 注（M12 sprint 关闸回写，2026-05-08）：action_type 字面与 frontmatter
+> `produces_action_types` + 实装常量 `ACTION_SNAPSHOT_*` 字面对齐 underscore 形态；
+> M15 订阅靠机械字符串匹配，不一致 → 订阅失败（M11 R1-A P1-02 同款元教训）。
 
 **实现位置**：`api/services/comparison_service.py` 每个 C/U/D 方法事务内调 `self.activity.log(...)`。
 
@@ -636,23 +653,23 @@ class ComparisonSnapshotNotFoundError(NotFoundError):
     code = ErrorCode.COMPARISON_SNAPSHOT_NOT_FOUND
     message = "Comparison snapshot not found"
 
-class ComparisonSnapshotNameEmptyError(AppError):
+# M12 sprint R1-A P2-06 + R1-C P1-01 关闸回写（2026-05-08）：
+# NameEmpty / NodeNotFound / EmptySelection 全继承 ValidationError（默认 422）
+# 与 M02-M11 R-X3 元教训对齐 + 5 ErrorCode AppError 子类层级化
+class ComparisonSnapshotNameEmptyError(ValidationError):
     code = ErrorCode.COMPARISON_SNAPSHOT_NAME_EMPTY
-    http_status = 422
     message = "Snapshot name cannot be empty"
 
-class ComparisonNodeNotFoundError(NotFoundError):
+class ComparisonNodeNotFoundError(ValidationError):
     code = ErrorCode.COMPARISON_NODE_NOT_FOUND
     message = "One or more selected nodes do not belong to this project"
 
-class ComparisonEmptySelectionError(AppError):
+class ComparisonEmptySelectionError(ValidationError):
     code = ErrorCode.COMPARISON_EMPTY_SELECTION
-    http_status = 422
     message = "Must select at least one node and one dimension for comparison"
 
-class ComparisonSnapshotConflictError(AppError):
+class ComparisonSnapshotConflictError(ConflictError):
     code = ErrorCode.COMPARISON_SNAPSHOT_CONFLICT
-    http_status = 409
     message = "Snapshot was modified by someone else; please refresh and retry"
 ```
 
@@ -715,10 +732,10 @@ class ComparisonSnapshotConflictError(AppError):
 - [x] 节 13：ErrorCode 5 个新增（G4：无降级相关 ErrorCode；每条 AppError 子类）
 - [x] 节 14：tests.md 测试场景（G4 快照存值测试）
 - [x] 节 15：本 checklist 全勾过
-- [ ] **🔴 第一轮 reviewer audit（完整性）通过**
-- [ ] **🔴 第二轮 reviewer audit（边界场景）通过**
-- [ ] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**
-- [ ] CY 全文复审通过 → status 转 accepted
+- [x] **🔴 第一轮 reviewer audit（完整性）通过**（M12 sprint R1 3 subagent / R2 1 合并 Opus；commit 169e948 + R2 design 回写本 commit）
+- [x] **🔴 第二轮 reviewer audit（边界场景）通过**（同上 R1+R2）
+- [x] **🔴 第三轮 reviewer audit（演进 / 模板可复用性）通过**（L1 第十数据点稳定 / R-X3 范式延续）
+- [x] CY 全文复审通过 → status 转 accepted（status=accepted 已 / sprint 实施完成）
 
 ---
 

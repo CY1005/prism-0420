@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M11-sprint-complete)
+last_updated: 2026-05-08 (post-M12-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,19 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M11-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M12-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 55%（M01-M08+M10+M11 完成；下一站 M12，M09 superseded by M18 不实装）
+- **Phase 2.1 业务模块**：⏳ 60%（M01-M08+M10+M11+M12 完成；下一站 M13，M09 superseded by M18 不实装）
+- **2026-05-08 M12 sprint 完成**（7 commit + R1+R2 闭环 / L1+L2+L3 第十次实证 / 闸门 2.5 三栏第七次 B 0 项 / **常规 own + 跨模块只读 R-X3 范式实证**）：
+  - commits: `63f2f93` 子片 0 prep（§14.5 + DimensionService.batch_get_by_nodes 实装 / M04 sprint scaffold "caller sprint 实装"到期 + 3 smoke）+ `9a0f039` 子片 1 model+alembic（2 表 / G4=B 值快照 / node_id ON DELETE SET NULL passive_deletes）+ 9 model tests + `3aa7415` 子片 2 ComparisonDAO+16 unit + `99105b4` 子片 3 ComparisonService+5 ErrorCode+21 service tests + `169e948` R1 4 P1 立修（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet 三 subagent 并行；nodes_count → node_ids_count metadata 漂移 / _mk_snap 迁 conftest make_snapshot fixture / rename write_event 异常传播测试 / Core UPDATE updated_at 显式刷）+ 4 coverage 补 + `589407c` 子片 4 router+6 endpoints+15 e2e（POST/PUT/DELETE/GET matrix/GET list/GET detail；viewer 写 3 端点全 403 主动复制）+ 子片 5 关闸（本 commit）
+  - **742 PASS / 0 fail / ruff 净 / R13-1 74→79（+5）+ L12 守护通过**
+  - **R-X3 跨模块只读范式实证**：DimensionService.batch_get_by_nodes（M04 own / M12 首 caller）+ NodeDAO.list_by_ids 校验 / 不嵌跨模块 metadata 在 response（cells-only）
+  - **R2 P1 裁决型新教训 1 条**：design §7 ComparisonMatrixResponse 草案 nodes+dim_types+cells 三字段 vs 实装 cells-only — 与 ADR-003 规则 1 + M02-M11 R-X3 范式一致 → 裁决 = cells-only + scaffold disambiguation 注释（与 M01 D1 7 seam reconcile 同形态）
+  - **元自审教训**（主流程错误 + 自纠）：让 CY 拍裁决型 R2 P1（matrix metadata）违反 feedback_problem_layered_analysis 失效信号 — L1 R-X3 范式已锁 → AI 应自决 + design 回写，不应让 CY 拍。下次 R-X1/R-X2/R-X3 范式既锁的裁决型 P1 不再让 CY 拍，直接落 disambiguation
+  - **元教训防御 actionable 应用清单（M02-M11 沉淀 + 主动复制不等抓）**：viewer 写 3 端点 403 ✅ / write_event 异常传播 3 写端点全 ✅（rename R1-C P1-02 立修补）/ cross-tenant 404 ✅ / cross-project node 422 ✅ / IntegrityError 区分约束 N/A / R-X1 失败补偿 N/A / 文件上传 N/A
+  - **R1 + R2 命中数据**：R1=4 P1（去重；3 subagent 并行）/ R2=1 P1 裁决型（1 合并 Opus）/ M02-M12 十数据点 R2 稳态 0-1 P1 区间（M11 R-X1 首发 3 P1 是异常点）
+  - **闸门 2.5 三栏第七次 B 栏 0 项**：M05+M06+M07+M08+M10+M11+M12 七连稳定 → M13+ 默认范式可作模板
 - **2026-05-08 M11 sprint 完成**（8 commit + R1+R2 闭环 / L1 第九数据点 / 闸门 2.5 第六次 B 0 项 / **首个 R-X1 orchestrator 范式实证**）：
   - commits: `8ef59b3` 子片 0 prep（§14.5 + 3 跨模块 batch_create_in_transaction 接通 M04 R1-A A6 + M06/M07 scaffold 全到期）+ `4ed8dbe` 子片 1 ColdStartTask model + alembic + 14 model tests + `090621a` 子片 2 ColdStartDAO + 12 unit tests + `e93057c` 子片 3 ColdStartOrchestratorService + 7 ErrorCode + 17 service tests + `2ccd579` R1 6 P1 立修（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet 三 subagent 并行；frontmatter 字面 / design §5 disambiguation / dimensions 显式抛错保护 R-X1 完整性 / _mark_failed write_event 兜底 / _make_task 进 conftest / ISSUE_CATEGORIES 跨模块导出）+ `aba873a` 子片 4 router + 4 endpoints + 11 e2e tests（POST /upload multipart / GET list / GET detail / GET /template）+ `2c39980` R2 2 P1 立修 + 1 punt（file.size 预检 + filename sanitize；commit-then-rollback boundary punt M17）
   - **674 PASS / 0 fail / ruff 净 / R13-1 67→74（+7）+ L12 守护通过**
@@ -175,7 +184,22 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M12 sprint 启动（**当前推荐 / M11 已完整收官**）
+### Prompt 0 — M13 sprint 启动（**当前推荐 / M12 已完整收官**）
+
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M13 ..." 段（M12 sprint 已收官 / 742 PASS / Phase 2.1 60%）。
+
+M13 sprint 启动 reconcile checkpoint（必查）：
+- **M12 元自审新规**：R-X1/R-X2/R-X3 范式既锁的"裁决型 P1"不让 CY 拍，AI 直接 disambiguation
+- M02-M12 元教训防御 actionable 5 条 + M11 R-X1 NEW 2 条主动复制
+- L1 第十一数据点稳定 → R1=3 subagent + R2=1 合并 Opus 默认范式作模板
+- 闸门 2.5 B 0 项第八次稳定预期 → 启动 reconcile 自审一问"这真有候选吗 / 既锁规则的裁决型项不要列 B 栏"
+
+M13 模块特定要素（详见 sprint-prompts M13 段）：
+- **流式 SSE**（design §12 A）— 首个流式响应模块；testing harness async generator 适配
+- AI 集成（OpenAI / Claude）— 决定 LLM provider 注入接口
+- caller 拓扑（用户输入 → 流式输出 + 持久化）
+
+### Prompt 0' — M12 sprint 启动（已完成 2026-05-08，仅供历史追溯）
 
 参 `_handoff/sprint-prompts-M05-M20.md` § "## M12 ..." 段（M11 sprint 已收官 commit 子片 5 关闸 / 674 PASS / Phase 2.1 55%）。
 
