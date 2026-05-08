@@ -257,6 +257,70 @@ async def test_competitor_viewer_write_returns_403(auth_client, make_user, db_se
     assert r.json()["code"] == "permission_denied"
 
 
+async def test_viewer_write_403_full_coverage(auth_client, make_user, db_session):
+    """R2 P1-02 立修（M06 sprint，2026-05-08 / M05 R2 P1-01 元教训应用即抓即修）：
+    viewer 对 5 个写端点（PUT/DELETE competitor + POST/PUT/DELETE competitor-ref）
+    全部返 403，避免 M05 同款"仅测 1 sample 假 DONE"。
+    """
+    from api.models.competitor import Competitor, CompetitorRef
+    from api.models.node import Node
+    from api.models.project import MemberRole, ProjectMember
+
+    userA = await make_user(email="m06-vw-A@example.com")
+    userB = await make_user(email="m06-vw-B@example.com")
+    pidA = await _create_project(auth_client, userA.id)
+    nidA = await _create_node(auth_client, userA.id, pidA, name="A")
+
+    # A 创建 competitor + ref，B 加为 viewer
+    db_session.add(ProjectMember(project_id=pidA, user_id=userB.id, role=MemberRole.VIEWER.value))
+    from uuid import UUID
+
+    competitor = Competitor(project_id=UUID(pidA), display_name="X", created_by=userA.id)
+    db_session.add(competitor)
+    await db_session.flush()
+    node = await db_session.get(Node, UUID(nidA))
+    ref = CompetitorRef(
+        node_id=node.id,
+        competitor_id=competitor.id,
+        project_id=UUID(pidA),
+        created_by=userA.id,
+    )
+    db_session.add(ref)
+    await db_session.commit()
+
+    bearer_b = _bearer(userB.id)
+
+    # 5 个写端点全验 403
+    cases = [
+        ("PUT", f"/api/projects/{pidA}/competitors/{competitor.id}", {"display_name": "x"}),
+        ("DELETE", f"/api/projects/{pidA}/competitors/{competitor.id}", None),
+        (
+            "POST",
+            f"/api/projects/{pidA}/nodes/{nidA}/competitor-refs",
+            {"competitor_id": str(competitor.id)},
+        ),
+        (
+            "PUT",
+            f"/api/projects/{pidA}/nodes/{nidA}/competitor-refs/{ref.id}",
+            {"feature_coverage": "x"},
+        ),
+        (
+            "DELETE",
+            f"/api/projects/{pidA}/nodes/{nidA}/competitor-refs/{ref.id}",
+            None,
+        ),
+    ]
+    for method, path, body in cases:
+        if method == "PUT":
+            r = await auth_client.put(path, json=body, headers=bearer_b)
+        elif method == "POST":
+            r = await auth_client.post(path, json=body, headers=bearer_b)
+        elif method == "DELETE":
+            r = await auth_client.delete(path, headers=bearer_b)
+        assert r.status_code == 403, f"{method} {path} should 403, got {r.status_code}: {r.text}"
+        assert r.json()["code"] == "permission_denied", f"{method} {path}"
+
+
 async def test_unauthenticated_returns_401(auth_client, make_user):
     user = await make_user(email="m06-unauth@example.com")
     pid = await _create_project(auth_client, user.id)

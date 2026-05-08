@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-08（M05 sprint 完成: 6 commit + R1+R2 闭环 / L1+L2+L3 节奏第四次实证 / 闸门 2.5 三栏首次 B 栏 0 项实证）
-current_phase: Phase 2.1 进行中（M01+M02+M03+M04+M05 完成；下一站 M06 竞品参考）
+last_updated: 2026-05-08（M06 sprint 完成: 6 commit + R1+R2 闭环 / L1+L2+L3 节奏第五次实证 / 闸门 2.5 三栏第二次 B 栏 0 项实证 / R-X2 第二真注入零摩擦实证）
+current_phase: Phase 2.1 进行中（M01-M06 完成；下一站 M07 问题沉淀）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -27,7 +27,7 @@ current_phase: Phase 2.1 进行中（M01+M02+M03+M04+M05 完成；下一站 M06 
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
-Phase 2.1 业务模块  ⏳ ██████░░░░░░░░░░  30%  ← M01+M02+M03+M04+M05 完成；下一步 M06 竞品参考
+Phase 2.1 业务模块  ⏳ ███████░░░░░░░░░  35%  ← M01-M06 完成；下一步 M07 问题沉淀
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -170,7 +170,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [x] M03 模块树 ✅ 2026-05-07 (§14.5 prep 800e632 + 5 子片 d174e90→4a1a615 + R1+R2 修 ce73570+656e05c; 285 PASS; L1+L2+L3 第二次实证)
 - [ ] M04 维度记录
 - [x] M05 版本时间线 ✅ 2026-05-08 (6 子片 811d6bc→{TBD} + R1+R2 闭环 / 412 PASS / R13-1 49=49 / L12 守护 / 闸门 2.5 B 栏 0 项首次实证)
-- [ ] M06 竞品对标
+- [x] M06 竞品对标 ✅ 2026-05-08 (子片 0 c84f6f2 + 1 d01c5ad + 2 f7211fb + 3 86195cc + R1 立修 c792263 + 子片 4 [hash] + R2 闭环 0 P1 + 子片 5 关闸; 473+ PASS / R13-1 53=53; R-X2 第二真注入零摩擦; L1 第五数据点)
 - [ ] M07 问题沉淀
 - [ ] M08 模块关系
 - [ ] M10 项目总览（聚合）
@@ -305,4 +305,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-07 | M02 sprint 启动元反思 → 设计体系 v2 升级（5 体系盲区 + 8 条新规则 + 11 处 baseline-patch 回扫 + 修复 10 horizontal helper docstring 存量）；沉淀 design/audit/time-dimension-blindspot-2026-05-07.md + KB 补丁01；M02 design ready for sprint 实施 | CY + AI |
 | 2026-05-07 | M03 sprint 完成（5 子片 + R1+R2 闭环；285 PASS / R13-1 41=41 / L12 守护；§14.5 prep + design §6.X A4/A5/A6 + §3 description + §10 metadata + audit/m03-pilot-template-validation.md）；Phase 2.1 15→20%；下一站 M04 | CY + AI |
 | 2026-05-08 | M05 sprint 完成（6 子片 811d6bc 子片 0 prep / de53192 子片 1 model + alembic + Node back_populates / d3374fe 子片 2 DAO / 063cbd4 子片 3 Service+ErrorCode / 5e0e239 R1 P1 立修 / 56da878 R2 P1 立修 + 子片 5 design 回写；412 PASS / R13-1 49=49 / L12 守护；闸门 2.5 三栏首次 B 栏 0 项实证 = 5 步分层分析法防假决策价值首次产出）；Phase 2.1 25→30%；下一站 M06 | CY + AI |
+| 2026-05-08 | M06 sprint 完成（c84f6f2 子片 0 prep + ck_clause 别名规范化 / d01c5ad 子片 1 双表 model+migration+Node back_populates / f7211fb 子片 2 DAO / 86195cc 子片 3 Service+R-X2 第二真注入+4 ErrorCode / c792263 R1 3 P1 立修 + 子片 4 Router 8 endpoints + R2 0 P1 + 子片 5 关闸；473+ PASS / R13-1 53=53 / L12 守护；**R-X2 第二真注入零摩擦实证**（M04 Protocol 4 参升级元教训复用价值首次产出）+ **闸门 2.5 三栏 B 0 项第二次实证**（M05 立 / M06 复用，防御未来非修复存量）+ L1 第五数据点稳定）；Phase 2.1 30→35%；下一站 M07 问题沉淀 | CY + AI |
 | _（未来变更追加在这里）_ | | |

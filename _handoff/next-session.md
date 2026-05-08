@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M05-sprint-complete)
+last_updated: 2026-05-08 (post-M06-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,21 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M05-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M06-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 30%（M01 + M02 + M03 + M04 + M05 完成；下一站 M06 竞品参考）
+- **Phase 2.1 业务模块**：⏳ 35%（M01-M06 完成；下一站 M07 问题沉淀）
+- **2026-05-08 M06 sprint 完成**（6 commit + R1+R2 闭环 / L1+L2+L3 节奏第五次实证 / 闸门 2.5 三栏第二次 B 栏 0 项实证 / R-X2 第二真注入零摩擦实证）：
+  - commits: `c84f6f2` 子片 0 prep（§14.5 默认范式复用 + ck_clause 别名规范化 5 处一致）+ `d01c5ad` 子片 1 双表 model + alembic + Node back_populates + 8 model tests + `f7211fb` 子片 2 DAO + 18 unit tests + `86195cc` 子片 3 Service + R-X2 第二真注入 + 4 ErrorCode + 20 service tests + lifespan register_child_service("competitor") + `c792263` R1 3 P1 立修（design §5 多表事务消歧 + IntegrityError 区分约束名 + write_event 异常传播测试）+ {子片 4 commit hash} R2 0 P1 + 子片 5 关闸 commit
+  - **473+ PASS / 0 fail / ruff 净 / R13-1 53=53 + L12 守护通过**
+  - **L1+L2+L3 节奏第五次实证（M02-M06 五数据点稳定）**：M07-M20 默认范式可作模板（不再重复说明）
+  - **R-X2 第二真注入零摩擦实证**：M04 sprint 升级 Protocol 4 参 + 5 处 design 回写的元教训"5 步分层识别 L1 跨模块契约层"，在 M06 sprint plug-in CompetitorService.delete_by_node_id 完全无修改成本 — feedback_problem_layered_analysis "防本模块绕"价值的"防御未来"实证
+  - **闸门 2.5 三栏 B 栏 0 项第二次实证**（M05 立 / M06 复用，防御未来非修复存量）：8 项原候选全 grep 命中 L1/L3 锁规归 A 栏；M05 立的"自审一问必先 grep 既有规则"失效信号在 M06 是首次防御未来实证
+  - **R1 命中**：3 subagent 共 3 P1（去重）+ 6 P2 punt；R1-A 抓 M06 design §5 多表事务"with db.begin()"漂移（M04 reconcile 范式漏跟进）；R1-B 命中比例 ~14% / 复用率 90%+ 优于 M02-M05 基线；R1-C 抓 IntegrityError 未区分约束名（M05 P1-01 立规回退）+ write_event 异常传播测试缺失（M04 范式未复制）
+  - **R2 命中**：1 合并 Opus 0 P1 + 3 P2 punt（display_name join / pros_and_cons 类型退化 / ref 404 e2e gap）— 与 M02-M05 R2 P1 命中 0-1 区间稳定，第五次实证 1 合并 Opus 范式有效
+  - **M05 punt 池接通**：ck_clause 别名规范化（5 处一致 commit c84f6f2）
+
+
 - **2026-05-08 M05 sprint 完成**（6 commit + R1+R2 闭环 / L1+L2+L3 节奏第四次实证 / 闸门 2.5 三栏首次 B 栏 0 项实证）：
   - commits: `811d6bc` 子片 0 prep（§14.5 + M04 §5 消歧 + make_dim_type 抽出 4 文件 60+ 改）+ `de53192` 子片 1 model + alembic + Node back_populates + A6 covering 索引 + `d3374fe` 子片 2 DAO + 18 unit tests + `063cbd4` 子片 3 Service + 3 ErrorCode + 19 service tests + B2 不变量验证 + `5e0e239` R1 P1 立修（IntegrityError 区分约束 + _make_version 进 conftest）+ {TBD R2+子片5 commit}
   - **412 PASS / 0 fail / ruff 净 / R13-1 49=49 + L12 守护通过**
@@ -116,18 +127,48 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M06 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M07 sprint 实施代码启动（**当前推荐**）
 
-参 `_handoff/sprint-prompts-M05-M20.md` § "## M06 — 竞品参考（competitor）" 段；启动当天复制对应 prompt 段落，替换 `M{N-1} commits ... / N PASS / Phase 2.1 X%` 为真实最新值（M05 commits 811d6bc → {TBD} / 412 PASS / Phase 2.1 30%）。
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M07 — 问题沉淀（issue）" 段；启动当天复制对应 prompt 段落，替换 `M{N-1} commits ... / N PASS / Phase 2.1 X%` 为真实最新值（M06 commits c84f6f2 → {子片 5 关闸 commit} / 473+ PASS / Phase 2.1 35%）。
 
-M06 模块特定要素提示：
-- M06 是 R-X2 第二真注入方（M04 第一已实证 / NodeChildrenServiceProtocol 4 参签名稳定）
-- 子片 3 实装 CompetitorService.delete_by_node_id (4 参 含 actor_user_id) + lifespan 注入
-- M18 baseline-patch get_for_embedding A 路径同款（拼接 name + description，CY 决策 4：url 不参与）
+M07 模块特定要素提示：
+- M07 是 R-X2 **第三真注入方**（语义不同：orphan_by_node_id SET node_id=NULL 而非 delete；issue 不被真删只变游离）
+- 子片 3 实装 IssueService.orphan_by_node_id (4 参 含 actor_user_id) + lifespan register_child_service("issue", ...)
+- batch3 基线补丁决策 4：命名 orphan 区分 M04/M06 的 delete（避免误以为真删）
+- M13 pilot 登记 list_by_project 跨模块契约（无代码改动；pass-through DAO node_id 过滤）
+- activity_log: action_type="orphan" + metadata 含 cascade_source
 
-闸门 2.5 reconcile pass 前必查 M05 sprint punt 池中本期到期项（详见 `design/audit/m05-pilot-template-validation.md` Punt 池总池 19 项）+ M04 punt R1-A A6（M12 才接通，M06 不触发）+ M04 punt R1-C C6.1（delete_by_node_id N+1 batch 升级，M06 评估是否升级触发）。
+闸门 2.5 reconcile pass 前必查：
+- M06 sprint punt 池本期到期项（详见 `design/audit/m06-pilot-template-validation.md` Punt 池总表 8 项）：B1 _make_competitor/_make_ref 跨文件需求 / B6 CompetitorRefResponse.display_name 接通 / B8 ref 404 e2e test
+- M05 sprint punt 池继续（list_by_node id DESC tie-break / VersionNotFoundError reason 字段）
+- M04 punt R1-C C6.1（delete_by_node_id N+1 batch 升级，M07 评估是否升级触发，FK orphan 与 delete 行为不同）
 
 ---
+
+### Prompt 0' — M06 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
+
+```
+继续 prism-0420 M06 sprint 实施代码（M06 竞品参考；R-X2 第二真注入方；M05 sprint 已完成 commits 811d6bc → 6f489db / 412 PASS / Phase 2.1 30%）。
+
+参 _handoff/sprint-prompts-M05-M20.md § "## M06 — 竞品参考（competitor）" 段。
+
+冷启动按序读：
+1. CLAUDE.md / _handoff/next-session.md / design/00-roadmap.md / design/00-phase-gate.md
+2. design/02-modules/M06-competitor/00-design.md
+3. design/audit/m05-pilot-template-validation.md（含闸门 2.5 B 0 项首次实证 + 5 步分层失效信号）
+4. memory feedback_problem_layered_analysis（5 步分层 + 失效信号）
+5. memory feedback_three_agent_pipeline + 标准红线集
+
+特定要素：
+- R-X2 第二真注入方（Protocol 4 参签名稳定复用）
+- M18 baseline-patch get_for_embedding（拼接 name + description；url 不参与）
+- 多表事务（competitors + competitor_refs 同事务，design Q4）
+
+红线：
+- 异常契约严守 delete_by_node_id 不 catch-all
+- N+1 punt 接续（单 node refs 数量小不触发）
+- IntegrityError race 转换 M05 同款干净起步（区分约束名）
+```
 
 ### Prompt 0' — M05 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
 

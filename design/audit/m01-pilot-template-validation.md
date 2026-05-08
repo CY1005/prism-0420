@@ -25,6 +25,7 @@ last_reviewed_at: 2026-05-07
 | M03 模块树 | nodes 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-07): M03 是 M04-M19 树结构锚点,当前所有字段必须可用; A2 reconcile 加 description 字段是 M18 baseline-patch 被动接口需求,属横切扩展非"预留 schema" |
 | M04 维度记录 | dimension_records 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-07): M04 是档案页主表,所有字段（content JSONB / version / created_by / updated_by）必须可用; M18 baseline-patch get_for_embedding A 路径已实装非"预留 schema" |
 | M05 版本时间线 | version_records 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-08): M05 是档案页版本快照主表,所有字段（version_label / summary / details / change_type / is_current / snapshot_data / release_mode）必须可用; M16 pilot 基线补丁 count_by_node 是 R-X3 对外契约**已实装**非"预留" |
+| M06 竞品参考 | competitors + competitor_refs 2 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-08): M06 是档案页竞品参考主表（双表），所有字段（display_name/website_url/description + competitor_version/feature_coverage/tech_approach/pros_and_cons）必须可用; M18 baseline-patch get_for_embedding A 路径**已实装**非"预留" |
 | M11 节点版本 | 是否预建 `node_versions` 表但本期只读？ | ⏳ M11 实施时核对 |
 | M16/M17/M18 cron | 预留 cron config 表 vs 本期硬编码？ | ⏳ M16 实施时核对 |
 | M07 dimension 配置 | 预留 dimension type 枚举扩展位 vs 本期固定？ | ⏳ M07 实施时核对 |
