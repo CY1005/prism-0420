@@ -223,7 +223,7 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 ### Prompt 0 — M15 sprint 启动（**当前推荐 / M14 已完整收官 / 复制下方代码块到新 session**）
 
 ```
-继续 prism-0420 M15 sprint 实施代码（M15 数据流转 / activity_log 横切表 own；M14 sprint 已收官 7 commit / 子片 5 关闸 [hash] / 930 PASS / R13-1 90=90 / L12 守护 / Phase 2.1 70%）。
+继续 prism-0420 M15 sprint 实施代码（M15 数据流转 / activity_log 横切表 own；M14 sprint 已收官 8 commit / 子片 5 关闸 aab74ce / 930 PASS / R13-1 90=90 / L12 守护 / Phase 2.1 70%）。
 
 冷启动按序读：
 1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
