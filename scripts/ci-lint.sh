@@ -66,8 +66,10 @@ echo "✓ L13: $M15_SERVICE 未自调 write_event"
 # 豁免：activity_log_service.py docstring 范例 / auth_service.py（写 auth_audit_log，不写 activity_log，已由 L12 守护）
 ALLOWED_ACTION_TYPES=$(awk '/^_ACTION_TYPES = \(/{f=1; next} f && /^\)/{f=0} f' api/models/activity_log.py | grep -oE '"[a-z_]+"' | tr -d '"' | sort -u)
 SERVICE_FILES=$(ls api/services/*.py | grep -vE '(activity_log_service|auth_service)\.py$')
+ROUTER_FILES=$(ls api/routers/*.py 2>/dev/null || true)
+CALLER_FILES="$SERVICE_FILES $ROUTER_FILES"
 DRIFT=$(
-  grep -hoE 'action_type="[a-z._]+"' $SERVICE_FILES \
+  grep -hoE 'action_type="[a-z._]+"' $CALLER_FILES \
     | sed -E 's/action_type="([^"]+)"/\1/' \
     | sort -u \
     | grep -v -F -x -f <(echo "$ALLOWED_ACTION_TYPES") || true

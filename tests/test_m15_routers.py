@@ -35,24 +35,10 @@ async def _create_project(auth_client, user_id, name: str = "P1") -> str:
 
 
 async def test_get_stream_owner_200(auth_client, make_user, db_session):
+    """M16 sprint 子片 0.5 batch（write_event 真 INSERT 上线）后：M02 create_project
+    经 service 真写一条 project_created 事件，无需手插辅助行。"""
     user = await make_user()
     pid = await _create_project(auth_client, user.id)
-
-    # 这条 activity_log 由 M02 创建项目时写入（M03+ service 调 write_event 当前 stub
-    # 不入库；故 list_stream 真实只返回 0 行 — 我们直插一行测 endpoint 通路）
-    from api.models.activity_log import ActivityLog
-
-    db_session.add(
-        ActivityLog(
-            project_id=pid,
-            user_id=user.id,
-            action_type="project_created",
-            target_type="project",
-            target_id=str(pid),
-            summary="创建了项目",
-        )
-    )
-    await db_session.flush()
 
     r = await auth_client.get(f"/api/projects/{pid}/activity-stream", headers=_bearer(user.id))
     assert r.status_code == 200
@@ -64,6 +50,7 @@ async def test_get_stream_owner_200(auth_client, make_user, db_session):
     assert len(data["items"]) == 1
     assert data["items"][0]["user_name"] == user.name
     assert data["items"][0]["action_type"] == "project_created"
+    assert data["items"][0]["target_id"] == pid
 
 
 # ─────────────── M15-E2E-T2 editor 读成功 200 ───────────────
@@ -305,7 +292,9 @@ async def test_get_stream_pagination_first_page_has_more(auth_client, make_user,
     )
     assert r.status_code == 200
     data = r.json()
-    assert data["total"] == 3
+    # M16 sprint write_event 真 INSERT 后：_create_project 写 1 条 project_created +
+    # 手插 3 条 node_created = 4 条
+    assert data["total"] == 4
     assert data["has_more"] is True
     assert len(data["items"]) == 2
 
@@ -315,7 +304,9 @@ async def test_get_stream_pagination_second_page_no_total(auth_client, make_user
     pid = await _create_project(auth_client, user.id)
     from api.models.activity_log import ActivityLog
 
-    for _ in range(3):
+    # M16 sprint write_event 真 INSERT 后：_create_project 已写 1 条 project_created；
+    # 手插 2 条 → 总 3 条 / page 2 page_size 2 返回 1 < page_size → has_more=False
+    for _ in range(2):
         db_session.add(
             ActivityLog(
                 project_id=pid,
@@ -336,7 +327,8 @@ async def test_get_stream_pagination_second_page_no_total(auth_client, make_user
     assert r.status_code == 200
     data = r.json()
     assert data["total"] is None  # D-2: 后续 page total=None
-    assert data["has_more"] is False  # 3 items total / page 2 returns 1 < 2 → no more
+    assert data["has_more"] is False
+    assert len(data["items"]) == 1
 
 
 # ─────────────── M15-E2E-R2-P1-1 metadata 字段 e2e 字面映射（M13 NEW 元教训）───────────────
@@ -365,7 +357,10 @@ async def test_get_stream_metadata_field_literal_in_response(auth_client, make_u
 
     r = await auth_client.get(f"/api/projects/{pid}/activity-stream", headers=_bearer(user.id))
     assert r.status_code == 200
-    item = r.json()["items"][0]
+    # M16 sprint write_event 真 INSERT 后：_create_project 自动写 project_created；
+    # 取 node_updated 那条做字面映射断言
+    items = r.json()["items"]
+    item = next(i for i in items if i["action_type"] == "node_updated")
     # 字段名字面（防 _to_item 误写 "event_metadata" 静默丢字段）
     assert "metadata" in item
     assert "event_metadata" not in item
@@ -424,8 +419,13 @@ async def test_get_stream_member_of_both_only_sees_self_project(auth_client, mak
     r = await auth_client.get(f"/api/projects/{pid_a}/activity-stream", headers=_bearer(user_a.id))
     assert r.status_code == 200
     items = r.json()["items"]
-    assert len(items) == 1
-    assert items[0]["summary"] == "A event"
+    # M16 sprint write_event 真 INSERT 后：_create_project for A 写 project_created
+    # （summary="Created project 'A'"）+ 手插 "A event" = 2 条；B 项目事件不混入；
+    # cross-project tenant 强过滤断言：所有返回行 project_id 都为 pid_a，无 "B event"
+    assert len(items) == 2
+    summaries = {i["summary"] for i in items}
+    assert "B event" not in summaries
+    assert "A event" in summaries
 
 
 async def test_get_stream_unknown_action_type_returns_422(auth_client, make_user):
@@ -476,5 +476,8 @@ async def test_get_stream_does_not_return_global_events(auth_client, make_user, 
     r = await auth_client.get(f"/api/projects/{pid}/activity-stream", headers=_bearer(user.id))
     assert r.status_code == 200
     items = r.json()["items"]
-    assert len(items) == 1
-    assert items[0]["target_type"] == "project"
+    # M16 sprint write_event 真 INSERT 后：_create_project 自动 project_created + 手插
+    # project_created = 2 条 project 事件；news_created（project_id=None）天然不召回
+    assert len(items) == 2
+    assert all(i["target_type"] == "project" for i in items)
+    assert "news_created" not in {i["action_type"] for i in items}
