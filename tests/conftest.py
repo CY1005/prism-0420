@@ -244,6 +244,34 @@ async def make_node(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_dim_record(db_session):
+    """工厂 fixture：建一条 dimension_records 行（M04+M10）。
+
+    M10 sprint R1-B 立修（2026-05-08）：跨 test_m10_dao.py + test_m10_service.py
+    重复内联 _make_dim_record helper → 迁 conftest（M04+M05+M06+M07+M08+M10
+    六连规则延续）。
+
+    用法：rec = await make_dim_record(user=u, project=p, node=n, dim_type_id=t)
+    """
+    from api.models.dimension_record import DimensionRecord
+
+    async def _make(*, user, project, node, dim_type_id, content=None):
+        rec = DimensionRecord(
+            node_id=node.id,
+            project_id=project.id,
+            dimension_type_id=dim_type_id,
+            content=content if content is not None else {"x": "y"},
+            created_by=user.id,
+            updated_by=user.id,
+        )
+        db_session.add(rec)
+        await db_session.flush()
+        return rec
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_version(db_session):
     """工厂 fixture：建一条 version_records 行（M05）。
 
@@ -280,6 +308,33 @@ async def make_version(db_session):
             is_current=is_current,
             snapshot_data=snapshot_data,
             created_by=user.id,
+        )
+        db_session.add(rec)
+        await db_session.flush()
+        return rec
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_dim_record(db_session):
+    """工厂 fixture：建一条 dimension_records 行（M04 维度内容；M10 sprint 抽出）。
+
+    R1-B P1-01 立修（M10 sprint，2026-05-08）：从 test_m10_dao.py + test_m10_service.py
+    内联 _make_dim_record 迁入 conftest，规则六连延续：M04 R1-B B1.1 (_seed_dim_type) +
+    M05 R1-B P1-01 (_make_version) + M06 R1-B P1-01 (_make_competitor) + M07 R1-B P1-01
+    (_make_issue) + M08 R1-B P1-01 (_make_relation) + M10 R1-B P1-01 (_make_dim_record)。
+    """
+    from api.models.dimension_record import DimensionRecord
+
+    async def _make(*, user, project, node, dim_type_id, content: dict | None = None):
+        rec = DimensionRecord(
+            node_id=node.id,
+            project_id=project.id,
+            dimension_type_id=dim_type_id,
+            content=content or {"description": "x"},
+            created_by=user.id,
+            updated_by=user.id,
         )
         db_session.add(rec)
         await db_session.flush()

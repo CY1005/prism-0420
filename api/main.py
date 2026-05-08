@@ -17,6 +17,7 @@ from api.routers import (
     issue_router,
     module_relation_router,
     node_router,
+    overview_router,
     project_router,
     version_router,
 )
@@ -105,6 +106,7 @@ app.include_router(issue_router.issue_router)
 app.include_router(issue_router.issue_node_router)
 app.include_router(module_relation_router.relation_router)
 app.include_router(module_relation_router.relation_node_router)
+app.include_router(overview_router.overview_router)
 
 
 @app.get("/health")

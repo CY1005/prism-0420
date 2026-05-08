@@ -19,32 +19,6 @@ def dao():
     return OverviewDAO()
 
 
-async def _enable_dim(db_session, *, project_id, dim_type_id, enabled=True):
-    pdc = ProjectDimensionConfig(
-        project_id=project_id,
-        dimension_type_id=dim_type_id,
-        enabled=enabled,
-        sort_order=0,
-    )
-    db_session.add(pdc)
-    await db_session.flush()
-    return pdc
-
-
-async def _make_dim_record(db_session, *, user, project, node, dim_type_id):
-    rec = DimensionRecord(
-        node_id=node.id,
-        project_id=project.id,
-        dimension_type_id=dim_type_id,
-        content={"x": "y"},
-        created_by=user.id,
-        updated_by=user.id,
-    )
-    db_session.add(rec)
-    await db_session.flush()
-    return rec
-
-
 # ─────────────── M10-DAO-T1 count_enabled_dimensions ───────────────
 
 
@@ -85,7 +59,7 @@ async def test_dao_list_nodes_with_fill_count_empty_project(db_session, dao, mak
 
 
 async def test_dao_list_nodes_with_fill_count_basic(
-    db_session, dao, make_project, make_node, make_dim_type
+    db_session, dao, make_project, make_node, make_dim_type, make_dim_record
 ):
     user, proj = await make_project()
     n1 = await make_node(proj.id, name="A")
@@ -93,8 +67,8 @@ async def test_dao_list_nodes_with_fill_count_basic(
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
     t2 = await make_dim_type(key="t2", project_id=proj.id, enabled=True)
     # n1 填 2 维度 / n2 填 0 维度
-    await _make_dim_record(db_session, user=user, project=proj, node=n1, dim_type_id=t1)
-    await _make_dim_record(db_session, user=user, project=proj, node=n1, dim_type_id=t2)
+    await make_dim_record(user=user, project=proj, node=n1, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=n1, dim_type_id=t2)
 
     rows = await dao.list_nodes_with_fill_count(db_session, proj.id)
     by_id = {r["id"]: r for r in rows}
@@ -103,14 +77,14 @@ async def test_dao_list_nodes_with_fill_count_basic(
 
 
 async def test_dao_list_nodes_with_fill_count_isolates_tenants(
-    db_session, dao, make_project, make_node, make_dim_type
+    db_session, dao, make_project, make_node, make_dim_type, make_dim_record
 ):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
     nB = await make_node(projB.id, name="B")
     t = await make_dim_type(key="t", project_id=projA.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=projA, node=nA, dim_type_id=t)
+    await make_dim_record(user=user, project=projA, node=nA, dim_type_id=t)
 
     rowsA = await dao.list_nodes_with_fill_count(db_session, projA.id)
     rowsB = await dao.list_nodes_with_fill_count(db_session, projB.id)
@@ -124,12 +98,12 @@ async def test_dao_list_nodes_with_fill_count_isolates_tenants(
 
 
 async def test_dao_get_node_fill_count_returns_count(
-    db_session, dao, make_project, make_node, make_dim_type
+    db_session, dao, make_project, make_node, make_dim_type, make_dim_record
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     t = await make_dim_type(key="t", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=node, dim_type_id=t)
+    await make_dim_record(user=user, project=proj, node=node, dim_type_id=t)
 
     info = await dao.get_node_fill_count(db_session, node.id, proj.id)
     assert info is not None

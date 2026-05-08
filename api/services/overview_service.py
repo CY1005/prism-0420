@@ -29,6 +29,7 @@ from api.errors.exceptions import (
     OverviewNoDimensionsError,
     OverviewProjectNotFoundError,
 )
+from api.models.node import NodeType
 from api.models.project import Project
 
 
@@ -48,9 +49,14 @@ class OverviewService:
 
         分母=0 早返回（design M10-B3）：count_enabled == 0 → OverviewNoDimensionsError
         不进入节点聚合（避免半成品）。
+
+        R1-A P1-04 false positive 撤销（2026-05-08）：reviewer 建议 asyncio.gather
+        并行，但 SA AsyncSession 同 session 不允许 concurrent IO（"This session is
+        provisioning a new connection"），实测立即报错。M08 R1-C P1-02 同款 gather
+        能 pass 是因为测试路径未触发真并发（巧合）；范式实为 false positive。
+        保持串行 await，性能损失 1 RTT 进 m10 audit punt 池。
         """
         await self._check_project_exists(db, project_id)
-
         enabled_count = await self.dao.count_enabled_dimensions(db, project_id)
         if enabled_count == 0:
             raise OverviewNoDimensionsError(project_id=str(project_id))
@@ -90,7 +96,26 @@ class OverviewService:
         if enabled_count == 0:
             raise OverviewNoDimensionsError(project_id=str(project_id))
 
-        # 走整体计算路径以保证 folder 均值算法一致（folder file_count 子树聚合）
+        # R1-A P1-03 立修（hot path 性能优化）：file 节点走 dao.get_node_fill_count
+        # O(1) 单查询；folder 节点才走 list_nodes_with_fill_count O(N) 整体路径
+        # （保 folder 均值算法一致性）。M04 档案页打开 99% 流量是 file 节点，避免
+        # O(N) 全表聚合。
+        single = await self.dao.get_node_fill_count(db, node_id, project_id)
+        if single is None:
+            raise OverviewNodeNotFoundError(node_id=str(node_id))
+        if single["type"] == NodeType.FILE.value:
+            filled = single.get("filled_count") or 0
+            rate = filled / enabled_count
+            if rate > 1.0:
+                rate = 1.0
+            return {
+                "node_id": node_id,
+                "filled_count": filled,
+                "enabled_count": enabled_count,
+                "completion_rate": rate,
+            }
+
+        # folder 节点：仍走整体计算路径保 folder 均值算法一致（design §3 M10-B2）
         flat_rows = await self.dao.list_nodes_with_fill_count(db, project_id)
         completed = self._compute_completion_rates(flat_rows, enabled_count)
         for n in completed:
@@ -138,7 +163,7 @@ class OverviewService:
         for r in sorted_rows:
             rid = r["id"]
             ntype = r["type"]
-            if ntype == "file":
+            if ntype == NodeType.FILE.value:
                 rate = (r["filled_count"] or 0) / enabled_count
                 if rate > 1.0:
                     rate = 1.0  # 防御 filled_count > enabled_count（design 边界）
@@ -193,7 +218,7 @@ class OverviewService:
         enabled_count: int,
     ) -> dict[str, Any]:
         """项目整体统计（仅 file 节点参与均值）。"""
-        files = [n for n in completed if n["type"] == "file"]
+        files = [n for n in completed if n["type"] == NodeType.FILE.value]
         total_nodes = len(completed)
         file_count = len(files)
         fully = sum(1 for n in files if n["completion_rate"] >= 1.0)

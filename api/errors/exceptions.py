@@ -457,6 +457,12 @@ class RelationTypeInvalidError(ValidationError):
 
 
 class OverviewProjectNotFoundError(NotFoundError):
+    """R1 P1-02 立修注释（M10 sprint，2026-05-08）：生产路径下 router
+    check_project_access(role="viewer") 已拦截 non-member → ProjectNotFoundError 404
+    （M02 范式 code=project_not_found）。本 ErrorCode 仅 service 单测路径可达
+    （test_svc_project_not_found_raises_404）；R13-1 parity 保留 + 与 M02 R-X5
+    NodeNameEmptyError / M03 NODE_DELETE_HAS_CHILDREN 同款 pattern。"""
+
     code = ErrorCode.OVERVIEW_PROJECT_NOT_FOUND
     http_status = 404
     message = "Project not found or access denied"

@@ -20,19 +20,6 @@ def svc():
     return OverviewService()
 
 
-async def _make_dim_record(db_session, *, user, project, node, dim_type_id):
-    rec = DimensionRecord(
-        node_id=node.id,
-        project_id=project.id,
-        dimension_type_id=dim_type_id,
-        content={"x": "y"},
-        created_by=user.id,
-        updated_by=user.id,
-    )
-    db_session.add(rec)
-    await db_session.flush()
-
-
 # ─────────────── M10-SVC-T1 早返回边界 ───────────────
 
 
@@ -61,7 +48,7 @@ async def test_svc_get_node_completion_no_dimensions_raises_422(
 
 
 async def test_svc_get_overview_file_completion(
-    db_session, svc, make_project, make_node, make_dim_type
+    db_session, svc, make_project, make_node, make_dim_type, make_dim_record
 ):
     """3 启用维度 / 1 file 节点填 2 维度 → completion_rate = 2/3 ≈ 0.667。"""
     user, proj = await make_project()
@@ -69,8 +56,8 @@ async def test_svc_get_overview_file_completion(
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
     t2 = await make_dim_type(key="t2", project_id=proj.id, enabled=True)
     await make_dim_type(key="t3", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=node, dim_type_id=t1)
-    await _make_dim_record(db_session, user=user, project=proj, node=node, dim_type_id=t2)
+    await make_dim_record(user=user, project=proj, node=node, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=node, dim_type_id=t2)
 
     result = await svc.get_overview(db_session, project_id=proj.id)
     tree = result["tree"]
@@ -80,12 +67,12 @@ async def test_svc_get_overview_file_completion(
 
 
 async def test_svc_get_overview_full_completion(
-    db_session, svc, make_project, make_node, make_dim_type
+    db_session, svc, make_project, make_node, make_dim_type, make_dim_record
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A", type="file")
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=node, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=node, dim_type_id=t1)
 
     result = await svc.get_overview(db_session, project_id=proj.id)
     assert result["tree"][0]["completion_rate"] == 1.0
@@ -106,7 +93,7 @@ async def test_svc_get_overview_zero_completion(
 
 
 async def test_svc_get_overview_folder_subtree_average(
-    db_session, svc, make_project, make_node, make_dim_type
+    db_session, svc, make_project, make_node, make_dim_type, make_dim_record
 ):
     """folder 均值 = 子树 file 节点 rate 的均值（design D-1 迭代后序遍历）。
 
@@ -120,10 +107,10 @@ async def test_svc_get_overview_folder_subtree_average(
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
     t2 = await make_dim_type(key="t2", project_id=proj.id, enabled=True)
     # c1 填 2 维度 → 1.0
-    await _make_dim_record(db_session, user=user, project=proj, node=c1, dim_type_id=t1)
-    await _make_dim_record(db_session, user=user, project=proj, node=c1, dim_type_id=t2)
+    await make_dim_record(user=user, project=proj, node=c1, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=c1, dim_type_id=t2)
     # c2 填 1 维度 → 0.5
-    await _make_dim_record(db_session, user=user, project=proj, node=c2, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=c2, dim_type_id=t1)
 
     result = await svc.get_overview(db_session, project_id=proj.id)
     tree = result["tree"]
@@ -146,7 +133,7 @@ async def test_svc_get_overview_empty_folder_zero(
 
 
 async def test_svc_get_overview_nested_folder(
-    db_session, svc, make_project, make_node, make_dim_type
+    db_session, svc, make_project, make_node, make_dim_type, make_dim_record
 ):
     """嵌套 folder：root / sub / file (rate=1.0) → root + sub 都是 1.0。"""
     user, proj = await make_project()
@@ -154,7 +141,7 @@ async def test_svc_get_overview_nested_folder(
     sub = await make_node(proj.id, name="sub", type="folder", parent=root)
     f = await make_node(proj.id, name="f", type="file", parent=sub)
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=f, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=f, dim_type_id=t1)
 
     result = await svc.get_overview(db_session, project_id=proj.id)
     root_node = result["tree"][0]
@@ -165,12 +152,12 @@ async def test_svc_get_overview_nested_folder(
 # ─────────────── M10-SVC-T4 stats ───────────────
 
 
-async def test_svc_stats(db_session, svc, make_project, make_node, make_dim_type):
+async def test_svc_stats(db_session, svc, make_project, make_node, make_dim_type, make_dim_record):
     user, proj = await make_project()
     n1 = await make_node(proj.id, name="A", type="file")
     await make_node(proj.id, name="B", type="file")  # n2 不填 → 0%
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=n1, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=n1, dim_type_id=t1)
     # n2 不填 → 0%
 
     result = await svc.get_stats(db_session, project_id=proj.id)
@@ -187,12 +174,12 @@ async def test_svc_stats(db_session, svc, make_project, make_node, make_dim_type
 
 
 async def test_svc_get_node_completion_returns_rate(
-    db_session, svc, make_project, make_node, make_dim_type
+    db_session, svc, make_project, make_node, make_dim_type, make_dim_record
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A", type="file")
     t1 = await make_dim_type(key="t1", project_id=proj.id, enabled=True)
-    await _make_dim_record(db_session, user=user, project=proj, node=node, dim_type_id=t1)
+    await make_dim_record(user=user, project=proj, node=node, dim_type_id=t1)
 
     result = await svc.get_node_completion(db_session, project_id=proj.id, node_id=node.id)
     assert result["completion_rate"] == 1.0
