@@ -155,8 +155,12 @@ class OverviewService:
             pid = r["parent_id"]
             children_by_parent.setdefault(pid, []).append(r["id"])
 
-        # subtree 累计：node_id → (file_count, sum_rate)
-        subtree: dict[Any, tuple[int, float]] = {}
+        # subtree 累计：node_id → (file_count, sum_rate, sum_filled)
+        # R2 P1-01 立修（重做）：sum_filled 三元组让 folder.filled_count 同步聚合
+        # 与 design §7 NodeOverview 字面 "file 自身 / folder 子树汇总" 对齐
+        # （之前 R1 P1-01 立修被 CY 误连 asyncio.gather false positive 一起撤销，
+        # R2 reviewer 抓到 schema-service contract drift）
+        subtree: dict[Any, tuple[int, float, int]] = {}
 
         # 按 depth DESC 处理（叶节点先）
         sorted_rows = sorted(flat_rows, key=lambda r: -r["depth"])
@@ -164,25 +168,30 @@ class OverviewService:
             rid = r["id"]
             ntype = r["type"]
             if ntype == NodeType.FILE.value:
-                rate = (r["filled_count"] or 0) / enabled_count
+                filled = r["filled_count"] or 0
+                rate = filled / enabled_count
                 if rate > 1.0:
                     rate = 1.0  # 防御 filled_count > enabled_count（design 边界）
                 r["completion_rate"] = rate
-                subtree[rid] = (1, rate)
+                subtree[rid] = (1, rate, filled)
             else:
-                # folder：累加子节点 subtree 数据
+                # folder：累加子节点 subtree 数据（含 sum_filled 聚合）
                 file_count = 0
                 sum_rate = 0.0
+                sum_filled = 0
                 for cid in children_by_parent.get(rid, []):
-                    cf, cs = subtree.get(cid, (0, 0.0))
+                    cf, cs, sf = subtree.get(cid, (0, 0.0, 0))
                     file_count += cf
                     sum_rate += cs
+                    sum_filled += sf
                 if file_count > 0:
                     r["completion_rate"] = sum_rate / file_count
                 else:
                     # 空 folder（无子 file）→ 0.0
                     r["completion_rate"] = 0.0
-                subtree[rid] = (file_count, sum_rate)
+                # R2 P1-01 立修：folder.filled_count 写回子树聚合（design §7 字面）
+                r["filled_count"] = sum_filled
+                subtree[rid] = (file_count, sum_rate, sum_filled)
 
         return flat_rows
 

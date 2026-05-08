@@ -28,6 +28,7 @@ last_reviewed_at: 2026-05-07
 | M06 竞品参考 | competitors + competitor_refs 2 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-08): M06 是档案页竞品参考主表（双表），所有字段（display_name/website_url/description + competitor_version/feature_coverage/tech_approach/pros_and_cons）必须可用; M18 baseline-patch get_for_embedding A 路径**已实装**非"预留" |
 | M07 问题沉淀 | issues 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-08): M07 是档案页问题沉淀主表，所有字段（category/status/title/description/tags/assigned_to/resolved_at）必须可用; node_id 允许 NULL = orphan 语义业务设计而非预留; M18 baseline-patch + M13 pilot list_by_project pass-through **已实装**非"预留" |
 | M08 模块关系图 | module_relations 1 表全部本期实装,无预留模式 | ❌ 不复用 (2026-05-08): M08 是模块关系主表，所有字段（source/target/type/notes）必须可用; search_by_keyword R-X3 跨模块只读契约**已实装**非"预留" |
+| M10 项目全景图 | **无自有 model**（纯读聚合 / ADR-003 规则 2 豁免）| ❌ 不复用 (2026-05-08): M10 本身是 PT1 反例 — 纯读聚合无 schema 预留语义；DAO 仅 import 上游 M02 PDC + M03 Node + M04 DR 做 LEFT JOIN，禁 INSERT/UPDATE/DELETE |
 | M11 节点版本 | 是否预建 `node_versions` 表但本期只读？ | ⏳ M11 实施时核对 |
 | M16/M17/M18 cron | 预留 cron config 表 vs 本期硬编码？ | ⏳ M16 实施时核对 |
 | M07 dimension 配置 | 预留 dimension type 枚举扩展位 vs 本期固定？ | ⏳ M07 实施时核对 |

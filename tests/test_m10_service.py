@@ -11,7 +11,6 @@ from api.errors.exceptions import (
     OverviewNoDimensionsError,
     OverviewProjectNotFoundError,
 )
-from api.models.dimension_record import DimensionRecord
 from api.services.overview_service import OverviewService
 
 
@@ -118,6 +117,8 @@ async def test_svc_get_overview_folder_subtree_average(
     assert folder_node["type"] == "folder"
     assert folder_node["completion_rate"] == pytest.approx(0.75, rel=1e-6)
     assert len(folder_node["children"]) == 2
+    # R2 P1-01: folder.filled_count = 子树 file 节点 sum (c1=2 + c2=1 = 3)
+    assert folder_node["filled_count"] == 3
 
 
 async def test_svc_get_overview_empty_folder_zero(

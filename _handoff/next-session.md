@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M08-sprint-complete)
+last_updated: 2026-05-08 (post-M10-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,20 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M08-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M10-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 45%（M01-M08 完成；下一站 M10 全景图，M09 superseded by M18 不实装）
+- **Phase 2.1 业务模块**：⏳ 50%（M01-M08+M10 完成；下一站 M11 冷启动，M09 superseded by M18 不实装）
+- **2026-05-08 M10 sprint 完成**（6 commit + R1+R2 闭环 / L1 第八数据点 / 闸门 2.5 B 0 第五次 / **纯读聚合范式首次实证** / **元教训新增 2 条**）：
+  - commits: `098a2ee` 子片 0+1+2 (DAO + Service + 21 tests) + `b018aad` 子片 3 + R1 P1 立修 + 子片 4 关闸 [hash]
+  - **613 PASS / 0 fail / ruff 净 / R13-1 67=67 + L12 守护通过**
+  - **纯读聚合范式**（无 model/migration / ADR-003 规则 2 豁免 / **4 子片简化 / R1 三 subagent 合并为 1 Opus**）— 首次实证 M11+ 纯读模块简化模板
+  - folder 均值"迭代后序遍历"D-1 算法 + 分母=0 早返回 M10-B3
+  - **元教训新增 2 条 sink memory**：
+    1. **纯读模块 schema-service contract drift 风险**：M02-M08 业务模块靠"写端点 + activity_log + IntegrityError"三层强契约兜底；M10 纯读全无，schema 字段语义只能靠 docstring + 测试断言守。R1 立修 folder.filled_count subtree rollup 被误连 asyncio.gather false positive 一起撤销 → R2 reviewer 抓出 schema-service drift。**修法**：纯读模块 docstring 每字段必须配套 ≥1 unit test 断言守护
+    2. **R1→R2 reconcile 缺失**：R1 P1 立修被撤销但启动包陈述未同步更新 → R2 reviewer 看到代码 vs 启动包不一致。**修法**：R2 dispatch 前加 R1.5 reconcile checkpoint（grep R1 立修关键词在代码中真实存在）
+
+
 - **2026-05-08 M08 sprint 完成**（9 commit + R1+R2 闭环 / L1+L2+L3 第七次实证 / 闸门 2.5 三栏 B 0 项第四次实证 / **R-X2 第四真注入双向 + delete 语义** / **元教训"M07 P1 防御 actionable 主动应用"首次实证**）：
   - commits: `eed7749` 子片 0 prep + `fc142ad` 子片 1 model + `1fe57fe` 子片 2 DAO 双向 OR + `7b3d3eb` 子片 3 Service R-X2 第四真注入(双向 delete) + `de57b28` 子片 4 Router 5 endpoints + `868d290` R1+R2 P1 共 8 项立修（5 步分层全 L3 范式应用）+ 子片 5 关闸
   - **586+ PASS / 0 fail / ruff 净 / R13-1 64=64 + L12 守护通过**
@@ -150,7 +160,25 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M10 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M11 sprint 实施代码启动（**当前推荐**）
+
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M11 — 冷启动 / 项目模板（cold-start）" 段；启动当天复制对应 prompt 段落（M10 commits 098a2ee → 子片 4 关闸 / 613+ PASS / Phase 2.1 50%）。
+
+M11 模块特定要素提示：
+- **第一个 R-X1 orchestrator**（不直 INSERT 跨模块表，必须通过其他模块 Service.batch_create_in_transaction 调用）
+- 调用 M03 NodeService.batch_create_in_transaction + M04 DimensionService.batch_create_in_transaction（M04 punt：M11 sprint 期才实装）+ M07 IssueService.batch_create_in_transaction
+- **M04 punt 接通**：M11 是 M04 batch_create_in_transaction 的第一 caller
+- 闸门 2.6（M17 前置 queue scaffold 占位）— M11 通常同步无需 queue
+- R-X1 严守：M11 不直查/直写 nodes/dimension_records/issues；通过 service.batch_*
+
+**M02-M10 元教训防御 actionable 清单**（M11 sprint 启动 reconcile 时主动复制不等 R2 抓）：
+1. viewer 写**所有**写端点 403 全覆盖（M07 立 / M08 应用 / M10 N/A 因纯读）
+2. write_event 异常传播测试（M04/M06/M07/M08 范式）
+3. cross-tenant 404 / cross-project node 422 / IntegrityError 区分约束名
+4. **NEW from M10**：纯读模块 docstring 每字段 ≥1 unit test 断言（M10 纯读专属，M11 业务模块不适用，但元教训"绿测 ≠ 范式正确"通用）
+5. **NEW from M10**：R1.5 reconcile checkpoint — R2 dispatch 前 grep R1 立修关键词在代码中真实存在
+
+### Prompt 0' — M10 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
 
 参 `_handoff/sprint-prompts-M05-M20.md` § "## M10 — 全景图（overview）" 段；启动当天复制对应 prompt 段落（M08 commits eed7749 → 子片 5 关闸 / 586+ PASS / Phase 2.1 45%）。
 
