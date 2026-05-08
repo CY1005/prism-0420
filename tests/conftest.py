@@ -775,6 +775,52 @@ async def make_activity_log(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_import_task(db_session):
+    """工厂 fixture：建一条 import_tasks 行（M17 sprint）。
+
+    跨文件 helper 规则十二连（M03→M16 + M17）：service + dao + router 三子片复用，
+    R1-B P1-01 立修从 test_m17_service.py 迁入 conftest（防内联漂移 + 子片 4 router e2e
+    可直接复用）。
+
+    用法：t = await make_import_task(project_id=p.id, user_id=u.id, status="pending")
+    """
+    from uuid import uuid4
+
+    from api.models.import_task import ImportSourceType, ImportTask, ImportTaskStatus
+
+    async def _make(
+        *,
+        project_id,
+        user_id,
+        status: str = ImportTaskStatus.pending.value,
+        source_type: str = ImportSourceType.zip.value,
+        source_hash: str | None = None,
+        source_uri: str = "s3://bucket/test.zip",
+        ai_provider: str = "mock",
+        ai_model: str = "mock-1",
+        review_data: dict | None = None,
+        progress: int = 0,
+    ) -> ImportTask:
+        task = ImportTask(
+            project_id=project_id,
+            user_id=user_id,
+            source_type=source_type,
+            source_hash=source_hash or uuid4().hex,
+            source_uri=source_uri,
+            status=status,
+            progress=progress,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            review_data=review_data,
+        )
+        db_session.add(task)
+        await db_session.flush()
+        return task
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_ai_snapshot_task(db_session):
     """工厂 fixture：建一行 ai_snapshot_tasks（M16 sprint 子片 2）。
 

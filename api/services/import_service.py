@@ -28,6 +28,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -75,6 +76,14 @@ _FINAL_STATUSES = frozenset(
     }
 )
 # partial_failed 是半终态：可循环回 ai_step3（R4-3a）
+# IMPL-NOTE（R1-A P1-1）：design §10 列 import_partial_failed 事件 + R4-3a 入边
+# ① importing 部分 item 失败 ② ai_step2 部分文件失败。本期 design §4 决策
+# importing = 整任务 single transaction（all-or-nothing），任何 batch_insert 路径
+# 异常一律 _mark_failed → status=failed（不写 partial_failed）；ai_step2 当前未做
+# chunk 化，整步失败也走 failed。partial_failed 仅保留：① 入边 enum 字面（防 ALTER
+# TABLE 改 CHECK）② retry 出边（partial_failed → ai_step3）以备 ai_step2 chunk 化或
+# importing per-step 拆分时启用。R1-A P1-1 实证：本期不发射，retry_task 路径靠 fixture
+# 直造状态测试，不依赖业务可达。
 _RESUMABLE_STATUSES = frozenset({ImportTaskStatus.partial_failed.value})
 
 # idempotency 复用范围（design §11）
@@ -167,24 +176,26 @@ class ImportService:
         try:
             await self.dao.create(db, task)
         except IntegrityError as e:
-            # UNIQUE(user_id, project_id, source_hash) 命中：可能是 race 或 failed/cancelled
-            # 仍占用 key（design §11："failed/cancelled 不复用"但 DB UNIQUE 没分 status）
+            # R1 P1 立修（M05 P1-01 立规延续）：区分 uq_import_user_project_hash UNIQUE
+            # vs 其他约束（CHECK / FK），不再统一走 select 兜底（防误转误分类）。
             await db.rollback()
-            from sqlalchemy import select
-
-            stmt = select(ImportTask).where(
-                ImportTask.user_id == user_id,
-                ImportTask.project_id == project_id,
-                ImportTask.source_hash == source_hash,
-            )
-            result = await db.execute(stmt)
-            existing2 = result.scalar_one_or_none()
-            if existing2 is not None:
-                raise ImportTaskDuplicateError(
-                    existing_task_id=str(existing2.id),
-                    existing_status=existing2.status,
-                ) from e
-            # 非 UNIQUE 撞，是其他 constraint 失败
+            constraint_str = str(getattr(e.orig, "args", "")) + str(e.orig)
+            if "uq_import_user_project_hash" in constraint_str:
+                # UNIQUE(user_id, project_id, source_hash) 命中：race 或 failed/cancelled
+                # 仍占用 key（design §11："failed/cancelled 不复用"但 DB UNIQUE 没分 status）
+                stmt = select(ImportTask).where(
+                    ImportTask.user_id == user_id,
+                    ImportTask.project_id == project_id,
+                    ImportTask.source_hash == source_hash,
+                )
+                result = await db.execute(stmt)
+                existing2 = result.scalar_one_or_none()
+                if existing2 is not None:
+                    raise ImportTaskDuplicateError(
+                        existing_task_id=str(existing2.id),
+                        existing_status=existing2.status,
+                    ) from e
+            # 非 UNIQUE 撞（CHECK / FK / 其他）→ 422 业务参数无效
             raise ImportInvalidSourceError(reason="db_constraint_failed") from e
 
         # 3) bulk insert items（解压 / clone 阶段才知道全部文件，提交时仅 metadata 占位）
@@ -361,15 +372,16 @@ class ImportService:
             metadata={"at_status": task.status},
         )
         await db.refresh(task)
-        await publish_progress(
-            ProgressEvent(
-                type="status_change",
-                task_id=task.id,
-                progress=100,
-                status=ImportTaskStatus.cancelled.value,
-                message="cancelled",
+        with contextlib.suppress(Exception):
+            await publish_progress(
+                ProgressEvent(
+                    type="status_change",
+                    task_id=task.id,
+                    progress=100,
+                    status=ImportTaskStatus.cancelled.value,
+                    message="cancelled",
+                )
             )
-        )
         return task
 
     async def retry_task(
@@ -547,15 +559,16 @@ class ImportService:
                     await self._write_step_complete(
                         db, task, project_id, user_id, step=2, items_count=len(items)
                     )
-                    await publish_progress(
-                        ProgressEvent(
-                            type="review_ready",
-                            task_id=task.id,
-                            progress=60,
-                            status=ImportTaskStatus.awaiting_review.value,
-                            message="review ready",
+                    with contextlib.suppress(Exception):
+                        await publish_progress(
+                            ProgressEvent(
+                                type="review_ready",
+                                task_id=task.id,
+                                progress=60,
+                                status=ImportTaskStatus.awaiting_review.value,
+                                message="review ready",
+                            )
                         )
-                    )
             elif step == 3:
                 # 不调 LLM；仅 consolidate confirmed_data
                 review_data = task.review_data or {}
@@ -670,17 +683,27 @@ class ImportService:
                     temp_to_real[raw["temp_id"]] = real.id
 
             # ② M04 dimensions
+            # R1-C P1-01 立修：批量预查 dimension_types（防 N+1 / N 条 dimensions 200 次 SELECT）
+            # M04 batch_create_in_transaction 接 dimension_type_id 而非 key；M17 sprint scaffold：
+            # dimension_type_key → upsert 在 service 层做（与 M13 baseline-patch 同款逻辑）。
+            dim_keys_unique = list(
+                {
+                    d["dimension_type_key"]
+                    for d in consolidated.get("dimensions", [])
+                    if temp_to_real.get(d["target_proposed_node_id"]) is not None
+                }
+            )
+            dim_type_cache: dict[str, Any] = {}
+            for k in dim_keys_unique:
+                dim_type_cache[k] = await self.dimensions._upsert_dimension_type(  # noqa: SLF001
+                    db, k
+                )
             dimensions_data: list[dict[str, Any]] = []
             for d in consolidated.get("dimensions", []):
                 node_real_id = temp_to_real.get(d["target_proposed_node_id"])
                 if node_real_id is None:
                     continue
-                # M04 batch_create_in_transaction 接 dimension_type_id 而非 key；M17
-                # sprint scaffold：dimension_type_key → upsert 在 service 层做（与
-                # M13 baseline-patch DimensionService.create_dimension_record 同款逻辑）
-                dt = await self.dimensions._upsert_dimension_type(  # noqa: SLF001
-                    db, d["dimension_type_key"]
-                )
+                dt = dim_type_cache[d["dimension_type_key"]]
                 dimensions_data.append(
                     {
                         "node_id": node_real_id,
@@ -777,15 +800,16 @@ class ImportService:
         )
         await db.commit()
         await db.refresh(task)
-        await publish_progress(
-            ProgressEvent(
-                type="completed",
-                task_id=task.id,
-                progress=100,
-                status=ImportTaskStatus.completed.value,
-                message="completed",
+        with contextlib.suppress(Exception):
+            await publish_progress(
+                ProgressEvent(
+                    type="completed",
+                    task_id=task.id,
+                    progress=100,
+                    status=ImportTaskStatus.completed.value,
+                    message="completed",
+                )
             )
-        )
 
     # ─────────────── 死信清理 ───────────────
 

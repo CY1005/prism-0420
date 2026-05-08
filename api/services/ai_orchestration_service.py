@@ -127,13 +127,15 @@ class AIOrchestrationService:
         nodes = confirmed.get("nodes", [])
         skipped_ids = {n["proposed_id"] for n in nodes if n.get("skipped")}
         skipped_ids.update(confirmed.get("skip_proposed_ids", []))
+        # R1-C P1-04 立修：提前构造 skipped_str set，避免每条 dim/issue 重建 O(k) 集合
+        skipped_str = {str(s) for s in skipped_ids}
 
         # dimensions 去重 + 跳过 skipped 节点
         seen_dim: set[tuple[str, str]] = set()
         dims_out: list[dict[str, Any]] = []
         for d in confirmed.get("dimensions", []):
             tn = str(d["target_proposed_node_id"])
-            if tn in {str(s) for s in skipped_ids}:
+            if tn in skipped_str:
                 continue
             k = (tn, d["dimension_type_key"])
             if k in seen_dim:
@@ -146,7 +148,7 @@ class AIOrchestrationService:
         issues_out: list[dict[str, Any]] = []
         for i in confirmed.get("issues", []):
             tn = str(i.get("target_proposed_node_id") or "")
-            if tn and tn in {str(s) for s in skipped_ids}:
+            if tn and tn in skipped_str:
                 continue
             k = (tn, i["title"])
             if k in seen_issue:

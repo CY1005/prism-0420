@@ -19,7 +19,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-import pytest_asyncio
 
 from api.errors.exceptions import (
     ImportInvalidStateTransitionError,
@@ -27,7 +26,7 @@ from api.errors.exceptions import (
     ImportTaskFinalizedError,
     ImportTaskNotFoundError,
 )
-from api.models.import_task import ImportSourceType, ImportTask, ImportTaskStatus
+from api.models.import_task import ImportSourceType, ImportTaskStatus
 from api.queue.import_tasks import (
     ConfirmedCompetitorData,
     ConfirmedImportData,
@@ -40,45 +39,8 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 # ─────────────── fixtures ───────────────
-
-
-@pytest_asyncio.fixture(loop_scope="session")
-async def make_import_task(db_session):
-    """工厂 fixture：建一条 import_tasks 行（M17 sprint）。
-
-    跨文件 helper 规则十二连：M03/M04/M05/M06/M07/M11/M12/M13/M14/M15/M16/M17。
-    """
-
-    async def _make(
-        *,
-        project_id,
-        user_id,
-        status: str = ImportTaskStatus.pending.value,
-        source_type: str = ImportSourceType.zip.value,
-        source_hash: str | None = None,
-        source_uri: str = "s3://bucket/test.zip",
-        ai_provider: str = "mock",
-        ai_model: str = "mock-1",
-        review_data: dict | None = None,
-        progress: int = 0,
-    ) -> ImportTask:
-        task = ImportTask(
-            project_id=project_id,
-            user_id=user_id,
-            source_type=source_type,
-            source_hash=source_hash or uuid4().hex,
-            source_uri=source_uri,
-            status=status,
-            progress=progress,
-            ai_provider=ai_provider,
-            ai_model=ai_model,
-            review_data=review_data,
-        )
-        db_session.add(task)
-        await db_session.flush()
-        return task
-
-    yield _make
+# make_import_task 已迁到 tests/conftest.py（R1-B P1-01 立修 / 跨文件 helper 规则
+# 十二连 M03/M04/M05/M06/M07/M11/M12/M13/M14/M15/M16/M17）。
 
 
 # ─────────────── submit_import ───────────────
@@ -301,6 +263,22 @@ class TestStateTransitions:
         user, proj = await make_project_with_member()
         task = await make_import_task(
             project_id=proj.id, user_id=user.id, status=ImportTaskStatus.pending.value
+        )
+        svc = ImportService()
+        out = await svc.cancel_task(
+            db_session, user_id=user.id, project_id=proj.id, task_id=task.id
+        )
+        assert out.status == ImportTaskStatus.cancelled.value
+
+    async def test_cancel_awaiting_review_to_cancelled(
+        self, db_session, make_project_with_member, make_import_task
+    ):
+        """R1-C P1-05 立修：awaiting_review 是用户最常见的取消入口（review 页面取消按钮）。"""
+        user, proj = await make_project_with_member()
+        task = await make_import_task(
+            project_id=proj.id,
+            user_id=user.id,
+            status=ImportTaskStatus.awaiting_review.value,
         )
         svc = ImportService()
         out = await svc.cancel_task(
@@ -538,6 +516,119 @@ class TestWorkerEntries:
         assert calls["issue"] == 1
         await db_session.refresh(task)
         assert task.status == ImportTaskStatus.completed.value
+
+    async def test_run_batch_insert_dimension_upsert_batched_n_plus_1_safe(
+        self,
+        db_session,
+        make_project_with_member,
+        make_import_task,
+        monkeypatch,
+    ):
+        """R1-C P1-06 立修：dimensions 批量入库走 _upsert_dimension_type 缓存（N+1 防护）。
+
+        验证：5 条 dimension 用 2 个不同 dimension_type_key → _upsert_dimension_type
+        应只调用 2 次（unique key 数）而非 5 次（dimension 数）。
+        """
+        user, proj = await make_project_with_member()
+        task = await make_import_task(
+            project_id=proj.id, user_id=user.id, status=ImportTaskStatus.importing.value
+        )
+        await db_session.commit()
+
+        # _upsert_dimension_type 调用计数
+        upsert_calls: list[str] = []
+
+        class _FakeDt:
+            def __init__(self, key: str) -> None:
+                self.id = abs(hash(key)) % (10**9)
+                self.key = key
+
+        async def fake_upsert(self, db, key):
+            upsert_calls.append(key)
+            return _FakeDt(key)
+
+        async def fake_node_batch(self, db, *, project_id, actor_user_id, nodes_data):
+            from uuid import uuid4 as _u4
+
+            from api.models.node import Node
+
+            return [
+                Node(
+                    id=_u4(),
+                    project_id=project_id,
+                    name=raw["name"],
+                    type=raw.get("type", "folder"),
+                    parent_id=None,
+                    path="/x",
+                    depth=0,
+                )
+                for raw in nodes_data
+            ]
+
+        async def fake_dim_batch(self, db, *, project_id, actor_user_id, dimensions_data):
+            return []
+
+        async def fake_comp_batch(self, db, *, project_id, actor_user_id, competitors_data):
+            return []
+
+        async def fake_issue_batch(self, db, *, project_id, actor_user_id, issues_data):
+            return []
+
+        monkeypatch.setattr(
+            "api.services.dimension_service.DimensionService._upsert_dimension_type",
+            fake_upsert,
+        )
+        monkeypatch.setattr(
+            "api.services.node_service.NodeService.batch_create_in_transaction",
+            fake_node_batch,
+        )
+        monkeypatch.setattr(
+            "api.services.dimension_service.DimensionService.batch_create_in_transaction",
+            fake_dim_batch,
+        )
+        monkeypatch.setattr(
+            "api.services.competitor_service.CompetitorService.batch_create_in_transaction",
+            fake_comp_batch,
+        )
+        monkeypatch.setattr(
+            "api.services.issue_service.IssueService.batch_create_in_transaction",
+            fake_issue_batch,
+        )
+
+        from api.queue.import_tasks import ConfirmedDimensionData
+
+        svc = ImportService()
+        node_pid = uuid4()
+        # 5 条 dimensions / 2 个 unique key
+        dims = []
+        for i in range(5):
+            dims.append(
+                ConfirmedDimensionData(
+                    proposed_id=uuid4(),
+                    target_proposed_node_id=node_pid,
+                    dimension_type_key="key_a" if i % 2 == 0 else "key_b",
+                    content={"v": i},
+                )
+            )
+        confirmed = ConfirmedImportData(
+            nodes=[ConfirmedNodeData(proposed_id=node_pid, name="root", type="folder")],
+            dimensions=dims,
+            competitors=[],
+            issues=[],
+        )
+        await svc.run_batch_insert(
+            db_session,
+            user_id=user.id,
+            project_id=proj.id,
+            task_id=task.id,
+            confirmed=confirmed,
+        )
+        # 关键断言：N+1 防护——5 条 dim / 2 unique key → 2 次 upsert（不是 5 次 / 不是 3 条 dedup 后）
+        # consolidate_step3 dedup (node, key) 后剩 2 条（key_a + key_b 各 1 条），unique key=2
+        assert len(upsert_calls) == 2, (
+            f"expected 2 unique key upsert calls, got {len(upsert_calls)}"
+        )
+        assert set(upsert_calls) == {"key_a", "key_b"}
 
 
 # ─────────────── 死信清理 ───────────────
