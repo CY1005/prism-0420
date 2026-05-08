@@ -676,3 +676,43 @@ async def make_snapshot(db_session):
         return snap
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_activity_log(db_session):
+    """工厂 fixture：建一行 activity_logs（M15 R10-2 owner）。
+
+    主动复制（M07/M14 元教训）：DAO + Service + Router 三子片都会用，先迁 conftest 防
+    R1-B 抓内联（跨文件 helper 规则十一连：M03→M14 + M15）。
+
+    用法：ev = await make_activity_log(project_id=p.id, user_id=u.id,
+                                       action_type="node_created", target_type="node",
+                                       target_id=str(n.id))
+    project_id=None 即全局豁免事件（M14 范式）。
+    """
+    from api.models.activity_log import ActivityLog
+
+    async def _make(
+        *,
+        user_id,
+        action_type: str,
+        target_type: str,
+        target_id: str = "00000000-0000-0000-0000-000000000099",
+        summary: str = "test event",
+        project_id=None,
+        event_metadata=None,
+    ) -> ActivityLog:
+        ev = ActivityLog(
+            project_id=project_id,
+            user_id=user_id,
+            action_type=action_type,
+            target_type=target_type,
+            target_id=target_id,
+            summary=summary,
+            event_metadata=event_metadata,
+        )
+        db_session.add(ev)
+        await db_session.flush()
+        return ev
+
+    yield _make
