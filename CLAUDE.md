@@ -119,11 +119,12 @@ GitHub：https://github.com/CY1005/prism-0420
 
 1. 本文件（协作规则）
 2. **`_handoff/next-session.md`**（上一 session 留的"接着做什么 + 怎么做"——含 prompt A/B/C 和状态快照）
-3. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
-4. `design/00-phase-gate.md`（下一闸门 checkbox）
-5. TaskList pending 任务（下一件事）
-6. `design/adr/ADR-001-shadow-prism.md`（核心决策）
-7. 开始工作前：告诉 CY "我看到进度是 X，handoff 推荐 prompt 是 Y，要按这个跑还是切别的？"
+3. **`_handoff/cross-sprint-punt-pool.md`**（🔴 跨 sprint Punt 池总表 / 防"约定 M? sprint 处理但被遗忘"漂移 / 启动 reconcile 必查本 sprint 命中项 + 真漏洞 Top 10 + 高耦合触发点联动）
+4. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
+5. `design/00-phase-gate.md`（下一闸门 checkbox）
+6. TaskList pending 任务（下一件事）
+7. `design/adr/ADR-001-shadow-prism.md`（核心决策）
+8. 开始工作前：告诉 CY "我看到进度是 X，handoff 推荐 prompt 是 Y，要按这个跑还是切别的？"
 
 ## 关键路径
 

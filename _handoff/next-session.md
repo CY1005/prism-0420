@@ -245,12 +245,22 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 冷启动按序读：
 1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
 2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M15-sprint-complete + 本 Prompt 0 M16 启动 reconcile checklist）
-3. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 75%，下一站 M16）
-4. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 2.5 + 闸门 3.4 L1 review 触发粒度规则）
-5. /root/workspace/projects/prism-0420/design/02-modules/M16-ai-snapshot/00-design.md（M16 design）
-6. /root/workspace/projects/prism-0420/design/audit/m15-pilot-template-validation.md（M15 sprint 实证 + R1 1 P1 + R2 2 P1 + Punt 池 3 项 + 纯读 R10-2 owner 新教训 4 条 + 元教训 14 项应用情况）
-7. memory feedback_problem_layered_analysis（含 M15 NEW 失效信号 — 双层防御 service unit 不可达 e2e 是合理设计 / 与 R1 P1-1 schema 注册无 raise 结论相反）
-8. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb + feedback_self_decide_no_ask（标准红线集 / 含 M15 sprint 期立的 self_decide_no_ask "已批准 sprint 多子片连续做不在子片间停下来问"）
+3. /root/workspace/projects/prism-0420/_handoff/cross-sprint-punt-pool.md（**🔴 跨 sprint Punt 池总表 / M15 sprint 收官后建立 / 94 项审计 / 30 STILL_PUNT / 真漏洞 Top 10 / M16 必处理项**）
+4. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 75%，下一站 M16）
+5. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 2.5 + 闸门 3.4 L1 review 触发粒度规则）
+6. /root/workspace/projects/prism-0420/design/02-modules/M16-ai-snapshot/00-design.md（M16 design）
+7. /root/workspace/projects/prism-0420/design/audit/m15-pilot-template-validation.md（M15 sprint 实证 + R1 1 P1 + R2 2 P1 + Punt 池 3 项 + 纯读 R10-2 owner 新教训 4 条 + 元教训 14 项应用情况）
+8. memory feedback_problem_layered_analysis（含 M15 NEW 失效信号 — 双层防御 service unit 不可达 e2e 是合理设计 / 与 R1 P1-1 schema 注册无 raise 结论相反）
+9. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb + feedback_self_decide_no_ask（标准红线集 / 含 M15 sprint 期立的 self_decide_no_ask "已批准 sprint 多子片连续做不在子片间停下来问"）
+
+**🔴 M16 sprint 必处理 punt 项（来自 cross-sprint-punt-pool.md 真漏洞 Top 10）**：
+- **M15-B1 + M15-B2 + 8 项历史联动**：write_event stub → 真 INSERT + M03-M08 service ~14 处裸 CRUD action_type 改过去式 + M05/M06/M07/M08 4 处 race window 复审（高耦合触发点 / 元发现 #1 / 工作量 4-6h）
+- **M13-B16**：M02 Project.ai_model 字段 alembic add column（M14 已过未补 / 1 步迁移）
+- **M13-B13**：SSE generator AsyncSession 占 300s 异步 SSE 连接策略（M16 是 Queue 后台同款 long-lived session 风险 / 必查）
+- **M07-9**：IssueResponse 漏 join 字段（design §7 字面承诺 / 前端 N+1 / 顺手补 selectinload + schema 字段）
+- **M07-2**：update 不支持 detach (None→NULL) — 让 CY 拍是否 M16 顺手做（产品决策）
+- **M14-B12**：write_event 异常传播 update/delete/unlink 三路径 e2e（与 M15-B1 同 sprint）
+- **M10-5**：viewer /overview/stats 测试缺（启动顺手补）
 
 任务：M16 sprint TDD 实施。
 
