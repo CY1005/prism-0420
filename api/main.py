@@ -27,6 +27,9 @@ from api.routers import (
     version_router,
 )
 from api.routers import auth as auth_router
+from api.routers import (
+    import_router as import_router_mod,
+)
 from api.services.auth_service import get_auth_service
 from api.services.dimension_service import DimensionService
 from api.services.node_service import register_child_service
@@ -121,6 +124,7 @@ app.include_router(industry_news_router.news_node_router)
 app.include_router(activity_stream_router.activity_stream_router)
 app.include_router(ai_snapshot_router.ai_snapshot_node_router)
 app.include_router(ai_snapshot_router.ai_snapshot_task_router)
+app.include_router(import_router_mod.import_router)
 
 
 @app.get("/health")
