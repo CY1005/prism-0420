@@ -370,15 +370,20 @@ class RelationResponse(BaseModel):
     id: UUID4
     project_id: UUID4
     source_node_id: UUID4
-    source_node_name: str      # join 出来便于前端渲染图节点标签
     target_node_id: UUID4
-    target_node_name: str
     relation_type: RelationType
     notes: str | None
     created_by: UUID4
-    created_by_name: str
     created_at: datetime
     updated_at: datetime
+    # M08 R2 P1-01 立修（2026-05-08，feedback_design_scaffold_reconcile 范式）：
+    # 删除 source_node_name / target_node_name / created_by_name 三字段
+    # M06 RefResponse display_name 同款 punt 决策延续：核心字段也由前端 N+1 lookup
+    # 而非 DAO outerjoin（避免 list endpoint 多表 join 性能成本 + 保持 service 单表
+    # 简洁）。前端关系图节点标签按 node_id/user_id 批量预拉。
+    # M08 R2 P1-01 第三次"design *_name 字段实装漂移"实证（M05 created_by_name
+    # punt → M06 display_name punt → M08 *_node_name + created_by_name punt，三连
+    # 范式稳定）。前端 sprint 期可批量 lookup endpoint 一次性补齐。
 
 
 class RelationListResponse(BaseModel):
@@ -635,7 +640,7 @@ class RelationSelfLoopError(AppError):
 
 class RelationNodeNotInProjectError(AppError):
     code = ErrorCode.RELATION_NODE_NOT_IN_PROJECT
-    http_status = 404
+    http_status = 422  # R1-B P1-02 立修（2026-05-08）：M06 CompetitorCrossProjectError + M07 IssueNodeCrossProjectError 范式对齐 — 跨 project 引用校验 = validation 422，而非 not_found 404
     message = "One or both nodes do not belong to the given project"
 
 
