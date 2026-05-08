@@ -46,11 +46,15 @@ async def lifespan(app: FastAPI):
     tenant_filter.set_tenant_context(M02TenantContext())
     # M04 子片 3: R-X2 第一真注入（M03 delete_node 调下游 → DimensionService 清下游）
     register_child_service("dimension", DimensionService().delete_by_node_id)
+    # M06 子片 3: R-X2 第二真注入（CompetitorService 清 competitor_refs）
+    from api.services.competitor_service import CompetitorService
+
+    register_child_service("competitor", CompetitorService().delete_by_node_id)
     log.info(
         "app.startup",
         version="0.1.0",
         tenant_context="M02 (project_members)",
-        child_services=["dimension"],
+        child_services=["dimension", "competitor"],
     )
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
         try:

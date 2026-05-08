@@ -344,3 +344,30 @@ class VersionSnapshotInvalidError(ValidationError):
     code = ErrorCode.VERSION_SNAPSHOT_INVALID
     http_status = 422
     message = "snapshot_data does not match expected format"
+
+
+# ─────────────── M06 竞品参考 ───────────────
+
+
+class CompetitorNotFoundError(NotFoundError):
+    code = ErrorCode.COMPETITOR_NOT_FOUND
+    http_status = 404
+    message = "Competitor not found"
+
+
+class CompetitorRefNotFoundError(NotFoundError):
+    code = ErrorCode.COMPETITOR_REF_NOT_FOUND
+    http_status = 404
+    message = "Competitor reference not found"
+
+
+class CompetitorRefDuplicateError(ConflictError):
+    code = ErrorCode.COMPETITOR_REF_DUPLICATE
+    http_status = 409
+    message = "This competitor is already referenced for this node"
+
+
+class CompetitorCrossProjectError(ValidationError):
+    code = ErrorCode.COMPETITOR_CROSS_PROJECT
+    http_status = 422
+    message = "Cannot reference a competitor from another project"

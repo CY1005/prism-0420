@@ -76,3 +76,9 @@ class ErrorCode(StrEnum):
     VERSION_NOT_FOUND = "version_not_found"
     VERSION_LABEL_DUPLICATE = "version_label_duplicate"
     VERSION_SNAPSHOT_INVALID = "version_snapshot_invalid"
+
+    # M06 竞品参考 (design §13)
+    COMPETITOR_NOT_FOUND = "competitor_not_found"
+    COMPETITOR_REF_NOT_FOUND = "competitor_ref_not_found"
+    COMPETITOR_REF_DUPLICATE = "competitor_ref_duplicate"
+    COMPETITOR_CROSS_PROJECT = "competitor_cross_project"
