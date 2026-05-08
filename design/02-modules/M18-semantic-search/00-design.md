@@ -1,12 +1,12 @@
 ---
 title: M18 语义搜索 - 详细设计
-status: draft
+status: accepted
 owner: CY
 created: 2026-04-25
-accepted: null
+accepted: 2026-05-09
 supersedes: [M09]
 superseded_by: null
-last_reviewed_at: 2026-05-07
+last_reviewed_at: 2026-05-09
 module_id: M18
 prism_ref: F18
 pilot: true
@@ -1323,6 +1323,59 @@ class EmbeddingDeleteFailedError(SilentFailure):
 
 详见独立 [`tests.md`](./tests.md)（本会话不写，作为 Task #2）。
 
+---
+
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L1 总则强制段 / 2026-05-09 启动期立）
+
+> 闸门 3.4 L1 总则要求每业务模块 design 必有「Sprint Review 拆分计划」段，
+> 声明本 sprint 拆 N 次 review、每次覆盖哪些子片、合并子片的 SKIP 比例理由。
+> M18 sprint 启动期补完（2026-05-09）。
+
+### 拆分总览（5+ 子片 / R1=3 subagent 并行 + R2=1 合并 Opus）
+
+| 子片 | 范围 | 行数 / 文件数预估 | Review 形态 |
+|------|------|---------------|-----------|
+| 0 prep | §14.5 self-correct + scaffold 简化 4 字段注释 + 闸门 2.6 类似 mini-sprint（EmbeddingProvider 抽象基类 + Mock 实现 + 4 pytest）| ~150 / ~3 | self-审（启动期范畴 / 不触 simplify 22 条） |
+| 1 | 4 表 model（embeddings 含异维列拆分 / embedding_tasks / embedding_failures / search_evaluation_log）+ alembic（含 CREATE EXTENSION vector + 7 字段 PK + ivfflat 三索引 + advisory_xact_lock 双 namespace）+ ActionType+0（已 baseline-patch）+ TargetType+1（embedding_task）+ model tests | ~600 / ~6 | **R1 = 3 subagent 并行**（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）合并审 子片 1+2+3 |
+| 2 | 4 DAO（embedding_dao 含 pgvector cosine 距离查询 + tenant filter / embedding_task_dao + embedding_failure_dao + search_evaluation_log_dao + EmbeddingBackfillDAO 规则 4 豁免只读 import）+ unit tests | ~700 / ~5 | 同上（合并 R1） |
+| 3 | EmbeddingService（horizontal owner=M18 / enqueue / get_or_compute / embed_query / batch_backfill / enqueue_delete）+ EmbeddingProvider 抽象 + OpenAI/bge/Mock 三实现 + Schema（SearchRequest/Response/EmbedSinglePayload）+ 12 ErrorCode + 12 AppError 子类（含 EmbeddingDeleteFailedError 继承 SilentFailure）+ Queue tasks（embed_single）+ Cron（embedding_backfill / backfill_recovery / monitor）+ Redis query embed 短缓存 + AI Client 接通 + service/schema tests | ~1200 / ~10 | 同上（合并 R1） |
+| 4 | Router（search.py POST /search + embedding_admin.py 3 endpoints platform_admin only）+ multipart 不触发（search 无文件上传）+ e2e（含 cross-sprint 元教训 17+ 项 actionable 主动复制；新增 WS 5-test 矩阵 N/A 显式声明 / sanitize horizontal N/A 声明 / multipart N/A 声明 / SLA 超时埋点指标 e2e）| ~700 / ~4 | **R2 = 1 合并 Opus subagent**（endpoint 单审 / WS form 不适用） |
+| 5 | 关闸（design §3 disambiguation 回写 / audit/m18-pilot-template-validation.md 元教训沉淀 / handoff §0 / roadmap M18 + Phase 2.1 85→90% / cross-sprint punt 池接通 / M09 status 改 superseded_by=M18 已 baseline-patch / readme M18 行）| ~150 / ~5 | 主对话总结 |
+
+### SKIP 例外段（L1 总则触发例外条款 a/b/c）
+
+- **a 子片 1（model+alembic）**：simplify 22 条 SKIP ≥ 80%（无 frontend、无 Server Action、无契约漂移、无 LLM hot path / 仅 schema），合并到子片 4 e2e 一次跑（提前声明，非临时合并）。
+- **b context budget pressure**：bypass log #2 配套已恢复（M17 commit ad069c0 标 ✅ review 完成），M18 不再 self-审；R1=3 + R2=1 spawn subagent 必跑（不复位累计触发线）。
+- **c 临时合并**：禁。如 sprint 中临时合并 → bypass log 第 3 次触发对闸门规则本身的 review。
+
+### 范式复用清单（M02-M17 沉淀 / M18 主动复制不等抓）
+
+- viewer 写所有写端点 403（M07 立 / M18 admin endpoint require_platform_admin 单测 + e2e）
+- write_event 异常传播测试 e2e 字面验（M16 立 / M18 backfill / model_upgrade trigger 写 activity_log 路径必测）
+- cross-tenant 404 + cross-project node 404（M02 立 / M18 search 路由 cross-project query 必测）
+- IntegrityError 区分约束名（M05 立 / M18 4 表新建 全 INSERT 路径凡 UNIQUE 必 catch — design-principles 清单 6 + ci-lint R15 守护）
+- M11 R-X1 失败补偿 commit boundary：M18 不触 R-X1 形态（search 无补偿 / delete 走异步 enqueue / N/A 显式声明）
+- M11 文件上传 file.size + sanitize：M18 search 无 multipart / N/A 显式声明
+- M13 SSE 形态特殊不免除契约纪律：M18 同步路由 / N/A
+- M13 metadata 字段集每条 e2e 字面验（backfill_triggered / model_upgrade_triggered 两 ActionType 必逐字段验）
+- M14 endpoint 形态特殊不免除契约纪律：M18 admin endpoint 形态 / 主动复制
+- M14 N/A 元教训显式声明范式：M18 §14.5 + tests.md docstring 双重显式
+- M15 横切表 owner enum 4 处同步：M18 ActionType+0 已 baseline-patch + TargetType+1 必同步 4 处（model tuple + schema StrEnum + CHECK constraint + Alembic）
+- M16 R14：write_event 调用 action_type 必须 _ACTION_TYPES 枚举字面（ci-lint 守护 / M18 不漂移）
+- M16 CAS UPDATE 顶层方法内部 commit / 禁 Service 事务上下文：M18 backfill / model_upgrade trigger 端点同形态
+- M16 BackgroundTasks / Queue runner 自起 SessionLocal：M18 cron + arq worker 复用
+- M17 NEW R-X1 第二实例 compensation_session helper：M18 不触发（无补偿形态 / N/A 显式声明）
+- M17 NEW idempotency 含 project_id：M18 三层幂等 R3-3 已含 project_id（schema 已锁 / 7 字段 PK）
+- M17 NEW IntegrityError 端到端 catch（清单 6 落地）：M18 子片 1+2+3 全适用
+
+### L3 子选项留空待实证（R-X5 风格）
+
+- "M18 §12D 子模板首战是否触发新照抄要点回写 README §12 表" — sprint 实证后回写 audit/m18-pilot-template-validation.md
+- "异维列拆分（embedding_512/1536/3072）pgvector 索引建立顺序与 dim_provider 路由切换路径" — sprint 实证
+- "R1=3 subagent 在 §12D pilot 模块的命中率分布" — sprint 实证 / M02-M17 十五数据点延续
+
+
+
 6 类必覆盖：
 - Golden：增量路径成功 / backfill 路径成功 / 混合搜索关键词+语义命中 / 模型升级回填 / RRF 项目级参数生效
 - 边界：query 空字符串 / query 200char / pgvector 不可用降级 / OpenAI 超时 fallback / embedding 维度不匹配
@@ -1359,8 +1412,14 @@ class EmbeddingDeleteFailedError(SilentFailure):
 - [x] **Round 3 演进 audit (Opus)** —— 12 风险 / 7 退路 / 半衰期 9-12 月（2026-04-25）
 - [x] **CY 决策 C1=B / C2=A / C3=C ack**（2026-04-25）
 - [x] **audit fix v1**：5 Blocker + 13 Major 主对话修复（2026-04-25）
-- [ ] verify Agent 独立审 fix（防自报告撒谎）
-- [ ] 主对话精修剩余 → status=accepted
+- [x] verify Agent 独立审 fix v1 → fix v2（1.5 假修 + 3 regression + 4 漏洞 + 4 新问题，2026-04-25）
+- [x] verify v2 → fix v3（CY 决策 D/A/B；dim 区段死局 + L4 真做 re-enqueue + advisory 双参 ack）
+- [x] verify v3 → fix v4（R1 致命假修 + R4 死引用 + R5 4 处同步）
+- [x] verify v4 → fix v4.1（R5'=B 拆 model_name / model_version 三段式 + 应修 3 项）
+- [x] verify v4.1 → fix v4.2（8 项必修 + R2=A mock provider 校验 + 应修小项）
+- [x] verify v4.2 → fix v4.3（4 必修 F1-F4 + 2 旧 regression V2/V3 + V1 死字段备注 + V4 编号顺序）
+- [x] **fix v4.3 grep 复检关键词全清**（2026-05-09 startup verify：F1 三元组 / F2 7 字段 PK / F3 三段回填 / F4 EMBEDDING_MODEL_NAME / V2 embed_single / V3 idempotency_key 移除 全命中）
+- [x] 主对话精修剩余 → status=accepted（2026-05-09 ✅ flip）
 
 ### Baseline-patch 配套
 - [x] M02 加 rrf_k + similarity_threshold 字段（baseline-patch-m18.md）
@@ -1374,9 +1433,9 @@ class EmbeddingDeleteFailedError(SilentFailure):
 
 ### 配套文档更新
 - [x] design/02-modules/README.md §12 表加 §12D 行
-- [ ] design/02-modules/README.md M18 行 status draft→accepted
+- [x] design/02-modules/README.md M18 行 status draft→accepted（2026-05-09 启动期）
 - [x] design/02-modules/README.md 加 2026-10-25 §12D 合并评估触发器
-- [ ] design/00-architecture/07-capability-matrix.md M18 状态更新
+- [ ] design/00-architecture/07-capability-matrix.md M18 状态更新（sprint 收官子片 5 内做）
 
 ### 演进锚点（audit Round 3 落地，§15 不闭合，CY 周期性核查）
 - [ ] **embedding_tasks 行数 > 50万** 时评估 partition / 归档表演进（audit M11 / R3 E3）

@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（M17 sprint 完成: 7 commit + R-X1 第二实例 + Queue 异步 pilot + WebSocket endpoint 首发 + L1+L2+L3 第十五次实证 / 闸门 2.5 三栏第十二次 B 栏 0 项实证 / R1=3 subagent 并行 + R2=1 合并 Opus（bypass log #2 配套已恢复）/ R-X1 helper compensation_session 第二 caller 零摩擦 / 元贡献 7 项 + sink 立规候选 3 项 + punt 池新增 4 项）
-current_phase: Phase 2.1 进行中（M01-M08+M10+M11+M12+M13+M14+M15+M16+M17 完成；下一站 M18 语义搜索 / M09 superseded by M18）
+last_updated: 2026-05-09（M18 sprint 启动期完成 / design status flip draft→accepted + 闸门 2.5 reconcile pass A 8 / B 0 / C 6 + B 栏 0 第十三次实证 + design §14.5 sprint review 拆分计划补完 + cross-sprint punt 池本 sprint 命中检查 + M17 bypass log #2 配套验收）
+current_phase: Phase 2.1 进行中（M01-M08+M10+M11+M12+M13+M14+M15+M16+M17 完成；M18 语义搜索 sprint 进行中 / M09 superseded by M18）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -184,7 +184,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [x] M15 数据流转 ✅ 2026-05-08（**纯读 R10-2 owner 模块 / R1=1 合并 Opus M10 范式复用**；8 commit 29b0aaa 子片 0 prep §14.5 + M14 baseline-patch 反向回写 α 路线 / 8889ec5 子片 1 ActivityLog model + alembic + 9 model tests / af9120c 子片 2 DAO + 16 unit / 0fa19ad 子片 3 Schema + 11 ErrorCode（3 own + 8 M20 baseline-patch）+ Service + 21 tests / d527632 R1 1 P1 立修 + §14.5 self-correct / 4e9fd54 子片 4 Router 1 endpoint + 13 e2e / 9ca130e R2 2 P1 立修（metadata e2e 字面 + Pydantic 422 边界）/ 子片 5 关闸 commit；63 PASS / R13-1 90→101 / L12+L13 守护；闸门 2.5 三栏 A 6 / B 0 / C 10 第十次 B 栏 0 项；纯读 R10-2 owner 新教训 4 条 sink：横切 enum 同步责任 / 纯读 R1=1 合并 Opus / 双层防御非 dead code 区分 / 读权限 403 测试范式）
 - [x] M16 AI 快照（后台 §12B）✅ 2026-05-09（**§12B 后台 fire-and-forget 子模板首次实战 + L1 R14 立规重大事件**；7 commit 9e9eb68 子片 0 prep + 5c592d5 子片 0.5 L1+L3 batch 41 处过去式 + 959e0b4 write_event 真 INSERT + 6007fa2 子片 1 model+alembic+ActionType+3+TargetType+1 + ba0afb5 子片 2 DAO+CAS+18 unit + 2273f90 子片 3 Service+Schema+Runner+14 ErrorCode+15 unit + 043e3e2 子片 4 Router+19 e2e；1063 PASS / R13-1 116=116 / R14 守护通过 / L12+L13 守护；R1+R2 self-审 bypass log #2 / 闸门 2.5 三栏 A 8 / B 0 / C 8 第十一次 B 栏 0 项；L1 第十四数据点稳定 → M17+ 默认范式作模板；元贡献 6 项：R14 立规+ci-lint / §12B 子模板首战 / CAS UPDATE 防双写 / advisory_xact_lock 幂等 / 自起 SessionLocal runner / SYSTEM_USER_UUID + queue/base scaffold；cross-sprint 真漏洞 #1+#2+#5 关闭）
 - [x] M17 AI 导入（Queue §12C）✅ 2026-05-09（**首个 R-X1 第二实例 + 异步 Queue + WebSocket endpoint pilot**；ad069c0 启动期 + 7a6327f 子片 0 prep R-X1 第一实例迁移 + b806931 子片 1 model+alembic+ActionType+8+TargetType+1+36 model tests + f41ad25 子片 2 DAO+tenant filter+idempotency 7d+dead_letter 30d+28 unit + 9229759 子片 3 Service+AIOrchestrationService+8 ErrorCode+Queue+WS+40 新测试 + d558b5f R1 立修 8 P1（3 subagent 并行）+ [hash] 子片 4 Router 7 REST+1 WS+24 e2e + dcf7024 R2 立修 4 P1（1 合并 Opus）+ 子片 5 关闸；1213 PASS / R13-1 116→124 / L12+L13+R14 全过；闸门 2.5 第十二次 B 0；L1 第十五数据点稳定；bypass log #2 配套已恢复 spawn subagent；元贡献 7 项：R-X1 第二实例零摩擦验证 + WS endpoint Query Bearer 鉴权 + idempotency project_id B1 修复 + N+1 防护批量 cache + filename sanitize 字面验范式 + partial_failed IMPL-NOTE + design §7 字面漂移立规 sink；sink 立规候选 3 项：WS 5-test 矩阵 / sanitize horizontal 化 / multipart 上限分级；punt 池新增 4 项）
-- [ ] M18 语义搜索（embedding §12D）
+- [⏳ in-progress] M18 语义搜索（embedding §12D）— 启动期完成 2026-05-09（design accepted + reconcile pass + 闸门 2.6 类似 mini-sprint 待）
 - [ ] M19 导入导出
 - [ ] ~~M09~~（superseded by M18，不实现）
 
