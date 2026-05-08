@@ -119,6 +119,36 @@ class IssueService:
 
     # ─── 写 ───
 
+    async def batch_create_in_transaction(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        actor_user_id: UUID,
+        issues_data: list[dict[str, Any]],
+    ) -> list[Issue]:
+        """M11/M17 调用入口（R-X3 共享外部 session，R-X1 orchestrator 模式）。
+
+        issues_data 每条形如 {category, title, description, node_id?, tags?, assigned_to?}。
+        每条独立写 create activity_log（R10-1 batch3）；任一失败由 caller 事务回滚。
+        M11 sprint 接通（M07 sprint scaffold "M11/M17 sprint 期不实装" 到期，2026-05-08）。
+        """
+        created: list[Issue] = []
+        for raw in issues_data:
+            i = await self.create(
+                db,
+                project_id=project_id,
+                category=raw["category"],
+                title=raw["title"],
+                description=raw["description"],
+                node_id=raw.get("node_id"),
+                tags=raw.get("tags"),
+                assigned_to=raw.get("assigned_to"),
+                actor_user_id=actor_user_id,
+            )
+            created.append(i)
+        return created
+
     async def create(
         self,
         db: AsyncSession,

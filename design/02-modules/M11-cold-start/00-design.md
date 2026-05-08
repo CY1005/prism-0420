@@ -551,6 +551,27 @@ class ColdStartFileTooLargeError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M10 八数据点稳定后 M11 复用默认范式）
+
+> 按闸门 3.4 L1 总则要求落本 sprint review 计划。M11 是**第一个 R-X1 orchestrator**
+> （不直 INSERT 跨模块表 / 同步 HTTP 路径 / 调 4 个 service.batch_create_in_transaction）。
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（OrchestratorService + 4 batch_create 集成 + 事务边界） | 子片 0 + 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| M02-M10 八数据点稳定；R-X1 orchestrator 首次 — Spec 信号必合并 service 才能审；4 跨模块 service 接通 + 共享事务必合并审才能拼出 |
+| **R2** | 子片 4 完成（CSV upload endpoint + check_project_access + parse 错误行报告） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| endpoint 层契约漂移 + tenant 隔离 + 错误行 metadata 是 R2 高命中区 |
+
+**子片 5 不单跑**（≥80% SKIP 例外）；**子片 0 prep + design §14.5 段** + 4 service batch_create_in_transaction 接通同 commit；**M11 自身无 schema 子片**（子片 1 = own model `cold_start_tasks` + alembic）。
+
+**特殊触发点**：
+- 闸门 2.6（M17 前置 queue scaffold）—— **M11 不触发**（design §1+§12 同步 N/A 已决）
+- M04 punt R1-A A5「caller 必排序」—— 已被 design §6 G5 line 238 字面决定（caller 必排序 / path 计算在 NodeService）
+- R-X1 严守：M11 不直 INSERT 跨模块表，全走 service.batch_*
+
+**L3 实证回写承诺**：sprint 结束时把 R1/R2 命中比例 + R-X1 范式首次实证 + 4 跨模块 service.batch_create 接通元教训写到 `../../audit/m11-pilot-template-validation.md`。
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 1：职责边界 in/out scope 完整（引 US-A1.5 + PRD Q3.1；G6 Queue 预留兼容性说明）

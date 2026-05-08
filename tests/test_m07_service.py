@@ -502,3 +502,23 @@ async def test_svc_get_for_embedding_empty_description_still_includes_separator(
     text_out = await svc.get_for_embedding(db_session, i.id, proj.id)
     # 应拼出 "title only\n"（含分隔符），而非旧 falsy 跳过得 "title only"
     assert text_out == "title only\n"
+
+
+# ─────────────── M11 sprint R-X1 batch_create_in_transaction smoke ───────────────
+
+
+async def test_svc_batch_create_in_transaction_creates_multiple(db_session, svc, make_project):
+    """M11 sprint 接通：M07 batch_create_in_transaction 服务于 R-X1 orchestrator。"""
+    user, proj = await make_project()
+    created = await svc.batch_create_in_transaction(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        issues_data=[
+            {"category": "bug", "title": "i1", "description": "d1"},
+            {"category": "tech_debt", "title": "i2", "description": "d2"},
+        ],
+    )
+    assert len(created) == 2
+    titles = {i.title for i in created}
+    assert titles == {"i1", "i2"}

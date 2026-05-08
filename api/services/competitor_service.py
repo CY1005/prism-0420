@@ -96,6 +96,33 @@ class CompetitorService:
     ) -> Competitor:
         return await self._get_competitor_or_raise(db, competitor_id, project_id)
 
+    async def batch_create_in_transaction(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        actor_user_id: UUID,
+        competitors_data: list[dict[str, Any]],
+    ) -> list[Competitor]:
+        """M11/M17 调用入口（R-X3 共享外部 session，R-X1 orchestrator 模式）。
+
+        competitors_data 每条形如 {display_name, website_url?, description?}。
+        每条独立写 create activity_log（R10-1 batch3）；任一失败由 caller 事务回滚。
+        M11 sprint 接通（M06 sprint scaffold "M11 sprint 期不实装" 到期，2026-05-08）。
+        """
+        created: list[Competitor] = []
+        for raw in competitors_data:
+            c = await self.create_competitor(
+                db,
+                project_id=project_id,
+                display_name=raw["display_name"],
+                website_url=raw.get("website_url"),
+                description=raw.get("description"),
+                actor_user_id=actor_user_id,
+            )
+            created.append(c)
+        return created
+
     async def create_competitor(
         self,
         db: AsyncSession,

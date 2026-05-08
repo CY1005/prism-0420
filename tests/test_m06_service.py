@@ -400,3 +400,23 @@ async def test_svc_get_for_embedding_not_found_returns_none(db_session, svc, mak
     _, proj = await make_project()
     text = await svc.get_for_embedding(db_session, uuid4(), proj.id)
     assert text is None
+
+
+# ─────────────── M11 sprint R-X1 batch_create_in_transaction smoke ───────────────
+
+
+async def test_svc_batch_create_in_transaction_creates_multiple(db_session, svc, make_project):
+    """M11 sprint 接通：M06 batch_create_in_transaction 服务于 R-X1 orchestrator。"""
+    user, proj = await make_project()
+    created = await svc.batch_create_in_transaction(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        competitors_data=[
+            {"display_name": "Notion", "description": "all-in-one"},
+            {"display_name": "Figma", "website_url": "https://figma.com"},
+        ],
+    )
+    assert len(created) == 2
+    names = {c.display_name for c in created}
+    assert names == {"Notion", "Figma"}

@@ -589,3 +589,28 @@ async def test_svc_create_rejects_disabled_type(
 # helper for monkeypatch lambda return
 async def _async_none():
     return None
+
+
+# ─────────────── M11 sprint R-X1 batch_create_in_transaction smoke ───────────────
+
+
+async def test_svc_batch_create_in_transaction_creates_multiple(
+    db_session, svc, make_project, make_node, make_dim_type
+):
+    """M11 sprint 接通：M04 batch_create_in_transaction 服务于 R-X1 orchestrator。"""
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    t1 = await make_dim_type(key="b1", project_id=proj.id)
+    t2 = await make_dim_type(key="b2", project_id=proj.id)
+
+    created = await svc.batch_create_in_transaction(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        dimensions_data=[
+            {"node_id": node.id, "dimension_type_id": t1, "content": {"x": 1}},
+            {"node_id": node.id, "dimension_type_id": t2, "content": {"y": 2}},
+        ],
+    )
+    assert len(created) == 2
+    assert {r.dimension_type_id for r in created} == {t1, t2}

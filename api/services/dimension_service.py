@@ -169,6 +169,33 @@ class DimensionService:
 
     # ─── 写 ───
 
+    async def batch_create_in_transaction(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        actor_user_id: UUID,
+        dimensions_data: list[dict[str, Any]],
+    ) -> list[DimensionRecord]:
+        """M11/M17 调用入口（R-X3 共享外部 session，R-X1 orchestrator 模式）。
+
+        dimensions_data 每条形如 {node_id, dimension_type_id, content}。
+        每条独立写 ``create`` activity_log（R10-1 batch3）；任一失败由 caller 事务回滚。
+        M11 sprint 接通（M04 sprint scaffold "M11 sprint 期实装" 到期，2026-05-08）。
+        """
+        created: list[DimensionRecord] = []
+        for raw in dimensions_data:
+            rec = await self.create(
+                db,
+                project_id=project_id,
+                node_id=raw["node_id"],
+                dimension_type_id=raw["dimension_type_id"],
+                content=raw.get("content") or {},
+                actor_user_id=actor_user_id,
+            )
+            created.append(rec)
+        return created
+
     async def create(
         self,
         db: AsyncSession,
