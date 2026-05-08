@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-08
+last_updated: 2026-05-09
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -46,11 +46,11 @@ policy:
 
 | # | punt | 来源 | 约定 | 影响 | 推荐处理 |
 |---|---|---|---|---|---|
-| 1 | **write_event stub 仍未替换为真 INSERT** | M15-B1 | 后续独立 sprint | **critical** — M02-M14 全部 activity_log 事件未持久化；M15 owner 表零写入；前端 timeline / 审计追溯空数据 | M16 启动子片 0 prep 内吸收（β 路线） |
-| 2 | **M03-M08 service ~14 处裸 CRUD `action_type="create/update/delete"`** | M15-B2 | 与 B1 同 sprint | **high** — 一旦 B1 落地，CHECK constraint 必爆（M14 baseline-patch α 路线已锁过去式命名规约）；R10-2 enum 守护失效 | 与 #1 同时做（issue/version/dimension/competitor/node） |
+| 1 | ~~**write_event stub 仍未替换为真 INSERT**~~ ✅ **DONE 2026-05-09 commit 959e0b4** | M15-B1 | 后续独立 sprint | ~~critical~~ | **M16 sprint 子片 0.5 L1+L3 batch 关闭** |
+| 2 | ~~**M03-M08 service ~14 处裸 CRUD `action_type="create/update/delete"`**~~ ✅ **DONE 2026-05-09 commit 5c592d5**（实际 7 模块 41 处 含 M02 + M11 cold_start 命名漂移 + M07 issue_unassigned + M08 module_relation_updated + M05 version_record_set_current + M06 competitor_ref_updated 4 NEW enum）| M15-B2 | 与 B1 同 sprint | ~~high~~ | **M16 sprint 子片 0.5 batch 关闭 + ci-lint R14 grep 守护立规防御未来** |
 | 3 | **IssueResponse 漏 join 字段（node_name/created_by_name/assigned_to_name）** | M07 R2 P2-1 | M13/M15 集成期补 | **high** — design §7 字面承诺；前端 N+1 拼接；列表卡顿 | M16 启动 reconcile 时拍 |
 | 4 | **SSE generator 占 AsyncSession 300s** | M13-B13 | M16/M17 立异步 SSE 策略 | **high** — 10 并发即吃光默认 10 PG 连接池；生产可能拒服务 | M16 启动必查（M16 是 Queue 后台 / 同款 long-lived session 风险） |
-| 5 | **M02 Project.ai_model 字段未实装** | M13-B16 | M14+ baseline-patch | medium — M13 LLM 集成走 fallback；M14 已过未补 | M16 启动子片 0 prep 顺修（alembic add column 1 步） |
+| 5 | ~~**M02 Project.ai_model 字段未实装**~~ ✅ **DONE 2026-05-09 / 子片 3 验证字段已存在不需 alembic add**（M02 model 字面已含 ai_model 列；M13-B16 punt 误判） | M13-B16 | M14+ baseline-patch | ~~medium~~ | **M16 sprint 子片 3 验证关闭** |
 | 6 | **M07 update 不支持 detach (None→NULL)** | M07 R1-A P2-2 | design §3/§7 reconcile + 产品决策 | medium — issue 节点关联无法解除；M14 link/unlink 已支持但 M07 主表残缺 | M16 启动让 CY 拍是否补 |
 | 7 | **M11-B1 R-X1 失败补偿 commit boundary** | M11 R2 P1-01 punt | M17 异步 zip 导入时 | critical 但**未到约定** | 等 M17 sprint（按计划） |
 | 8 | **M14-B12 update/delete/unlink write_event 异常传播 e2e** | M14 R2 punt | M14 baseline-patch | medium — M02+ 元教训纪律 3 写路径无 e2e 覆盖 | 与 #1+#2 同 sprint 做 |

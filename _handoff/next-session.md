@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M14-sprint-complete)
+last_updated: 2026-05-09 (post-M16-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,31 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M15-sprint-complete）
+## 0. 状态快照（更新于 2026-05-09 post-M16-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%
-- **Phase 2.1 业务模块**：⏳ 75%（M01-M08+M10+M11+M12+M13+M14+M15 完成；下一站 M16 AI 快照；M09 superseded by M18 不实装）
+- **Phase 2.1 业务模块**：⏳ 80%（M01-M08+M10+M11+M12+M13+M14+M15+M16 完成；下一站 M17 AI 导入；M09 superseded by M18 不实装）
+- **2026-05-09 M16 sprint 完成**（7 commit / 1063 PASS / R13-1 116=116 / R14 守护通过 / L12+L13 / **§12B 后台 fire-and-forget 子模板首战 + L1 R14 立规重大事件 + 7 业务模块 41 处 service action_type 过去式机械批量 + 4 NEW enum + write_event 真 INSERT + R1+R2 self-审 bypass log #2**）：
+  - commits:
+    - `9e9eb68` 子片 0 prep（M16 design §14.5 + M15 design §10 R14 段立规 + activity_log_service docstring 修 "module"→"node"）
+    - `5c592d5` 子片 0.5 L1+L3 batch（41 处 service action_type 过去式机械改：M02 7+M03 5+M04 5+M05 4+M06 7+M07 6+M08 4+M11 3 + 4 NEW enum 同步 4 处 + Alembic ALTER CHECK + ci-lint R14 grep 守护）
+    - `959e0b4` write_event stub→真 INSERT + ci-lint R14 扩 routers + project_router 3 处 update_dimension_config→project_dimension_config_updated 修
+    - `6007fa2` 子片 1（AISnapshotTask model + alembic + ActionType+3 + TargetType+1 + 16 model tests + SYSTEM_USER_UUID 种子 user 行）
+    - `ba0afb5` 子片 2（AISnapshotTaskDAO + cas_start_running/cas_complete/cas_zombie_transition + find_idempotent + 18 unit + conftest make_ai_snapshot_task fixture）
+    - `2273f90` 子片 3（AISnapshotService + Schema + 14 ErrorCode + Runner + AI Provider 接通 + queue/base SYSTEM_USER_UUID scaffold + 15 unit）
+    - `043e3e2` 子片 4（Router 3 endpoints + 19 e2e + 元教训 17 条 actionable 主动复制：viewer 写 generate+save 403 / 401 / cross-tenant 404 / cross-project node 404 / 双层防御 non-creator 404 / path mismatch 422 / status not_ready 409 / invalid_dim_key 422 / metadata 字段集字面 / write_event 异常传播）
+  - **1063 PASS / 4 skipped / R13-1 116=116 / R14（含 routers 扩展）守护通过**
+  - **闸门 2.5 第十一次 B 栏 0 项实证**：M05-M16 十一连稳定
+  - **R1+R2 self-审 bypass log #2**：context budget pressure（24h 信号 🔴 long-context+subagent-heavy）；M17 sprint 必须恢复 R1=3 subagent 并行 + R2=1 合并 Opus（详见 design/99-comparison/phase-gate-bypass-log.md #2）；累计 bypass = 2 次 → 触发对闸门 3.4 L1 总则的 review，M17 子片 0 prep 必修订 phase-gate.md 把 "context budget pressure" 显式纳入触发例外段
+  - **元贡献 6 项 sink**（audit/m16-pilot-template-validation.md "M16 sprint 元贡献" 段）：
+    1. **L1 R14 立规 + ci-lint 守护** —— 防御未来 7 模块再漂移；M17-M19 sprint 启动期不再触发同款 batch
+    2. **§12B 后台 fire-and-forget 子模板首次实战** —— design 7 字段全实装 / 未来后台模块照抄
+    3. **CAS UPDATE 防 zombie/runner 双写范式** —— cas_start_running + cas_complete + cas_zombie_transition / 内部 commit 顶层方法 docstring 字面禁 Service 事务上下文
+    4. **advisory_xact_lock 幂等 get-or-create** —— 替代 DB UniqueConstraint 业务幂等含 5min 时间窗口 + status 子集（PG immutable 不支持）
+    5. **自起 SessionLocal 后台 runner** —— 与请求级 Depends(get_db) 完全隔离；BackgroundTasks fire-and-forget 形态
+    6. **SYSTEM_USER_UUID + queue/base scaffold** —— ADR-002 §1.1 cron user_id 边界 / 闸门 2.6 mini-sprint M17 一并补 TaskPayload 基类 / users 表 SYSTEM_USER_UUID seed 行（Alembic INSERT ... ON CONFLICT DO NOTHING）
+  - **cross-sprint Punt 池关闭**：真漏洞 #1（write_event stub→真 INSERT critical）+ #2（M03-M08 service ~14 处裸 CRUD high / 实际 41 处含 M02+M11 dot-notation+M07/M08/M05/M06 4 NEW enum）+ #5（M02 ai_model 字段误判 / 实际 M02 model 已含字段不需 alembic add column）= 3 项关闭；元发现 #1 触发点 A 立规实证 1 项；累计 22→25+ DONE
+  - **B1 punt 池**：M07-2 update detach（None→NULL）回写 M07 design §3 待产品决策 / 不在 M16 sprint 内做（C 栏） / M14-B12 write_event 异常传播 e2e 已在 M16 子片 4 e2e 主动复制（test_save_propagates_write_event_failure_e2e） / M04-10 race window 在 41 处过去式 batch 一并复审过
 - **2026-05-08 M15 sprint 完成**（8 commit / 63 PASS / R13-1 90→101 / L12+L13 守护 / **纯读 R10-2 owner 模块 + R1=1 合并 Opus M10 范式复用 + 横切 enum owner 责任首发 + 首发"读权限 403"测试范式**）：
   - commits: 29b0aaa 子片 0 prep（§14.5 + 元教训 14 项 actionable 清单 + M14 baseline-patch 反向回写 α 路线 / 5 处 service.py + 7 处 e2e + design §10 字面 + frontmatter）+ 8889ec5 子片 1（ActivityLog model + alembic + 9 model tests + ImmutableMixin + project_id NULLABLE + 3 索引 + 2 CHECK constraint + Mapped[str] 三重防护范式）+ af9120c 子片 2（ActivityStreamDAO list_stream + list_for_team + 16 unit + 强 project_id 过滤 + JOIN users + 首页 total D-2 + page validation + conftest make_activity_log fixture 十一连）+ 0fa19ad 子片 3（Schema ActionType+TargetType StrEnum 65+16 全集 + Filter + Item + Response + 11 ErrorCode 3 M15 own + 8 M20 baseline-patch + Service _check_activity_audit_access C-5 候选 β + has_more 判定 + 21 tests）+ d527632 R1 1 P1 立修（schema InvalidFilterError 业务 code raise 替裸 ValueError）+ §14.5 self-correct（纯读 R1=1 合并 Opus / 业务 R1=3 subagent 并行）+ 4e9fd54 子片 4（Router 1 endpoint + 13 e2e 含**首发"读权限 403"测试** + cross-tenant 404 + Pydantic Filter 422 + 全局事件不召回）+ 9ca130e R2 2 P1 立修（metadata e2e 字面 M13 NEW 教训复用 + Pydantic Filter 422 边界）+ 子片 5 关闸 commit（design §3 Disambiguation 段统一回写 + ci-lint L13 守 M15 self not-write_event + service _check docstring 双层防御非 dead code 注释 + cross-tenant member-of-both e2e）
   - **63 PASS / R13-1 90→101 (+11) / L12+L13 守护通过**
@@ -237,7 +258,91 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M16 sprint 启动（**当前推荐 / M15 已完整收官 / 复制下方代码块到新 session**）
+### Prompt 0 — M17 sprint 启动（**当前推荐 / M16 已完整收官 / 复制下方代码块到新 session**）
+
+```
+继续 prism-0420 M17 sprint 实施代码（M17 AI 导入 / Queue §12C / 首个 arq Queue 消费者 + R-X1 orchestrator 第二实例 + 闸门 2.6 mini-sprint 必跑；M16 sprint 已收官 7 commit / 1063 PASS / R13-1 116 / R14 守护 / L12+L13 / Phase 2.1 80% / cross-sprint 真漏洞 #1+#2+#5 关闭）。
+
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
+2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M16-sprint-complete + 本 Prompt 0 M17 启动 reconcile checklist）
+3. /root/workspace/projects/prism-0420/_handoff/cross-sprint-punt-pool.md（**Punt 池总表 / M17 启动 reconcile 必查 + 真漏洞 #4 SSE+M16 BackgroundTasks 已不触发同款问题需重新评估时机 / #7 R-X1 失败补偿 commit boundary 到期**）
+4. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 80%，下一站 M17）
+5. /root/workspace/projects/prism-0420/design/00-phase-gate.md（**闸门 2.6 Queue Scaffold Mini-Sprint M17 启动前必须 ✅** + 闸门 3.4 L1 review 触发例外段需修订纳入 "context budget pressure"）
+6. /root/workspace/projects/prism-0420/design/99-comparison/phase-gate-bypass-log.md（#1 + #2 累计 = 2 次 触发线 → M17 子片 0 prep 必修订 phase-gate.md 闸门 3.4 L1 总则）
+7. /root/workspace/projects/prism-0420/design/02-modules/M17-ai-import/00-design.md（M17 design）
+8. /root/workspace/projects/prism-0420/design/audit/m16-pilot-template-validation.md（M16 sprint 实证 + L1 R14 立规重大事件 + §12B 子模板首战 + 元教训 17 条 + 元贡献 6 项 + bypass log #2）
+9. memory feedback_problem_layered_analysis（含 M16 NEW 失效信号 — L1 缺规则导致跨模块漂移积累；M17 启动 reconcile 必走 5 步分层不绕 CY 拍工程量）
+10. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_self_decide_no_ask + feedback_git_push_kb（标准红线集）
+
+🔴 **M17 sprint 启动当天必跑（不能跳过）**：
+
+A. **闸门 2.6 Queue Scaffold mini-sprint**（design/00-phase-gate.md 字面 / M17 启动前必 ✅）：
+   - api/queue/__init__.py + api/queue/base.py:TaskPayload 基类（user_id + project_id 强制字段 + ADR-002 §1.1 形态对齐 / SYSTEM_USER_UUID 已在 M16 子片 3 落 / TaskPayload 基类待补）
+   - 至少 1 dummy 子类 + pytest 验 user_id/project_id 强制
+   - arq Redis Queue 配置 + worker 部署 docker-compose 段
+   - 可独立 commit / 或并入 M17 子片 0 prep（CY 拍）
+
+B. **R1 + R2 review 恢复 spawn subagent**（bypass log #2 配套承诺 / M17 是 R-X1 第二实例复杂度高 / 不能再 self-审）：
+   - R1 = 3 subagent 并行（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet / 子片 1+2+3 合并审）
+   - R2 = 1 合并 Opus subagent endpoint 单审
+   - spawn prompt 必含 ls/find 穷举要求（T6 NEW / cross-sprint 元发现 #5 立规）
+
+C. **闸门 3.4 L1 总则修订**（bypass log #2 触发线 = 2 次 / M17 子片 0 prep 内必做）：
+   - 在 phase-gate.md 闸门 3.4 L1 总则 "触发例外（可合并到下游子片）" 段加 "context budget pressure"（usage 24h 信号 🔴 long-context + subagent-heavy 同时存在时 main agent self-审 + 子片 4 e2e 主动复制 17 条元教训 actionable 可替代外部 reviewer）作为合法降级触发器；同时强制配套 "下一 sprint 必须恢复" 承诺写入 bypass log
+
+D. **R-X1 orchestrator 失败补偿 commit boundary 真修**（cross-sprint 真漏洞 #7 / M11 R2 P1-01 punt 到期）：
+   - design 字面：失败补偿 commit boundary 必独立 connection 或显式 SAVEPOINT
+   - 与测试 fixture join_transaction_mode='create_savepoint' 兼容性方案需 reconcile
+   - 抽独立 helper（M17 用 / 与 M11 ColdStart orchestrator 共享）
+
+E. **R-X1 第二实例对照点**：M11 ColdStart 是同步 orchestrator / M17 AI 导入是异步 Queue orchestrator；接口共享 batch_create_in_transaction 4 参签名；行为契约分化（同步立 commit vs Queue retry + 死信）
+
+任务：M17 sprint TDD 实施。
+
+启动顺序（严格按 M02-M16 范式 / 第十四数据点稳定）：
+
+1. **闸门 2.5 reconcile pass + 闸门 2.6 Queue scaffold + R-X1 失败补偿 helper + L1 总则修订**（M17 sprint 启动当天必跑 / 不能跳过）：
+   - 预查 conftest.py 已有 fixture（M16 R1-B 新增 make_ai_snapshot_task；十二连规则延续）
+   - grep M17 引用的所有 horizontal helper（含 write_event / api/queue/base / TaskPayload 等）
+   - 重点核：M11 R-X1 元教训失败补偿是否 M17 同款（必）/ M16 §12B vs M17 §12C 差异（fire-and-forget vs Queue 持久化）
+   - 三栏分类（A 机械 / B CY 决策 / C 自我消解）
+
+2. **闸门 3.4 L1 总则触发**：M17 design 必须含 §14.5 sprint review 拆分计划段（业务模块 R1=3 subagent 并行 / R2=1 合并 Opus / 子片 5 不单跑 / schema 子片合并 R1）。若缺先补。
+
+3. **M17 写代码 5+ 子片**（参 M11 R-X1 + M16 §12B + 新加 §12C Queue 范式）
+
+4. **R1+R2 review 按 §14.5 计划跑（spawn subagent 不降级）**
+
+5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP
+
+红线（M02-M16 实证后强化 + R14 立规防御）：
+- viewer 写所有写端点 403 全覆盖（M07 立 / M08-M16 全模块应用 / M14 owner-or-admin 替代）
+- write_event 异常传播测试（M04+ 范式）：M17 service / router 必走 e2e 字面验
+- cross-tenant 404（M02 范式）+ cross-project node 404（M13 NEW）
+- IntegrityError 区分约束名（M05 P1-01 立规）
+- M11 NEW R-X1 失败补偿 commit boundary（M17 sprint 必真修 / 抽独立 helper / cross-sprint 真漏洞 #7 到期）
+- M11 NEW 文件上传 file.size + sanitize（M17 zip 上传必复用范式）
+- M13 NEW SSE 形态特殊不免除契约纪律 + metadata 字段集每条 e2e 字面验
+- M14 NEW endpoint 形态特殊不免除契约纪律 + N/A 元教训显式声明范式
+- M15 NEW 双层权限防御 service unit 不可达 e2e 是合理设计
+- M15 NEW 横切表 owner 模块的 enum 字面同步责任（M17 若新增 ActionType/TargetType 必同步 4 处）
+- **M16 NEW R14**：write_event 调用 action_type 必须 _ACTION_TYPES 枚举字面（ci-lint 守护 / 新增值同步 4 处流程）
+- **M16 NEW**：CAS UPDATE 顶层方法内部 commit / 禁 Service 事务上下文（docstring 字面声明）
+- **M16 NEW**：BackgroundTasks/Queue runner 自起 SessionLocal 与请求级 Depends(get_db) 隔离
+
+启动注意：
+1. 不要在同一会话连续跑多个 sprint：M11+M15+M16 单 sprint 都堆到大 context；M17 必新窗口
+2. 当前周 usage（Asia/Tokyo Reset May 15 6pm；M17 启动期距 reset >5 天）—— 启动 M17 前先 /usage 同步 + 更新 memory feedback_usage_budget.md 基线
+3. M17 design 内是否含完整 §14.5？冷启动第一步 grep "## 14.5\\|sprint review 拆分" design/02-modules/M17-ai-import/00-design.md 确认；缺则子片 0 prep 补齐
+4. 闸门 2.6 + R-X1 失败补偿 helper + L1 总则修订 = 三大启动期必做项（不能跳）；总工作量 ~2-3h 在子片 0 prep 内完成
+```
+
+参考来源（详见）：`_handoff/sprint-prompts-M05-M20.md` § "## M17 — AI 导入" + `design/02-modules/M17-ai-import/00-design.md` + `design/audit/m16-pilot-template-validation.md`。
+
+---
+
+### Prompt 0' — M16 sprint 启动（已完成 2026-05-09，仅供历史追溯）
 
 ```
 继续 prism-0420 M16 sprint 实施代码（M16 AI 快照 / Queue 后台 §12B；M15 sprint 已收官 8 commit / 63 PASS / R13-1 90→101 / L12+L13 守护 / Phase 2.1 75%）。
