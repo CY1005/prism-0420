@@ -371,3 +371,42 @@ class CompetitorCrossProjectError(ValidationError):
     code = ErrorCode.COMPETITOR_CROSS_PROJECT
     http_status = 422
     message = "Cannot reference a competitor from another project"
+
+
+# ─────────────── M07 问题沉淀 ───────────────
+
+
+class IssueNotFoundError(NotFoundError):
+    code = ErrorCode.ISSUE_NOT_FOUND
+    http_status = 404
+    message = "Issue not found"
+
+
+class IssueTransitionInvalidError(ValidationError):
+    code = ErrorCode.ISSUE_TRANSITION_INVALID
+    http_status = 422
+    message = "Invalid status transition"
+
+
+class IssueClosedError(ValidationError):
+    code = ErrorCode.ISSUE_CLOSED_ERROR
+    http_status = 422
+    message = "Issue is closed and cannot be reopened; create a new issue instead"
+
+
+class IssueAssigneeRequiredError(ValidationError):
+    code = ErrorCode.ISSUE_ASSIGNEE_REQUIRED
+    http_status = 422
+    message = "assigned_to is required when transitioning to in_progress"
+
+
+class IssueCategoryInvalidError(ValidationError):
+    code = ErrorCode.ISSUE_CATEGORY_INVALID
+    http_status = 422
+    message = "Invalid issue category"
+
+
+class IssueNodeCrossProjectError(ValidationError):
+    code = ErrorCode.ISSUE_NODE_CROSS_PROJECT
+    http_status = 422
+    message = "The specified node does not belong to this project"

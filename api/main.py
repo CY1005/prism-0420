@@ -56,11 +56,15 @@ async def lifespan(app: FastAPI):
     from api.services.competitor_service import CompetitorService
 
     register_child_service("competitor", CompetitorService().delete_by_node_id)
+    # M07 子片 3: R-X2 **第三真注入（orphan 语义）** — IssueService 游离化 issues
+    from api.services.issue_service import IssueService
+
+    register_child_service("issue", IssueService().orphan_by_node_id)
     log.info(
         "app.startup",
         version="0.1.0",
         tenant_context="M02 (project_members)",
-        child_services=["dimension", "competitor"],
+        child_services=["dimension", "competitor", "issue"],
     )
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
         try:

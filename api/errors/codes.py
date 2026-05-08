@@ -82,3 +82,11 @@ class ErrorCode(StrEnum):
     COMPETITOR_REF_NOT_FOUND = "competitor_ref_not_found"
     COMPETITOR_REF_DUPLICATE = "competitor_ref_duplicate"
     COMPETITOR_CROSS_PROJECT = "competitor_cross_project"
+
+    # M07 问题沉淀 (design §13)
+    ISSUE_NOT_FOUND = "issue_not_found"
+    ISSUE_TRANSITION_INVALID = "issue_transition_invalid"
+    ISSUE_CLOSED_ERROR = "issue_closed_error"
+    ISSUE_ASSIGNEE_REQUIRED = "issue_assignee_required"
+    ISSUE_CATEGORY_INVALID = "issue_category_invalid"
+    ISSUE_NODE_CROSS_PROJECT = "issue_node_cross_project"
