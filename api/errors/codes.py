@@ -118,3 +118,12 @@ class ErrorCode(StrEnum):
     COMPARISON_NODE_NOT_FOUND = "comparison_node_not_found"
     COMPARISON_EMPTY_SELECTION = "comparison_empty_selection"
     COMPARISON_SNAPSHOT_CONFLICT = "comparison_snapshot_conflict"
+
+    # M13 AI 需求分析 (design §13)
+    ANALYSIS_NODE_NOT_FOUND = "analysis_node_not_found"
+    ANALYSIS_PROVIDER_NOT_CONFIGURED = "analysis_provider_not_configured"
+    ANALYSIS_PROVIDER_ERROR = "analysis_provider_error"
+    ANALYSIS_TIMEOUT = "analysis_timeout"
+    ANALYSIS_QUOTA_EXCEEDED = "analysis_quota_exceeded"
+    ANALYSIS_SAVE_FAILED = "analysis_save_failed"
+    ANALYSIS_INVALID_LEVEL = "analysis_invalid_level"

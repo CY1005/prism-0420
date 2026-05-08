@@ -551,3 +551,45 @@ class ComparisonEmptySelectionError(ValidationError):
 class ComparisonSnapshotConflictError(ConflictError):
     code = ErrorCode.COMPARISON_SNAPSHOT_CONFLICT
     message = "Snapshot was modified by someone else; please refresh and retry"
+
+
+# ─── M13 AI 需求分析 (design §13) ───
+
+
+class AnalysisNodeNotFoundError(NotFoundError):
+    code = ErrorCode.ANALYSIS_NODE_NOT_FOUND
+    message = "Node not found or not in project"
+
+
+class AnalysisProviderNotConfiguredError(ValidationError):
+    code = ErrorCode.ANALYSIS_PROVIDER_NOT_CONFIGURED
+    message = "AI provider is not configured for this project; go to project settings to configure"
+
+
+class AnalysisProviderError(AppError):
+    code = ErrorCode.ANALYSIS_PROVIDER_ERROR
+    http_status = 503
+    message = "AI provider call failed (transient, please retry)"
+
+
+class AnalysisTimeoutError(AppError):
+    code = ErrorCode.ANALYSIS_TIMEOUT
+    http_status = 504
+    message = "Analysis exceeded server timeout (5min)"
+
+
+class AnalysisQuotaExceededError(AppError):
+    code = ErrorCode.ANALYSIS_QUOTA_EXCEEDED
+    http_status = 429
+    message = "AI quota exceeded"
+
+
+class AnalysisSaveFailedError(AppError):
+    code = ErrorCode.ANALYSIS_SAVE_FAILED
+    http_status = 500
+    message = "Failed to save analysis result"
+
+
+class AnalysisInvalidLevelError(ValidationError):
+    code = ErrorCode.ANALYSIS_INVALID_LEVEL
+    message = "Invalid analysis level (must be L1/L2/L3)"
