@@ -16,6 +16,7 @@ dependencies = [
     "bcrypt>=4.2",
     "email-validator>=2.2",
     "cryptography>=43.0",
+    "python-multipart>=0.0.27",
 ]
 
 [dependency-groups]
@@ -45,6 +46,8 @@ extend-immutable-calls = [
     "fastapi.Body",
     "fastapi.Path",
     "fastapi.Cookie",
+    "fastapi.File",
+    "fastapi.Form",
     # M02 子片 4: check_project_access(role=...) 是 Depends 工厂,模式同 fastapi.Depends
     "api.auth.check_project_access.check_project_access",
 ]
