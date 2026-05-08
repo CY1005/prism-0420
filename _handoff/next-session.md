@@ -160,16 +160,36 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M11 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M11 sprint 子片 1+ 接续（**当前推荐 / 子片 0 prep 已落地**）
 
-参 `_handoff/sprint-prompts-M05-M20.md` § "## M11 — 冷启动 / 项目模板（cold-start）" 段；启动当天复制对应 prompt 段落（M10 commits 098a2ee → 子片 4 关闸 / 613+ PASS / Phase 2.1 50%）。
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M11 — 冷启动 / 项目模板（cold-start）" 段；启动当天从子片 1 开始（M11 子片 0 prep 本会话已 commit `8ef59b3` / 616 PASS / Phase 2.1 50%）。
+
+**M11 子片 0 prep 已完成（commit `8ef59b3` 2026-05-08）**：
+- ✅ design §14.5 sprint review 拆分计划段补
+- ✅ **3 跨模块 batch_create_in_transaction 接通**（M04 punt R1-A A6 + M06/M07 scaffold "M11 期实装" 全到期）：
+  - `DimensionService.batch_create_in_transaction(dimensions_data)` ✅
+  - `CompetitorService.batch_create_in_transaction(competitors_data)` ✅
+  - `IssueService.batch_create_in_transaction(issues_data)` ✅
+  - `NodeService.batch_create_in_transaction` 已存在（M03 sprint） → **R-X1 4 接口齐全**
+- ✅ 3 smoke tests / 616 PASS / R13-1 67=67
+
+**M11 闸门 2.5 reconcile 三栏（已分析 / 第六次 B 栏 0 项实证）**：
+- A 8 项（其中 4 项已落地子片 0：M04+M06+M07 batch_create + §14.5）
+- B 0 项
+- C 3 项（queue N/A / R-X1 不是 R-X2 / caller 拓扑责任 design §6 G5 已决）
+
+**M11 剩余子片**（下个 session 接续）：
+- **子片 1**: M11 own model `cold_start_tasks` + alembic（design §3）
+- **子片 2**: ColdStartDAO（task CRUD + tenant 过滤）
+- **子片 3**: ColdStartOrchestratorService（CSV parse + 4 service.batch_create 集成 + 共享 db.begin() / R-X1 严守）
+- **子片 4**: Router CSV upload endpoint（multipart/form-data）+ check_project_access editor + 错误行报告
+- **子片 5**: 关闸（audit/m11-pilot-template-validation.md + roadmap + handoff）
 
 M11 模块特定要素提示：
-- **第一个 R-X1 orchestrator**（不直 INSERT 跨模块表，必须通过其他模块 Service.batch_create_in_transaction 调用）
-- 调用 M03 NodeService.batch_create_in_transaction + M04 DimensionService.batch_create_in_transaction（M04 punt：M11 sprint 期才实装）+ M07 IssueService.batch_create_in_transaction
-- **M04 punt 接通**：M11 是 M04 batch_create_in_transaction 的第一 caller
-- 闸门 2.6（M17 前置 queue scaffold 占位）— M11 通常同步无需 queue
-- R-X1 严守：M11 不直查/直写 nodes/dimension_records/issues；通过 service.batch_*
+- **第一个 R-X1 orchestrator**（不直 INSERT 跨模块表，全走 service.batch_*）
+- M11 是同步 HTTP 路径（design §12 N/A queue / 无 SSE / 无 Worker）
+- caller 拓扑排序契约（M11 csv 已是层序，design §6 G5 line 238）
+- ⚠️ **asyncio.gather AsyncSession 同 session 不安全**（M08 立修 tests pass 是巧合 / SA 抛 "concurrent operations not permitted" / 新模块禁用 / 见 memory feedback_problem_layered_analysis 失效信号）
 
 **M02-M10 元教训防御 actionable 清单**（M11 sprint 启动 reconcile 时主动复制不等 R2 抓）：
 1. viewer 写**所有**写端点 403 全覆盖（M07 立 / M08 应用 / M10 N/A 因纯读）
