@@ -156,6 +156,16 @@ class ErrorCode(StrEnum):
     SNAPSHOT_INVALID_DIMENSION_KEY = "snapshot_invalid_dimension_key"
     SNAPSHOT_TASK_PATH_MISMATCH = "snapshot_task_path_mismatch"
 
+    # M17 AI 智能导入 (design §13 / R-X1 第二实例 / Queue 异步 pilot)
+    IMPORT_TASK_NOT_FOUND = "import_task_not_found"
+    IMPORT_TASK_FINALIZED = "import_task_finalized"
+    IMPORT_INVALID_SOURCE = "import_invalid_source"
+    IMPORT_AI_PROVIDER_ERROR = "import_ai_provider_error"
+    IMPORT_BATCH_INSERT_FAILED = "import_batch_insert_failed"
+    IMPORT_QUOTA_EXCEEDED = "import_quota_exceeded"
+    IMPORT_TASK_DUPLICATE = "import_task_duplicate"
+    IMPORT_INVALID_STATE_TRANSITION = "import_invalid_state_transition"
+
     # M20 团队 (M15 sprint baseline-patch / design §13 / 未实装期 ErrorCode）
     # M15 sprint 期仅注册 + R13-1 parity；生产路径 M20 sprint 期补 raise caller + e2e 回归
     TEAM_NOT_FOUND = "team_not_found"

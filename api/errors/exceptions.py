@@ -638,6 +638,62 @@ class ActivityStreamInvalidFilterError(ValidationError):
     message = "Invalid filter parameters: from_dt must be before to_dt"
 
 
+# ─── M17 AI 智能导入 (design §13 / R-X1 第二实例 / Queue 异步) ───
+
+
+class ImportTaskNotFoundError(NotFoundError):
+    code = ErrorCode.IMPORT_TASK_NOT_FOUND
+    message = "Import task not found"
+
+
+class ImportTaskFinalizedError(ConflictError):
+    code = ErrorCode.IMPORT_TASK_FINALIZED
+    http_status = 409
+    message = "Import task is in final state and cannot be modified"
+
+
+class ImportInvalidSourceError(ValidationError):
+    code = ErrorCode.IMPORT_INVALID_SOURCE
+    http_status = 422
+    message = "Import source is invalid (corrupted zip / unreachable git URL)"
+
+
+class ImportAIProviderError(AppError):
+    code = ErrorCode.IMPORT_AI_PROVIDER_ERROR
+    http_status = 503
+    message = "AI provider call failed after retries"
+
+
+class ImportBatchInsertFailedError(AppError):
+    code = ErrorCode.IMPORT_BATCH_INSERT_FAILED
+    http_status = 500
+    message = "Batch insert failed; transaction rolled back"
+
+
+class ImportQuotaExceededError(AppError):
+    code = ErrorCode.IMPORT_QUOTA_EXCEEDED
+    http_status = 429
+    message = "AI quota exceeded for user or project"
+
+
+class ImportTaskDuplicateError(AppError):
+    """idempotency 命中——非错误，service 层用此类标识复用。
+
+    http_status=200 是有意为之（design §13 字面）：复用上次任务 = 正常返回旧 task，
+    router 层 catch 此异常时改返 200 + 复用 task 响应（区别于真错误的 4xx/5xx）。
+    """
+
+    code = ErrorCode.IMPORT_TASK_DUPLICATE
+    http_status = 200
+    message = "Reusing previous import task (idempotency hit)"
+
+
+class ImportInvalidStateTransitionError(ConflictError):
+    code = ErrorCode.IMPORT_INVALID_STATE_TRANSITION
+    http_status = 409
+    message = "Invalid state transition"
+
+
 # ─── M20 团队 (M15 sprint baseline-patch / design §13) ───
 # M15 sprint 期仅注册 + R13-1 parity；M20 sprint raise caller + e2e 回归
 

@@ -151,9 +151,9 @@ async def _patch_compensation_session_for_tests(
     """
     from contextlib import asynccontextmanager
 
-    from api.services import cold_start_service, orchestrator_helpers
+    from api.services import cold_start_service, import_service, orchestrator_helpers
 
-    _MODULES = (orchestrator_helpers, cold_start_service)
+    _MODULES = (orchestrator_helpers, cold_start_service, import_service)
 
     @asynccontextmanager
     async def _test_compensation_session() -> AsyncIterator[AsyncSession]:
