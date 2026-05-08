@@ -212,24 +212,58 @@ async def test_issue_cross_tenant_returns_404(auth_client, make_user):
     assert r.json()["code"] == "project_not_found"
 
 
-async def test_issue_viewer_write_returns_403(auth_client, make_user, db_session):
-    """B 是 A 项目 viewer → POST/PUT/DELETE/transition 全 403（与 M06 同款全覆盖）。"""
+async def test_issue_viewer_write_returns_403_full_coverage(auth_client, make_user, db_session):
+    """R2 P1-01 立修（M06 元教训复发立修）：B 是 A 项目 viewer → 4 写端点全 403。
+
+    对照 M06 R2 P1-02 立修范式：每个写端点单独抄写
+    Depends(check_project_access(role="editor")) 是抄漏单点静默失效区域，必须 4
+    端点全测。M07 sprint 是该元教训"复发 + 应用立修"的第一次实证。
+    """
     from api.models.project import MemberRole, ProjectMember
 
     userA = await make_user(email="m07-vA@example.com")
     userB = await make_user(email="m07-vB@example.com")
     pidA = await _create_project(auth_client, userA.id)
+    iidA = await _create_issue(auth_client, userA.id, pidA)
+
     db_session.add(ProjectMember(project_id=pidA, user_id=userB.id, role=MemberRole.VIEWER.value))
     await db_session.commit()
 
-    # POST 403
-    r = await auth_client.post(
-        f"/api/projects/{pidA}/issues",
-        json={"category": "bug", "title": "hack", "description": "d"},
-        headers=_bearer(userB.id),
-    )
-    assert r.status_code == 403
-    assert r.json()["code"] == "permission_denied"
+    cases = [
+        (
+            "POST create",
+            "post",
+            f"/api/projects/{pidA}/issues",
+            {"category": "bug", "title": "hack", "description": "d"},
+        ),
+        (
+            "PUT update",
+            "put",
+            f"/api/projects/{pidA}/issues/{iidA}",
+            {"title": "hack"},
+        ),
+        (
+            "POST transition",
+            "post",
+            f"/api/projects/{pidA}/issues/{iidA}/transition",
+            {"target_status": "resolved"},
+        ),
+        (
+            "DELETE",
+            "delete",
+            f"/api/projects/{pidA}/issues/{iidA}",
+            None,
+        ),
+    ]
+    for label, method, url, body in cases:
+        if method == "delete":
+            r = await auth_client.delete(url, headers=_bearer(userB.id))
+        elif method == "put":
+            r = await auth_client.put(url, json=body, headers=_bearer(userB.id))
+        else:
+            r = await auth_client.post(url, json=body, headers=_bearer(userB.id))
+        assert r.status_code == 403, f"{label}: expected 403 got {r.status_code}"
+        assert r.json()["code"] == "permission_denied", f"{label}: wrong code"
 
 
 async def test_unauthenticated_returns_401(auth_client, make_user):
