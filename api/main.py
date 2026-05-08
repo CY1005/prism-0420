@@ -13,6 +13,7 @@ from api.errors import register_exception_handlers
 from api.routers import auth as auth_router
 from api.routers import (
     cold_start_router,
+    comparison_router,
     competitor_router,
     dimension_router,
     issue_router,
@@ -109,6 +110,7 @@ app.include_router(module_relation_router.relation_router)
 app.include_router(module_relation_router.relation_node_router)
 app.include_router(overview_router.overview_router)
 app.include_router(cold_start_router.cold_start_router)
+app.include_router(comparison_router.comparison_router)
 
 
 @app.get("/health")
