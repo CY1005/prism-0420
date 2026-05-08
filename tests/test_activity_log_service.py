@@ -15,8 +15,8 @@ async def test_write_event_emits_structured_log(capsys):
         db=None,
         actor_user_id=actor,
         project_id=proj,
-        action_type="create",
-        target_type="module",
+        action_type="node_created",
+        target_type="node",
         target_id=str(target),
         summary="创建了节点『登录流程』",
         metadata={"importance": "high"},
@@ -26,8 +26,8 @@ async def test_write_event_emits_structured_log(capsys):
     assert payload["event"] == "activity.event"
     assert payload["actor_user_id"] == str(actor)
     assert payload["project_id"] == str(proj)
-    assert payload["action_type"] == "create"
-    assert payload["target_type"] == "module"
+    assert payload["action_type"] == "node_created"
+    assert payload["target_type"] == "node"
     assert payload["target_id"] == str(target)
     assert payload["summary"] == "创建了节点『登录流程』"
     assert payload["metadata"] == {"importance": "high"}
@@ -40,7 +40,7 @@ async def test_write_event_metadata_optional(capsys):
         db=None,
         actor_user_id=uuid4(),
         project_id=uuid4(),
-        action_type="delete",
+        action_type="project_deleted",
         target_type="project",
         target_id=str(uuid4()),
         summary="x",

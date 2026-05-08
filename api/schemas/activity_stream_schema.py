@@ -53,20 +53,26 @@ class ActionType(StrEnum):
     version_record_created = "version_record_created"
     version_record_updated = "version_record_updated"
     version_record_deleted = "version_record_deleted"
+    version_record_set_current = (
+        "version_record_set_current"  # M16 sprint 子片 0.5 batch / R14 对账
+    )
     # M06 竞品
     competitor_created = "competitor_created"
     competitor_updated = "competitor_updated"
     competitor_deleted = "competitor_deleted"
     competitor_ref_created = "competitor_ref_created"
+    competitor_ref_updated = "competitor_ref_updated"  # M16 sprint 子片 0.5 batch / R14 对账
     competitor_ref_deleted = "competitor_ref_deleted"
     # M07 问题
     issue_created = "issue_created"
     issue_updated = "issue_updated"
     issue_deleted = "issue_deleted"
     issue_status_changed = "issue_status_changed"
+    issue_unassigned = "issue_unassigned"  # M16 sprint 子片 0.5 batch / R14 对账
     issue_orphaned = "issue_orphaned"
     # M08 模块关系
     module_relation_created = "module_relation_created"
+    module_relation_updated = "module_relation_updated"  # M16 sprint 子片 0.5 batch / R14 对账
     module_relation_deleted = "module_relation_deleted"
     # M11 冷启动
     cold_start_created = "cold_start_created"

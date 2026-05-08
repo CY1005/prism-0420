@@ -416,7 +416,9 @@ async def test_svc_orphan_by_node_id_sets_null_writes_activity_log(
 
     # R-X2 R10-1 不变量：每条 issue 独立 orphan event（含 cascade_source metadata）
     orphan_events = [
-        e for e in captured if e.get("action_type") == "orphan" and e.get("target_type") == "issue"
+        e
+        for e in captured
+        if e.get("action_type") == "issue_orphaned" and e.get("target_type") == "issue"
     ]
     assert len(orphan_events) == 2, (
         f"应为每条 issue 写 1 条 orphan event，实得 {len(orphan_events)}"

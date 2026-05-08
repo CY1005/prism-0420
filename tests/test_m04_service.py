@@ -84,7 +84,7 @@ async def test_svc_create_persists_and_writes_activity_log(
 
     assert len(captured) == 1
     ev = captured[0]
-    assert ev["action_type"] == "create"
+    assert ev["action_type"] == "dimension_record_created"
     assert ev["target_type"] == "dimension_record"
     assert ev["target_id"] == str(rec.id)
     assert ev["metadata"]["node_id"] == str(node.id)
@@ -168,7 +168,7 @@ async def test_svc_update_increments_version_and_logs(
     assert updated.content == {"x": 2}
 
     assert len(captured) == 1
-    assert captured[0]["action_type"] == "update"
+    assert captured[0]["action_type"] == "dimension_record_updated"
     assert captured[0]["metadata"]["old_version"] == 1
     assert captured[0]["metadata"]["new_version"] == 2
 
@@ -249,7 +249,7 @@ async def test_svc_delete_removes_record_and_logs(
     found = await db_session.scalar(select(DimensionRecord).where(DimensionRecord.id == rec.id))
     assert found is None
 
-    delete_events = [e for e in captured if e["action_type"] == "delete"]
+    delete_events = [e for e in captured if e["action_type"] == "dimension_record_deleted"]
     assert len(delete_events) == 1
     assert delete_events[0]["target_id"] == str(rec.id)
 
@@ -310,7 +310,8 @@ async def test_svc_delete_by_node_id_deletes_all_records(
     cascade_events = [
         e
         for e in captured
-        if e.get("action_type") == "delete" and e["metadata"].get("cascade_source") == "node_delete"
+        if e.get("action_type") == "dimension_record_deleted"
+        and e["metadata"].get("cascade_source") == "node_delete"
     ]
     assert len(cascade_events) == 2, "应为每条记录写一条 cascade delete 事件"
 

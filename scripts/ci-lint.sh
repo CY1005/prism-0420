@@ -59,3 +59,27 @@ if grep -E "from api\.services\.activity_log_service|activity_log_service\.write
 fi
 
 echo "✓ L13: $M15_SERVICE 未自调 write_event"
+
+# R14: api/services/*.py 调用 write_event 时 action_type 字面必须在
+# api/models/activity_log.py:_ACTION_TYPES 元组内
+# （M16 sprint 子片 0.5 batch 立规 / M15 design §10 R14 段；防 7 业务模块 service 漂移再发）
+# 豁免：activity_log_service.py docstring 范例 / auth_service.py（写 auth_audit_log，不写 activity_log，已由 L12 守护）
+ALLOWED_ACTION_TYPES=$(awk '/^_ACTION_TYPES = \(/{f=1; next} f && /^\)/{f=0} f' api/models/activity_log.py | grep -oE '"[a-z_]+"' | tr -d '"' | sort -u)
+SERVICE_FILES=$(ls api/services/*.py | grep -vE '(activity_log_service|auth_service)\.py$')
+DRIFT=$(
+  grep -hoE 'action_type="[a-z._]+"' $SERVICE_FILES \
+    | sed -E 's/action_type="([^"]+)"/\1/' \
+    | sort -u \
+    | grep -v -F -x -f <(echo "$ALLOWED_ACTION_TYPES") || true
+)
+if [ -n "$DRIFT" ]; then
+  echo "ERROR (R14): api/services/ 中 write_event 调用 action_type 字面不在" \
+       "_ACTION_TYPES 元组内（M15 design §10 R14 / R10-2 owner 维护）："
+  echo "$DRIFT" | sed 's/^/  - /'
+  echo ""
+  echo "  修法：① 改用 _ACTION_TYPES 已有过去式字面；② 或新增 enum 值同步 4 处："
+  echo "  model._ACTION_TYPES + schema ActionType StrEnum + Alembic CHECK + 测试 enum set。"
+  exit 1
+fi
+
+echo "✓ R14: api/services/ write_event action_type 字面均在 _ACTION_TYPES 元组内"

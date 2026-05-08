@@ -309,7 +309,7 @@ async def test_svc_mark_failed_tolerates_write_event_failure(
 
     async def _selective_boom(*args, **kwargs):
         # 仅 _mark_failed 内的 cold_start.failed 事件抛
-        if kwargs.get("action_type") == "cold_start.failed":
+        if kwargs.get("action_type") == "cold_start_failed":
             raise RuntimeError("activity log down at failure path")
 
     monkeypatch.setattr("api.services.cold_start_service.write_event", _selective_boom)

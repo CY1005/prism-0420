@@ -166,7 +166,7 @@ async def test_svc_update_no_change_does_not_touch_updated_by(
         name="x",  # 同 name
     )
     assert result.updated_by == original_updated_by
-    assert not [ev for ev in captured if ev.get("action_type") == "update"]
+    assert not [ev for ev in captured if ev.get("action_type") == "node_updated"]
 
 
 async def test_svc_update_node_not_found(db_session, svc, make_project):
@@ -229,7 +229,7 @@ async def test_svc_delete_subtree_cascades_and_writes_per_node_events(
     assert rows.scalars().all() == []
 
     # R10-1 batch3: 子树每节点独立 delete 事件
-    delete_targets = {ev["target_id"] for ev in captured if ev.get("action_type") == "delete"}
+    delete_targets = {ev["target_id"] for ev in captured if ev.get("action_type") == "node_deleted"}
     assert delete_targets == {str(root.id), str(child.id), str(grandchild.id)}
 
 
@@ -317,7 +317,7 @@ async def test_svc_reorder_skips_unchanged_sort_order(db_session, svc, make_proj
         parent_id=None,
         items=[(a.id, 0), (b.id, 1)],
     )
-    reorder_evs = [ev for ev in captured if ev.get("action_type") == "reorder"]
+    reorder_evs = [ev for ev in captured if ev.get("action_type") == "node_reordered"]
     assert reorder_evs == [], "未变 sort_order 不应写 reorder 事件"
 
 

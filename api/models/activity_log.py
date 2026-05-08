@@ -73,20 +73,24 @@ _ACTION_TYPES = (
     "version_record_created",
     "version_record_updated",
     "version_record_deleted",
+    "version_record_set_current",  # M16 sprint 子片 0.5 batch（2026-05-08）/ R14 立规对账：M05 set_current 行为
     # M06 竞品
     "competitor_created",
     "competitor_updated",
     "competitor_deleted",
     "competitor_ref_created",
+    "competitor_ref_updated",  # M16 sprint 子片 0.5 batch / R14 对账：M06 update_ref 行为
     "competitor_ref_deleted",
     # M07 问题
     "issue_created",
     "issue_updated",
     "issue_deleted",
     "issue_status_changed",
+    "issue_unassigned",  # M16 sprint 子片 0.5 batch / R14 对账：M07 unassign assignee 行为
     "issue_orphaned",
     # M08 模块关系
     "module_relation_created",
+    "module_relation_updated",  # M16 sprint 子片 0.5 batch / R14 对账：M08 update relation notes 行为
     "module_relation_deleted",
     # M11 冷启动
     "cold_start_created",
