@@ -10,8 +10,6 @@ from uuid import uuid4
 import pytest
 
 from api.dao.overview_dao import OverviewDAO
-from api.models.dimension_record import DimensionRecord
-from api.models.project import ProjectDimensionConfig
 
 
 @pytest.fixture

@@ -244,34 +244,6 @@ async def make_node(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def make_dim_record(db_session):
-    """工厂 fixture：建一条 dimension_records 行（M04+M10）。
-
-    M10 sprint R1-B 立修（2026-05-08）：跨 test_m10_dao.py + test_m10_service.py
-    重复内联 _make_dim_record helper → 迁 conftest（M04+M05+M06+M07+M08+M10
-    六连规则延续）。
-
-    用法：rec = await make_dim_record(user=u, project=p, node=n, dim_type_id=t)
-    """
-    from api.models.dimension_record import DimensionRecord
-
-    async def _make(*, user, project, node, dim_type_id, content=None):
-        rec = DimensionRecord(
-            node_id=node.id,
-            project_id=project.id,
-            dimension_type_id=dim_type_id,
-            content=content if content is not None else {"x": "y"},
-            created_by=user.id,
-            updated_by=user.id,
-        )
-        db_session.add(rec)
-        await db_session.flush()
-        return rec
-
-    yield _make
-
-
-@pytest_asyncio.fixture(loop_scope="session")
 async def make_version(db_session):
     """工厂 fixture：建一条 version_records 行（M05）。
 
@@ -573,3 +545,38 @@ async def isolated_client(isolated_app):
         base_url="http://test",
     ) as client:
         yield client
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_cold_start_task(db_session):
+    """工厂 fixture：建一条 cold_start_tasks 行（M11+）。
+
+    M11 sprint R1-B 立修（2026-05-08）：内联 _make_task 在 test_m11_dao.py 多次
+    使用 → 迁 conftest（M04-M10 七连规则延续，下个 R-X1 模块可复用）。
+
+    用法：t = await make_cold_start_task(project_id=p.id, user_id=u.id, status="pending")
+    """
+    from uuid import uuid4
+
+    from api.models.cold_start_task import ColdStartStatus, ColdStartTask
+
+    async def _make(
+        *,
+        project_id,
+        user_id,
+        status: str = ColdStartStatus.PENDING.value,
+        source_filename: str = "x.csv",
+        source_hash: str | None = None,
+    ) -> ColdStartTask:
+        task = ColdStartTask(
+            project_id=project_id,
+            user_id=user_id,
+            source_hash=source_hash or uuid4().hex,
+            source_filename=source_filename,
+            status=status,
+        )
+        db_session.add(task)
+        await db_session.flush()
+        return task
+
+    yield _make

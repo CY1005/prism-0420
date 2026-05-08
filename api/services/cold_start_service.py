@@ -33,6 +33,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.core.logging import log
 from api.dao.cold_start_dao import ColdStartDAO
 from api.errors.exceptions import (
     ColdStartBatchInsertFailedError,
@@ -42,6 +43,7 @@ from api.errors.exceptions import (
     ColdStartTaskNotFoundError,
 )
 from api.models.cold_start_task import ColdStartStatus, ColdStartTask
+from api.models.issue import ISSUE_CATEGORIES
 from api.services.activity_log_service import write_event
 from api.services.competitor_service import CompetitorService
 from api.services.dimension_service import DimensionService
@@ -196,7 +198,7 @@ def parse_csv(content_bytes: bytes) -> ParsedCsv:
         issue_title = (row.get("issue_title") or "").strip()
         if issue_title:
             issue_cat = (row.get("issue_category") or "").strip()
-            if issue_cat not in ("bug", "tech_debt", "design_flaw", "performance"):
+            if issue_cat not in ISSUE_CATEGORIES:
                 errors.append(
                     {
                         "row": idx,
@@ -334,6 +336,38 @@ class ColdStartOrchestratorService:
             )
             raise
 
+        # R1-A P1-03 立修（M11 sprint，2026-05-08）：dimension 字段当前 sprint 未实装
+        # 真注入路径（ProjectDimensionConfig.dim_key → dimension_type_id 解析），不可静默
+        # 跳过完成 — 否则 R-X1 orchestrator 完整性契约破坏（用户认为成功但数据缺失）。
+        # dim 实装后删本段 + service §6 启用 DimensionService.batch_create_in_transaction。
+        if parsed.dimensions_pending:
+            err_rows = [
+                {
+                    "row": d["row"],
+                    "field": "dimension_key",
+                    "message": (
+                        "dimension columns not yet supported in current M11 sprint; "
+                        "remove dimension_key/dimension_content columns and retry"
+                    ),
+                }
+                for d in parsed.dimensions_pending
+            ]
+            await self._mark_failed(
+                db,
+                task,
+                project_id,
+                actor_user_id,
+                stage="parse",
+                error_code="cold_start_csv_invalid",
+                error_report=err_rows,
+                total_rows=parsed.total_rows,
+                failed_rows=len(err_rows),
+            )
+            raise ColdStartCsvInvalidError(
+                reason="dimension_key/dimension_content not yet implemented",
+                dimension_rows=len(parsed.dimensions_pending),
+            )
+
         if parsed.errors:
             await self._mark_failed(
                 db,
@@ -374,11 +408,9 @@ class ColdStartOrchestratorService:
                 if "temp_id" in raw:
                     temp_to_real[raw["temp_id"]] = real.id
 
-            # dimension_records：dim_key → dimension_type_id（按 project enabled config）
-            # M11 sprint scope：跳过 dimension 实装（design §1 列出但未给 type 解析路径）
-            # → 先做 nodes/competitors/issues；dimensions 留给后续 sprint 补
-            if parsed.dimensions_pending:
-                pass
+            # dimension_records：M11 sprint 不实装；parse 阶段已抛 CsvInvalid 不会到这（见上方立修）。
+            # 等 ProjectDimensionConfig.dim_key → dimension_type_id 解析路径建好后 plug-in
+            # DimensionService.batch_create_in_transaction（design §6 列出）。
 
             if parsed.competitors_data:
                 await self.competitor_service.batch_create_in_transaction(
@@ -448,6 +480,7 @@ class ColdStartOrchestratorService:
             metadata={
                 "total_rows": parsed.total_rows,
                 "nodes_created": len(parsed.nodes_data),
+                "dimensions_created": 0,  # M11 sprint dim 未实装；parse 阶段已拦截
                 "competitors_created": len(parsed.competitors_data),
                 "issues_created": len(parsed.issues_pending),
             },
@@ -468,6 +501,11 @@ class ColdStartOrchestratorService:
         total_rows: int,
         failed_rows: int,
     ) -> None:
+        """task 元数据落盘 + activity_log 失败事件（R1-A P1-04 + R1-C P1-01 立修）：
+
+        write_event 抛异常不能遮盖 task 状态落盘 / 不能吞调用方原始异常。task 状态落盘
+        是 R-X1 失败补偿契约的核心；activity_log 是 nice-to-have。
+        """
         await self.dao.update(
             db,
             task.id,
@@ -479,20 +517,29 @@ class ColdStartOrchestratorService:
                 "error_report": error_report,
             },
         )
-        await write_event(
-            db=db,
-            actor_user_id=actor_user_id,
-            project_id=project_id,
-            action_type="cold_start.failed",
-            target_type="cold_start_task",
-            target_id=str(task.id),
-            summary="冷启动导入失败",
-            metadata={
-                "stage": stage,
-                "failed_rows": failed_rows,
-                "error_code": error_code,
-            },
-        )
+        try:
+            await write_event(
+                db=db,
+                actor_user_id=actor_user_id,
+                project_id=project_id,
+                action_type="cold_start.failed",
+                target_type="cold_start_task",
+                target_id=str(task.id),
+                summary="冷启动导入失败",
+                metadata={
+                    "stage": stage,
+                    "failed_rows": failed_rows,
+                    "error_code": error_code,
+                },
+            )
+        except Exception as log_err:
+            # activity_log 失败降级 log；不让它遮盖原始异常 chain
+            log.warning(
+                "cold_start._mark_failed.write_event_failed",
+                task_id=str(task.id),
+                error_code=error_code,
+                log_error=str(log_err),
+            )
 
 
 __all__ = [

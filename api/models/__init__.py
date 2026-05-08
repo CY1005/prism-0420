@@ -4,7 +4,7 @@ from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixi
 from api.models.cold_start_task import ColdStartStatus, ColdStartTask
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
-from api.models.issue import Issue
+from api.models.issue import ISSUE_CATEGORIES, ISSUE_STATUSES, Issue
 from api.models.module_relation import ModuleRelation, RelationTypeEnum
 from api.models.node import Node, NodeType
 from api.models.project import (
@@ -39,6 +39,8 @@ __all__ = [
     "DimensionRecord",
     "DimensionType",
     "EmailChangeRequest",
+    "ISSUE_CATEGORIES",
+    "ISSUE_STATUSES",
     "ImmutableMixin",
     "InviteCode",
     "Issue",

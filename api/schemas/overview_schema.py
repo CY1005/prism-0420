@@ -24,7 +24,7 @@ class NodeOverview(BaseModel):
     path: str
     filled_count: int
     completion_rate: float
-    children: list["NodeOverview"] = []
+    children: list[NodeOverview] = []
 
 
 NodeOverview.model_rebuild()

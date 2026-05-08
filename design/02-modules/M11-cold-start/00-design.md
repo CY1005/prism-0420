@@ -57,9 +57,9 @@ references:
       reason: "orchestrator 调 IssueService.batch_create_in_transaction 写问题"
   consumes_action_types: []  # M11 不订阅 M15 activity_log
   produces_action_types:
-    - cold_start_created
-    - cold_start_completed
-    - cold_start_failed
+    - cold_start.create
+    - cold_start.completed
+    - cold_start.failed
 ---
 
 # M11 冷启动支持 - 详细设计
@@ -286,7 +286,7 @@ stateDiagram-v2
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | `cold_start_tasks.project_id` 冗余字段（R3-3）；DAO 强制 `WHERE project_id=?`；Service 层调各 batch_create_in_transaction 时传入 project_id |
-| **多表事务** | ✅ 必须（批量入库阶段）| Service 层 `with db.begin():` 包外层事务，顺序调用 M03 NodeService / M04 DimensionService / M06 CompetitorService / M07 IssueService 的 batch_create_in_transaction；任一失败全回滚；**M11 不直 INSERT 跨模块表**（R-X1） |
+| **多表事务** | ✅ 必须（批量入库阶段）| **Sprint 实装范式**：service 不主动 begin/commit/rollback；caller（router）管事务（成功 commit / 失败 commit task 失败状态 + rollback batch 数据）。原 design 字面"Service 层 `with db.begin():`"在 sprint 落地时为兼容测试 fixture（join_transaction_mode='create_savepoint'）放弃，由 router 持有 outer txn 等价。任一 batch_create 失败 → service 在 raise 前 dao.update task=failed + error_report，router 提交该状态后 rollback 业务数据；**M11 不直 INSERT 跨模块表**（R-X1）。M11 R1-A P1-01 立修注释（2026-05-08）。 |
 | **异步处理** | ❌ N/A | CSV 量可控（< 10MB / < 1000 行），同步 HTTP 请求内完成；无 Queue / 无 Worker / 无 SSE |
 | **并发控制** | ❌ N/A | M11 写操作为"导入批次"级别，同一用户重传同 CSV 创建新任务（G2/G6 无 idempotency）；多用户同时导入不同 CSV 互不影响；无乐观锁需求 |
 

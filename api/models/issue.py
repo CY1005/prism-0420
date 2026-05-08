@@ -28,6 +28,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base, TimestampMixin
 
+# 导出供 cross-module 复用（M11 csv parser 等）— 与下方 CheckConstraint 单一真相源对齐
+ISSUE_CATEGORIES: frozenset[str] = frozenset({"bug", "tech_debt", "design_flaw", "performance"})
+ISSUE_STATUSES: frozenset[str] = frozenset({"open", "in_progress", "resolved", "closed"})
+
 
 class Issue(Base, TimestampMixin):
     """issues 表（design §3 SQLAlchemy block）。

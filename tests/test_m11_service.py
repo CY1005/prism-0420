@@ -268,3 +268,63 @@ async def test_svc_write_event_exception_propagates(db_session, svc, make_projec
             content_bytes=csv_bytes,
             source_filename="x.csv",
         )
+
+
+# ─────────────── M11-SVC R1-A P1-03 / R1-C P1-03 立修验证 ───────────────
+
+
+async def test_svc_dimensions_explicit_raise_not_silent(db_session, svc, make_project):
+    """R1-A P1-03 立修：dimension_key 列存在但 sprint 未实装 → 必须抛 CsvInvalid，
+    不允许静默 completed（保护 R-X1 完整性）。"""
+    user, proj = await make_project()
+    csv_bytes = b"node_path,dimension_key,dimension_content\n/A,specs,some-content\n"
+    with pytest.raises(ColdStartCsvInvalidError):
+        await svc.process_csv(
+            db_session,
+            project_id=proj.id,
+            actor_user_id=user.id,
+            content_bytes=csv_bytes,
+            source_filename="x.csv",
+        )
+    rows = await svc.list_by_project(db_session, project_id=proj.id, user_id=user.id)
+    assert len(rows) == 1
+    assert rows[0].status == ColdStartStatus.FAILED.value
+    assert rows[0].error_report
+    assert rows[0].error_report[0]["field"] == "dimension_key"
+
+
+# ─────────────── M11-SVC R1-A P1-04 / R1-C P1-01 立修验证 ───────────────
+
+
+async def test_svc_mark_failed_tolerates_write_event_failure(
+    db_session, svc, make_project, monkeypatch
+):
+    """_mark_failed 内 write_event 抛异常不应遮盖 task 状态落盘 + 不应吞原始异常。
+
+    路径：parse 失败 → _mark_failed → dao.update（落盘 failed）→ write_event 抛 →
+    被 _mark_failed 内 try/except 吞 + log warning → process_csv 继续 raise 原始
+    ColdStartCsvInvalidError（不是 write_event 的 RuntimeError）。
+    """
+    user, proj = await make_project()
+
+    async def _selective_boom(*args, **kwargs):
+        # 仅 _mark_failed 内的 cold_start.failed 事件抛
+        if kwargs.get("action_type") == "cold_start.failed":
+            raise RuntimeError("activity log down at failure path")
+
+    monkeypatch.setattr("api.services.cold_start_service.write_event", _selective_boom)
+
+    csv_bytes = b"foo,bar\n1,2\n"  # 缺 node_path → CsvInvalid
+    with pytest.raises(ColdStartCsvInvalidError):
+        # 关键：上层收到的是 ColdStartCsvInvalidError，不是 RuntimeError
+        await svc.process_csv(
+            db_session,
+            project_id=proj.id,
+            actor_user_id=user.id,
+            content_bytes=csv_bytes,
+            source_filename="x.csv",
+        )
+    # task 状态仍落 failed（即使 activity_log 抛错）
+    rows = await svc.list_by_project(db_session, project_id=proj.id, user_id=user.id)
+    assert len(rows) == 1
+    assert rows[0].status == ColdStartStatus.FAILED.value
