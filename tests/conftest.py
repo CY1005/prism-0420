@@ -716,3 +716,45 @@ async def make_activity_log(db_session):
         return ev
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_ai_snapshot_task(db_session):
+    """工厂 fixture：建一行 ai_snapshot_tasks（M16 sprint 子片 2）。
+
+    跨文件 helper 规则十二连（M03→M15 + M16）：DAO + Service + Router 三子片都会用，
+    先迁 conftest 防 R1-B 抓内联（含主动复制规则继承）。
+
+    用法：task = await make_ai_snapshot_task(project_id=p.id, node_id=n.id,
+                                              user_id=u.id, version_count=3)
+    """
+    from api.models.ai_snapshot_task import AISnapshotTask
+
+    async def _make(
+        *,
+        project_id,
+        node_id,
+        user_id,
+        version_count: int = 3,
+        ai_provider: str = "mock",
+        ai_model: str = "default",
+        status: str = "pending",
+        review_data=None,
+        **extra,
+    ) -> AISnapshotTask:
+        task = AISnapshotTask(
+            project_id=project_id,
+            node_id=node_id,
+            user_id=user_id,
+            version_count=version_count,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            status=status,
+            review_data=review_data,
+            **extra,
+        )
+        db_session.add(task)
+        await db_session.flush()
+        return task
+
+    yield _make
