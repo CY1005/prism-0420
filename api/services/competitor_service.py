@@ -258,9 +258,19 @@ class CompetitorService:
         try:
             await self.dao.create_ref(db, ref)
         except IntegrityError as e:
-            # M05 A9 同款 race 转换：UNIQUE(node_id, competitor_id) 命中
-            raise CompetitorRefDuplicateError(
-                node_id=str(node_id), competitor_id=str(competitor_id)
+            # R1-C P1-01 立修（M05 同款范式）：区分约束名避免错误码语义误导
+            #   - uq_competitor_ref_node_competitor → 重复关联（409 CONFLICT）
+            #   - 其他（如 FK competitor 被并发删）→ cross-project 语义（422 VALIDATION）
+            err_text = str(e.orig) if e.orig else str(e)
+            if "uq_competitor_ref_node_competitor" in err_text:
+                raise CompetitorRefDuplicateError(
+                    node_id=str(node_id), competitor_id=str(competitor_id)
+                ) from e
+            # FK competitors_id 不存在 / 其他 → 视为竞品已被并发删（语义最近）
+            raise CompetitorCrossProjectError(
+                competitor_id=str(competitor_id),
+                project_id=str(project_id),
+                reason="competitor_concurrently_modified",
             ) from e
 
         await db.refresh(ref, attribute_names=["created_at", "updated_at"])

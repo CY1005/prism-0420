@@ -233,7 +233,7 @@ erDiagram
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | `competitors` 直接带 project_id；`competitor_refs` 冗余 project_id |
-| **多表事务** | ✅ 创建竞品+引用 走多表事务（competitors + competitor_refs 同一事务包裹） | Service 层 `with db.begin():` 包：① insert competitors ② insert competitor_refs；任一失败回滚（适用于档案页内联新建场景）。纯 competitor CRUD 单表无事务。 |
+| **多表事务** | ✅ 创建竞品+引用走多表事务 | 按入口形态分两类（M06 sprint R1-A A1 立修 / M04 §5 同款消歧 / 2026-05-08）：<br>**(1) 主流程入口**（Router 触发的 competitor / ref 单表 CRUD + 档案页内联"新建竞品+对标"双 service 调用）：Router 层 `await db.commit()` 是唯一 commit 点；service 不调 `async with db.begin():`。SQLAlchemy autobegin 保证 Router 内多次 service 调用落在同一 implicit transaction，异常自动回滚。<br>**(2) R-X3 跨模块入口**（被 M03 delete_node 调用的 `delete_by_node_id(db, node_id, project_id, actor_user_id)`）：接受外部 db session，**不自开事务**，由 caller orchestrator（M03 delete_node）控制事务边界。<br>详见 §6 对外契约段。 |
 | **异步处理** | ❌ N/A | 全同步，用户手动录入 |
 | **并发控制** | ❌ N/A | 05-module-catalog 标注无并发；竞品录入不是高频协同编辑场景；DB 唯一约束 `UNIQUE(node_id, competitor_id)` 防并发重复关联 |
 
@@ -560,7 +560,7 @@ class CompetitorCrossProjectError(AppError):
 | Q1 | 3 | competitor_refs 是否冗余 project_id | **B 冗余**（统一规则） |
 | Q2 | 11 | idempotency 范围 | **A 无幂等**（统一） |
 | Q3 | 1 | 竞品创建入口 | **B 档案页可内联新建并关联**（用户体验更流畅） |
-| Q4 | 5 | "新建竞品 + 同时创建对标"是否包一个事务 | **B Service 层包事务**（原子性，避免竞品创建成功但对标失败） |
+| Q4 | 5 | "新建竞品 + 同时创建对标"是否包一个事务 | **B Router 层包事务**（M02-M05 范式：Router commit / autobegin / 异常自动回滚；M06 sprint R1-A A1 立修与 M04 §5 同步消歧 — service 不调 `with db.begin()`） |
 
 ---
 

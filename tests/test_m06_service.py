@@ -336,6 +336,36 @@ async def test_svc_delete_by_node_id_empty_node_no_op(db_session, svc, make_proj
     await svc.delete_by_node_id(db_session, node.id, proj.id, user.id)
 
 
+async def test_svc_delete_by_node_id_propagates_write_event_exception(
+    db_session, svc, make_project, make_node, monkeypatch
+):
+    """R1-C P1-02 立修（M04 同款范式）：write_event 抛异常时不 catch-all，向上传播。
+
+    docstring 声明的 R1-C P1-01 异常契约（不 catch-all 吞错）必须有 test-level 闭环，
+    防 M15 升级 write_event 真 INSERT 时悄然引入 silent catch。
+    """
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    c = await svc.create_competitor(
+        db_session, project_id=proj.id, display_name="X", actor_user_id=user.id
+    )
+    await svc.create_ref(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        competitor_id=c.id,
+        actor_user_id=user.id,
+    )
+
+    async def _boom(**kwargs):
+        raise RuntimeError("simulated write_event failure")
+
+    monkeypatch.setattr("api.services.competitor_service.write_event", _boom)
+
+    with pytest.raises(RuntimeError, match="simulated write_event failure"):
+        await svc.delete_by_node_id(db_session, node.id, proj.id, user.id)
+
+
 # ─────────────── M06-SVC-T4 M18 baseline-patch get_for_embedding ───────────────
 
 
