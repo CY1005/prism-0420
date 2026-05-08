@@ -11,6 +11,7 @@ from api.core.redis import get_redis
 from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
 from api.routers import (
+    activity_stream_router,
     analyze_router,
     cold_start_router,
     comparison_router,
@@ -116,6 +117,7 @@ app.include_router(comparison_router.comparison_router)
 app.include_router(analyze_router.analyze_router)
 app.include_router(industry_news_router.news_router)
 app.include_router(industry_news_router.news_node_router)
+app.include_router(activity_stream_router.activity_stream_router)
 
 
 @app.get("/health")
