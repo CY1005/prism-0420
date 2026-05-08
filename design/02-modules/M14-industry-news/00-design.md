@@ -518,6 +518,40 @@ class NewsForbiddenError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M13 十一数据点稳定后 M14 复用默认范式 / **全局豁免业务模块特有强化**）
+
+> 按闸门 3.4 L1 总则要求落本 sprint review 计划。M14 是 **全局共享数据 + 无 tenant + 无项目角色 + 已登录即可写 + 关联跨模块只读 M03（节点存在校验）** 的简单 CRUD 形态——
+> 复用 M02-M13 默认范式（R1=3 subagent 并行 + R2=1 合并 Opus + 子片 5 不单跑），R1+R2 增强覆盖"全局豁免特有红线"（无 viewer/editor/owner role / created_by 校验落 service / 关联表唯一约束并发）。
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（IndustryNews + NewsNodeLink models + alembic + DAO 全局豁免（无 tenant filter）+ NewsService 含 _check_news_owner_or_admin / node 存在校验 / activity_log + 4 ErrorCode + AppError 子类）| 子片 0+1+2+3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| M02-M13 十一数据点稳定；M14 全局豁免无 tenant filter + 无 project role 形态特殊必合并审才能审到一致性；**spec+quality Opus 必审 DAO 注释 GLOBAL DATA — NO TENANT FILTER 与代码实装是否对齐**（清单 5 豁免显式声明） |
+| **R2** | 子片 4 完成（Router 8 endpoints + check_authenticated（require_user 无 project role 校验）+ Service 层 _check_news_owner_or_admin） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| endpoint 层契约漂移 + **403 路径全覆盖**（非本人 PUT / 非本人 DELETE / 非本人 link / 非本人 unlink 共 4 端点，platform_admin 豁免对照）+ 重复关联 409 / 关联不存在 node 404 / news_id 404 是 R2 高命中区；**全局豁免特化必审**：未登录 401（不依赖 project role）/ 跨用户 read 全等同（无 tenant 过滤）/ 平台管理员 platform_admin 删除他人动态豁免 |
+
+**子片 5 不单跑**（≥80% SKIP 例外）；**子片 0 prep + §14.5 段同 commit**；**M14 无 schema 子片**（schema 与 ErrorCode 在子片 3 与 NewsService 同 commit）。
+
+**特殊触发点**：
+- M14 是 **首个全局豁免业务模块**（M02-M13 全模块都属 project tenant；M14 design §9 显式豁免 06-design-principles 清单 5）。R1 必审 DAO 类 docstring "GLOBAL DATA — NO TENANT FILTER" 注释字面与实装是否对齐
+- **元教训防御 actionable 主动复制（不等 R2 抓）**：
+  - viewer 写所有写端点 403 全覆盖（M07 立 / M08+M11+M12+M13 应用第 9-11 数据点）→ **M14 N/A 显式声明**：design §8 已锁"已登录即可写"无 project role；R1 提示中明示该元教训豁免理由（防 reviewer 误抓）
+  - write_event 异常传播测试（M04+ 范式）→ ✅ 复制 5 写端点全（POST news / PUT news / DELETE news / POST link / DELETE link）
+  - cross-tenant 404（M02 范式）→ **M14 N/A 显式声明**：M14 全局豁免无 tenant 概念；用 P3/P5 非本人 403 替代覆盖跨用户写防御
+  - cross-project node 404（M06+M07+M08+M12+M13 范式 / 3 端点全覆盖原则）→ **部分适配**：M14 关联 node 时 design §灰区 2 ack node 不校验 project（全局动态可关联任意 node，仅校验 node 存在）— R1 提示中明示该元教训"3 端点全覆盖"在 M14 形态特殊只覆盖 link endpoint（POST /links），unlink/get-by-node 端点 node 存在则该 node 必有项目归属，cross-project 路径自然 N/A
+  - IntegrityError 区分约束名（M05 P1-01 立规延续）→ ✅ 复制：news_node_links UNIQUE(news_id, node_id) 必区分约束名映射 NEWS_LINK_DUPLICATE 而非 INTERNAL_ERROR（与 M05+ 范式一致）
+  - **NEW from M11 文件上传契约** → N/A（M14 无上传）
+  - **NEW from M12 元自审**：L1 R-X3 范式既锁的裁决型 P1 不让 CY 拍 → ✅ M14 全局豁免范式 + 无 project role 范式 + 关联跨项目 node design §灰区 2 既 ack 的裁决型 P1 不让 CY 拍，AI 自决落 disambiguation
+  - **NEW from M13 元自审**："3 端点全覆盖"原则 SSE 形态特殊不免除 → ✅ 同思想：M14 link/unlink 端点形态特殊但 405-409 防御原则不能因端点不写主资源而减
+- **GLOBAL 豁免专属红线**（feedback_problem_layered_analysis 触发）：
+  - DAO 类 docstring 必含 "⚠️ GLOBAL DATA — NO TENANT FILTER" 字面（design §9 line 391 字面） + 06-design-principles 清单 5 豁免引用；R1 必 grep 字面对齐
+  - Service 层 _check_news_owner_or_admin 必含 platform_admin 豁免分支 + e2e 必覆盖 P3+P4 对照（非本人 403 / 平台管理员 204）
+  - 全局豁免不等于"无权限"——读 401 必拦（design §6 已登录即可读）；R1 必审 401 和 200 全覆盖
+
+**L3 实证回写承诺**：sprint 结束时把 R1/R2 命中比例 + 全局豁免业务模块首发实证 + DAO 无 tenant filter 注释验证 + Service 层 created_by 校验 + platform_admin 豁免 + IntegrityError 区分约束名（M05 P1-01 元教训复用）+ 闸门 2.5 B 0 项第九次写到 `../../audit/m14-pilot-template-validation.md`。
+
+**Async 范式回写说明**：本 design 节 6/9 同步代码示例（`db.query()` / `Session`）写于 2026-04-21（预 M02 async 范式）；实施按 M02-M13 既有 async 范式落地（`async def` / `AsyncSession` / `select` + `await db.execute`），子片 5 关闸时 design 节 6/9 代码段同步刷成 async（与 M05/M06/M07/M12/M13 sprint 关闸 design 回写惯例一致）。
+
+---
+
 ## 15. 完成度判定 checklist
 
 定稿前必须全部勾过：
