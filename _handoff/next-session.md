@@ -184,20 +184,68 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M13 sprint 启动（**当前推荐 / M12 已完整收官**）
+### Prompt 0 — M13 sprint 启动（**当前推荐 / M12 已完整收官 / 复制下方代码块到新 session**）
 
-参 `_handoff/sprint-prompts-M05-M20.md` § "## M13 ..." 段（M12 sprint 已收官 / 742 PASS / Phase 2.1 60%）。
+```
+继续 prism-0420 M13 sprint 实施代码（M13 AI 需求分析；M12 sprint 已收官 7 commit / 子片 5 关闸 4bc096c / 742 PASS / R13-1 79=79 / L12 守护 / Phase 2.1 60%）。
 
-M13 sprint 启动 reconcile checkpoint（必查）：
-- **M12 元自审新规**：R-X1/R-X2/R-X3 范式既锁的"裁决型 P1"不让 CY 拍，AI 直接 disambiguation
-- M02-M12 元教训防御 actionable 5 条 + M11 R-X1 NEW 2 条主动复制
-- L1 第十一数据点稳定 → R1=3 subagent + R2=1 合并 Opus 默认范式作模板
-- 闸门 2.5 B 0 项第八次稳定预期 → 启动 reconcile 自审一问"这真有候选吗 / 既锁规则的裁决型项不要列 B 栏"
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
+2. /root/workspace/projects/prism-0420/_handoff/next-session.md（§0 状态快照 post-M12-sprint-complete + Prompt 0 M13 启动 reconcile checklist）
+3. /root/workspace/projects/prism-0420/design/00-roadmap.md（Phase 2.1 60%，下一站 M13）
+4. /root/workspace/projects/prism-0420/design/00-phase-gate.md（闸门 2.5 + 闸门 3.4 L1 review 触发粒度规则）
+5. /root/workspace/projects/prism-0420/design/02-modules/M13-requirement-analysis/00-design.md（M13 design）
+6. /root/workspace/projects/prism-0420/design/audit/m12-pilot-template-validation.md（M12 sprint 实证 + R1 4 P1 + R2 1 P1 裁决型 + Punt 池 13 项 + 元自审教训）
+7. memory feedback_problem_layered_analysis（含 M12 NEW 失效信号"L1 范式既锁裁决型 P1 错抛 CY 拍" — M13 reviewer P1 抓 design vs 实装漂移时必走 step 1-2 grep L1 锁定项）
+8. memory feedback_llm_hotpath_math（M13 接 LLM 进 hot path 必报频率×延迟×cost 4 数字 + 3 红线）
+9. memory feedback_monkeypatch_not_verification（LLM monkeypatch ≠ 生产路径；DONE 必区分 unit pass vs integration pass）
+10. memory feedback_three_agent_pipeline + feedback_problem_layered_analysis + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb（标准红线集）
 
-M13 模块特定要素（详见 sprint-prompts M13 段）：
-- **流式 SSE**（design §12 A）— 首个流式响应模块；testing harness async generator 适配
-- AI 集成（OpenAI / Claude）— 决定 LLM provider 注入接口
-- caller 拓扑（用户输入 → 流式输出 + 持久化）
+任务：M13 sprint TDD 实施。
+
+启动顺序（严格按 M02-M12 范式）：
+
+1. **闸门 2.5 reconcile pass**（M13 sprint 启动当天必跑）：
+   - 预查 conftest.py 已有 fixture（M12 R1-B 新增 make_snapshot；M04+M05+M06+M07+M08+M10+M11+M12 八连规则延续）
+   - grep M13 引用的所有 horizontal helper（含 NodeChildrenServiceProtocol 4 参 / write_event / DimensionService 跨模块只读接口 / M07 IssueService.list_by_project 跨模块 pass-through）
+   - 按闸门 2.5 三栏分类（A 机械可做 / B 待 CY 决策 / C 已自我消解）
+   - 自审一问："这真有候选吗 / 还是延续既有规则？" — 不允许把"机械应用既有规则"列为 B 栏
+   - **M12 元自审新规主动应用**：reviewer P1 若抓 design 草案 vs 实装漂移，先 grep L1 锁定项（ADR / 跨 sprint 范式实证）；命中 → AI 自决 disambiguation 落 design + scaffold 注释，不 AskUserQuestion；grep miss 才让 CY 拍
+
+2. **闸门 3.4 L1 总则触发**：M13 design 必须含 §14.5 sprint review 拆分计划段（M02-M12 十数据点稳定 → R1=3 subagent / R2=1 合并 Opus / 子片 5 不单跑 / schema 子片禁单跑 = 默认范式）。若缺先补。
+
+3. **M13 写代码 5 子片**（参 M12 sprint 范式）：按 design 拆。
+
+4. **R1+R2 review 按 §14.5 计划跑**：
+   - R1（子片 3 完成）→ 3 subagent 并行 background mode；>5min 无通知主动 ping
+   - R2（子片 4 完成）→ 1 合并 Opus subagent
+
+5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP
+
+红线（M02-M12 实证后强化 / 元教训防御 actionable 主动复制）：
+- viewer 写所有写端点 403 全覆盖（M07 立 / M08+M11+M12 应用）
+- write_event 异常传播测试（M04+ 范式 / 三写端点全覆盖含 M12 R1-C P1-02 立修补）
+- cross-tenant 404（M02 范式）
+- cross-project node 422（M06+M07+M08+M12 范式）
+- IntegrityError 区分约束名（M05 P1-01 立规延续）
+- M12 R1-C P1-03 NEW: Core UPDATE 显式刷 updated_at（不依赖 ORM onupdate）
+- M12 元自审 NEW: L1 范式既锁裁决型 P1 不让 CY 拍
+
+M13 模块特定要素（参 _handoff/sprint-prompts-M05-M20.md M13 段）：
+- **第一个真 LLM 集成模块**（feedback_llm_hotpath_math 触发：必报频率×延迟×cost 4 数字 + 3 红线 单跑<周期/2 + flock + cost ceiling）
+- **流式 SSE**（design §12 A 流式 vs 同步 vs queue 三选一；design 应已决；若同步 → 接口 SLA 估算）
+- **M04 punt 接通**：M13 是 M04 DimensionService.create_dimension_record + get_latest 的第一 caller → M04 service 层此 sprint 期实装两接口（含 extra_activity_metadata 合并机制）
+- **M07 list_by_project 跨模块 pass-through**（已 pilot 登记）
+- **LLM monkeypatch ≠ 生产路径**（feedback_monkeypatch_not_verification）：DONE 必区分 unit pass vs integration pass；端到端需真 LLM smoke
+- 安全：LLM 不接管 dimension content schema 校验（jsonschema 仍 service 层做）
+
+启动注意：
+1. 不要在同一会话连续跑多个 sprint：M11+M12 单 sprint 都堆到大 context，下次开新窗口
+2. 当前周 usage（Asia/Tokyo Reset 周三 6pm；本周 reset ~5/13）—— 启动 M13 前先 /usage 同步 + 更新 memory feedback_usage_budget.md 基线
+3. M13 design 内是否含完整 §14.5？冷启动第一步 grep "## 14.5\\|sprint review 拆分" design/02-modules/M13-requirement-analysis/00-design.md 确认；缺则子片 0 prep 补齐
+```
+
+参考来源（详见）：`_handoff/sprint-prompts-M05-M20.md` § "## M13 — AI 需求分析" + `design/02-modules/M13-requirement-analysis/00-design.md` + `design/audit/m12-pilot-template-validation.md`。
 
 ### Prompt 0' — M12 sprint 启动（已完成 2026-05-08，仅供历史追溯）
 
