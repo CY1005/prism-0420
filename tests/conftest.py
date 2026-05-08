@@ -627,6 +627,32 @@ async def set_project_ai(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_news(db_session):
+    """工厂 fixture：建一行 industry_news（M14）。
+
+    M14 sprint R1-B P1-01 立修（2026-05-08）：内联 `_make_news` 在 test_m14_dao.py 12 处 →
+    迁 conftest（M03 R1-B C1 跨文件 helper 规则**十连**：M03 / M04 / M05 / M06 / M07 / M08 /
+    M10 / M11 / M12 / M13 / M14；M15+ AI 相关模块若需 fixture 可复用）。
+
+    用法：n = await make_news(user=u, title="x", tags=["AI"])
+    """
+    from api.models.industry_news import IndustryNews
+
+    async def _make(*, user, title: str = "t", tags: list[str] | None = None) -> IndustryNews:
+        n = IndustryNews(
+            title=title,
+            tags=tags if tags is not None else [],
+            created_by=user.id,
+            updated_by=user.id,
+        )
+        db_session.add(n)
+        await db_session.flush()
+        return n
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_snapshot(db_session):
     """工厂 fixture：建一行 comparison_snapshots（M12）。
 

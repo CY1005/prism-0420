@@ -8,7 +8,19 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_serializer
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_serializer, field_validator
+
+# R1-C P1-3 立修（2026-05-08）：tags 单元素长度约束（与 title max_length=200 严密性一致）。
+_TAG_MAX_LENGTH = 50
+
+
+def _check_tag_lengths(tags: list[str] | None) -> list[str] | None:
+    if tags is None:
+        return tags
+    for t in tags:
+        if len(t) > _TAG_MAX_LENGTH:
+            raise ValueError(f"Each tag must be <= {_TAG_MAX_LENGTH} chars, got {len(t)}")
+    return tags
 
 
 class NewsCreate(BaseModel):
@@ -18,6 +30,11 @@ class NewsCreate(BaseModel):
     published_date: date | None = None
     tags: list[str] = Field(default_factory=list)
     # source_type 固定为 'manual'，不暴露给用户；service 层强制（design §3）
+
+    @field_validator("tags")
+    @classmethod
+    def _validate_tags(cls, v: list[str]) -> list[str]:
+        return _check_tag_lengths(v) or []
 
     @field_serializer("source_url")
     def _ser_url(self, v: AnyHttpUrl | None) -> str | None:
@@ -30,6 +47,11 @@ class NewsUpdate(BaseModel):
     source_url: AnyHttpUrl | None = None
     published_date: date | None = None
     tags: list[str] | None = None
+
+    @field_validator("tags")
+    @classmethod
+    def _validate_tags(cls, v: list[str] | None) -> list[str] | None:
+        return _check_tag_lengths(v)
 
     @field_serializer("source_url")
     def _ser_url(self, v: AnyHttpUrl | None) -> str | None:

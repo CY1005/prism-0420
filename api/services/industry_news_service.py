@@ -148,16 +148,24 @@ class IndustryNewsService:
         news_id: UUID,
         fields: dict[str, Any],
     ) -> IndustryNews:
-        """design §10 update：fields 不含 source_type（不可改）/ updated_by 自动注入。"""
+        """design §10 update：fields 不含 source_type（不可改）/ updated_by 自动注入。
+
+        R1-A P1-3 + R1-C P1-1 立修（2026-05-08）：
+        - 改用 ORM mutate (setattr + flush) 替代 dao.update raw SQL + db.refresh，
+          与 M02-M13 service 范式一致；避免 raw UPDATE 后 ORM identity map 不一致 + relationship expire。
+        - 不再 ``v is not None`` 过滤——caller（Router）用 ``model_dump(exclude_unset=True)`` 控制
+          字段集；显式传 ``summary=None`` 视为清空操作（`tags=[]` / `summary=None`）。
+        - source_type 仍强滤（design §3 灰区 1 service 层强制）。
+        """
         n = await self._get_or_raise(db, news_id)
         await self._check_news_owner_or_admin(n, actor_user_id=actor_user_id, actor_role=actor_role)
-        # source_type 不可改（design §3 灰区 1 强制）
-        sanitized = {k: v for k, v in fields.items() if k != "source_type" and v is not None}
+        sanitized = {k: v for k, v in fields.items() if k != "source_type"}
         if not sanitized:
             return n
-        sanitized["updated_by"] = actor_user_id
-        await self.dao.update(db, news_id, fields=sanitized)
-        await db.refresh(n)
+        for k, v in sanitized.items():
+            setattr(n, k, v)
+        n.updated_by = actor_user_id
+        await db.flush()
         await write_event(
             db=db,
             actor_user_id=actor_user_id,
@@ -168,7 +176,7 @@ class IndustryNewsService:
             summary=f"更新行业动态：{n.title}",
             metadata={"updated_fields": sorted(sanitized.keys())},
         )
-        return n
+        return await self._get_or_raise(db, news_id)  # 重新带 selectinload(node_links→node)
 
     async def delete_news(
         self,

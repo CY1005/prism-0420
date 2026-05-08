@@ -59,6 +59,17 @@ def test_news_create_invalid_url_raises():
         NewsCreate(title="t", source_url="not-a-url")
 
 
+def test_news_create_tag_too_long_raises():
+    """R1-C P1-3 立修：tags 单元素 max_length=50。"""
+    with pytest.raises(ValidationError):
+        NewsCreate(title="t", tags=["x" * 51])
+
+
+def test_news_update_tag_too_long_raises():
+    with pytest.raises(ValidationError):
+        NewsUpdate(tags=["x" * 51])
+
+
 def test_news_update_partial():
     u = NewsUpdate(title="new")
     assert u.title == "new"

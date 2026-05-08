@@ -117,3 +117,7 @@ class NewsNodeLink(Base):
     )
 
     news: Mapped[IndustryNews] = relationship("IndustryNews", back_populates="node_links")
+    # R1-A P1-1 立修（2026-05-08）：design §7 NewsResponse.linked_nodes 含 NodeRef.node_name + project_id；
+    # 没有此 relationship 则 Service 拿不到 node 字段——契约链断裂。
+    # foreign_keys 显式（NewsNodeLink → Node 单向，Node 端不反向加 back_populates 与 M08 同款规则）。
+    node = relationship("Node", foreign_keys=[node_id])

@@ -40,7 +40,14 @@ class IndustryNewsDAO:
         ⚠️ 无 project_id 过滤——全局数据豁免（清单 5）。
         ORDER BY created_at DESC 走 ix_industry_news_created_at 索引。
         分页 page/page_size 越界时返回空 items + 真实 total（不报错，design §14 E4）。
+
+        R1-C P1-2 立修（2026-05-08）：page/page_size <= 0 行为不可预测（LIMIT 0 返空 vs
+        OFFSET 负数兜底），与 design §14 E4 仅覆盖"超出总数"语义不同 → 显式拒绝。
         """
+        if page < 1 or page_size < 1:
+            raise ValueError(
+                f"page and page_size must be >= 1, got page={page} page_size={page_size}"
+            )
         base = select(IndustryNews)
         if tag is not None:
             base = base.where(IndustryNews.tags.contains([tag]))
@@ -51,7 +58,7 @@ class IndustryNewsDAO:
         total = int((await db.execute(total_stmt)).scalar_one())
 
         stmt = (
-            base.options(selectinload(IndustryNews.node_links))
+            base.options(selectinload(IndustryNews.node_links).selectinload(NewsNodeLink.node))
             .order_by(IndustryNews.created_at.desc(), IndustryNews.id.desc())
             .offset(max(0, (page - 1) * page_size))
             .limit(page_size)
@@ -63,7 +70,7 @@ class IndustryNewsDAO:
         """⚠️ 无 tenant 过滤——全局豁免。"""
         result = await db.execute(
             select(IndustryNews)
-            .options(selectinload(IndustryNews.node_links))
+            .options(selectinload(IndustryNews.node_links).selectinload(NewsNodeLink.node))
             .where(IndustryNews.id == news_id)
         )
         return result.scalar_one_or_none()
@@ -75,7 +82,7 @@ class IndustryNewsDAO:
         """
         result = await db.execute(
             select(IndustryNews)
-            .options(selectinload(IndustryNews.node_links))
+            .options(selectinload(IndustryNews.node_links).selectinload(NewsNodeLink.node))
             .join(NewsNodeLink, NewsNodeLink.news_id == IndustryNews.id)
             .where(NewsNodeLink.node_id == node_id)
             .order_by(IndustryNews.created_at.desc(), IndustryNews.id.desc())

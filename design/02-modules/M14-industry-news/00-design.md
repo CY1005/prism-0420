@@ -373,7 +373,15 @@ class NewsNodeLinkResponse(BaseModel):
 |----|------|------|
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
 | **Router** | 已登录即可读；写操作已登录即可 | `Depends(get_current_user)` 读；写接口同样只需 `Depends(get_current_user)`（无需 editor 角色，M14 全局数据无项目级角色）|
-| **Service** | 删除/编辑：校验 `created_by == current_user.id` OR 平台管理员 | Service 层 `_check_news_owner_or_admin()` |
+| **Service** | 删除/编辑（IndustryNews 主资源）：校验 `created_by == current_user.id` OR 平台管理员 | Service 层 `_check_news_owner_or_admin()` |
+| **Service** | 关联/解除关联（NewsNodeLink CRUD）：**已登录即可（与 IndustryNews 主资源 update/delete 不同）** | Service 层 `link_node` / `unlink_node` 不调 `_check_news_owner_or_admin` |
+
+**link/unlink 权限裁决**（R1-A P1-2 立修，2026-05-08，5 步分层 L1 R-X3 范式既锁裁决型）：
+- NewsNodeLink 是关联表元数据，不是主资源 IndustryNews 的"删除/编辑"
+- 与 link 对称：已登录即可解除关联（任何已登录用户均可对全局动态打 / 解关联标签）
+- 跨用户关联/解除关联是预期行为（多人协作管理全局动态的 node 关联）；
+  若未来需要 owner-only 关联策略，走 baseline-patch 加 `created_by==user OR admin` 校验即可
+- 元自审教训复用（M12 元自审 / feedback_problem_layered_analysis 失效信号）：L1 范式既锁的裁决型 P1 不让 CY 拍 → AI 自决 + design disambiguation 注释
 
 **异步路径**：M14 无异步，三层即足够。
 

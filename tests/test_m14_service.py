@@ -164,6 +164,59 @@ async def test_update_news_by_platform_admin_succeeds(db_session, make_user):
     assert fresh.title == "moderated"
 
 
+async def test_update_news_accepts_empty_tags_clear(db_session, make_user):
+    """R1-A P1-3 + R1-C P1-1 立修：tags=[] 视为清空操作（不再被 v is not None 滤掉）。"""
+    user = await make_user()
+    svc = await _svc()
+    n = await svc.create_news(db_session, actor_user_id=user.id, title="t", tags=["AI"])
+    fresh = await svc.update_news(
+        db_session,
+        actor_user_id=user.id,
+        actor_role=UserRole.USER.value,
+        news_id=n.id,
+        fields={"tags": []},
+    )
+    assert fresh.tags == []
+
+
+async def test_update_news_via_orm_mutate_persists(db_session, make_user):
+    """R1-A P1-3 立修：改 ORM mutate 不再 raw UPDATE + refresh，节点 relationship 保持 eager。"""
+    user = await make_user()
+    svc = await _svc()
+    n = await svc.create_news(db_session, actor_user_id=user.id, title="t")
+    fresh = await svc.update_news(
+        db_session,
+        actor_user_id=user.id,
+        actor_role=UserRole.USER.value,
+        news_id=n.id,
+        fields={"title": "renamed"},
+    )
+    assert fresh.title == "renamed"
+    # _get_or_raise 重新查带 selectinload(node_links → node)，访问不触发 lazy load
+    assert fresh.node_links == []
+
+
+async def test_unlink_node_no_owner_check_design_disambiguation(
+    db_session, make_project, make_node, make_user
+):
+    """R1-A P1-2 立修 design §8 disambiguation：unlink 已登录即可（与 link 对称，不要求 owner）。"""
+    owner, proj = await make_project()
+    node = await make_node(proj.id, name="x")
+    other = await make_user()
+    svc = await _svc()
+    n = await svc.create_news(db_session, actor_user_id=owner.id, title="t")
+    # owner 先关联
+    await svc.link_node(
+        db_session,
+        actor_user_id=owner.id,
+        actor_role=UserRole.USER.value,
+        news_id=n.id,
+        node_id=node.id,
+    )
+    # other（非 owner）解除关联——design §8 disambiguation：已登录即可，不抛 403
+    await svc.unlink_node(db_session, actor_user_id=other.id, news_id=n.id, node_id=node.id)
+
+
 async def test_update_news_ignores_source_type_change(db_session, make_user):
     """design §3 灰区 1：source_type 不可被 update 修改。"""
     user = await make_user()
