@@ -11,7 +11,6 @@ from uuid import uuid4
 import pytest
 
 from api.dao.version_dao import VersionDAO
-from api.models.version_record import VersionRecord
 
 
 @pytest.fixture
@@ -19,44 +18,23 @@ def dao():
     return VersionDAO()
 
 
-async def _make_version(
-    db_session,
-    *,
-    user,
-    project,
-    node,
-    label: str,
-    is_current: bool = False,
-    summary: str = "s",
-) -> VersionRecord:
-    rec = VersionRecord(
-        node_id=node.id,
-        project_id=project.id,
-        version_label=label,
-        summary=summary,
-        is_current=is_current,
-        created_by=user.id,
-    )
-    db_session.add(rec)
-    await db_session.flush()
-    return rec
-
-
 # ─────────────── M05-DAO-T1 list_by_node 时间线排序 ───────────────
 
 
-async def test_dao_list_by_node_orders_by_created_at_desc(db_session, dao, make_project, make_node):
+async def test_dao_list_by_node_orders_by_created_at_desc(
+    db_session, dao, make_project, make_node, make_version
+):
     """时间线 DESC：created_at 主序 + id DESC tie-break（同事务 now() 等值场景）。"""
     from datetime import UTC, datetime, timedelta
 
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     base = datetime(2026, 5, 8, 12, 0, 0, tzinfo=UTC)
-    v1 = await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    v1 = await make_version(user=user, project=proj, node=node, label="v1")
     v1.created_at = base
-    v2 = await _make_version(db_session, user=user, project=proj, node=node, label="v2")
+    v2 = await make_version(user=user, project=proj, node=node, label="v2")
     v2.created_at = base + timedelta(seconds=1)
-    v3 = await _make_version(db_session, user=user, project=proj, node=node, label="v3")
+    v3 = await make_version(user=user, project=proj, node=node, label="v3")
     v3.created_at = base + timedelta(seconds=2)
     await db_session.flush()
 
@@ -65,13 +43,15 @@ async def test_dao_list_by_node_orders_by_created_at_desc(db_session, dao, make_
     assert [r.id for r in rows] == [v3.id, v2.id, v1.id]
 
 
-async def test_dao_list_by_node_isolates_tenants(db_session, dao, make_project, make_node):
+async def test_dao_list_by_node_isolates_tenants(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
     nB = await make_node(projB.id, name="B")
-    await _make_version(db_session, user=user, project=projA, node=nA, label="vA")
-    await _make_version(db_session, user=user, project=projB, node=nB, label="vB")
+    await make_version(user=user, project=projA, node=nA, label="vA")
+    await make_version(user=user, project=projB, node=nB, label="vB")
 
     rowsA = await dao.list_by_node(db_session, nA.id, projA.id)
     assert len(rowsA) == 1
@@ -79,11 +59,13 @@ async def test_dao_list_by_node_isolates_tenants(db_session, dao, make_project, 
     assert rowsCross == [], "B 项目查 A 节点不应返回 A 数据"
 
 
-async def test_dao_list_by_node_respects_limit(db_session, dao, make_project, make_node):
+async def test_dao_list_by_node_respects_limit(
+    db_session, dao, make_project, make_node, make_version
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     for i in range(5):
-        await _make_version(db_session, user=user, project=proj, node=node, label=f"v{i}")
+        await make_version(user=user, project=proj, node=node, label=f"v{i}")
 
     rows = await dao.list_by_node(db_session, node.id, proj.id, limit=2)
     assert len(rows) == 2
@@ -92,20 +74,24 @@ async def test_dao_list_by_node_respects_limit(db_session, dao, make_project, ma
 # ─────────────── M05-DAO-T2 get_by_id ───────────────
 
 
-async def test_dao_get_by_id_returns_in_tenant(db_session, dao, make_project, make_node):
+async def test_dao_get_by_id_returns_in_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    rec = await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    rec = await make_version(user=user, project=proj, node=node, label="v1")
 
     found = await dao.get_by_id(db_session, rec.id, proj.id)
     assert found is not None and found.id == rec.id
 
 
-async def test_dao_get_by_id_blocks_cross_tenant(db_session, dao, make_project, make_node):
+async def test_dao_get_by_id_blocks_cross_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    rec = await _make_version(db_session, user=user, project=projA, node=nA, label="v1")
+    rec = await make_version(user=user, project=projA, node=nA, label="v1")
 
     found = await dao.get_by_id(db_session, rec.id, projB.id)
     assert found is None
@@ -120,24 +106,24 @@ async def test_dao_get_by_id_returns_none_when_missing(db_session, dao, make_pro
 # ─────────────── M05-DAO-T3 get_current ───────────────
 
 
-async def test_dao_get_current_returns_is_current_row(db_session, dao, make_project, make_node):
+async def test_dao_get_current_returns_is_current_row(
+    db_session, dao, make_project, make_node, make_version
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    await _make_version(db_session, user=user, project=proj, node=node, label="v1")
-    cur = await _make_version(
-        db_session, user=user, project=proj, node=node, label="v2", is_current=True
-    )
+    await make_version(user=user, project=proj, node=node, label="v1")
+    cur = await make_version(user=user, project=proj, node=node, label="v2", is_current=True)
 
     found = await dao.get_current(db_session, node.id, proj.id)
     assert found is not None and found.id == cur.id
 
 
 async def test_dao_get_current_returns_none_when_no_current(
-    db_session, dao, make_project, make_node
+    db_session, dao, make_project, make_node, make_version
 ):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    await make_version(user=user, project=proj, node=node, label="v1")
 
     assert await dao.get_current(db_session, node.id, proj.id) is None
 
@@ -145,22 +131,24 @@ async def test_dao_get_current_returns_none_when_no_current(
 # ─────────────── M05-DAO-T4 count_by_node ───────────────
 
 
-async def test_dao_count_by_node(db_session, dao, make_project, make_node):
+async def test_dao_count_by_node(db_session, dao, make_project, make_node, make_version):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     for label in ("v1", "v2", "v3"):
-        await _make_version(db_session, user=user, project=proj, node=node, label=label)
+        await make_version(user=user, project=proj, node=node, label=label)
 
     assert await dao.count_by_node(db_session, node.id, proj.id) == 3
     other = await make_node(proj.id, name="B")
     assert await dao.count_by_node(db_session, other.id, proj.id) == 0
 
 
-async def test_dao_count_by_node_blocks_cross_tenant(db_session, dao, make_project, make_node):
+async def test_dao_count_by_node_blocks_cross_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    await _make_version(db_session, user=user, project=projA, node=nA, label="v1")
+    await make_version(user=user, project=projA, node=nA, label="v1")
 
     assert await dao.count_by_node(db_session, nA.id, projB.id) == 0
 
@@ -168,10 +156,12 @@ async def test_dao_count_by_node_blocks_cross_tenant(db_session, dao, make_proje
 # ─────────────── M05-DAO-T5 update_metadata ───────────────
 
 
-async def test_dao_update_metadata_changes_fields(db_session, dao, make_project, make_node):
+async def test_dao_update_metadata_changes_fields(
+    db_session, dao, make_project, make_node, make_version
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    rec = await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    rec = await make_version(user=user, project=proj, node=node, label="v1")
 
     rows = await dao.update_metadata(
         db_session,
@@ -185,11 +175,13 @@ async def test_dao_update_metadata_changes_fields(db_session, dao, make_project,
     assert rec.details == "more info"
 
 
-async def test_dao_update_metadata_blocks_cross_tenant(db_session, dao, make_project, make_node):
+async def test_dao_update_metadata_blocks_cross_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    rec = await _make_version(db_session, user=user, project=projA, node=nA, label="v1")
+    rec = await make_version(user=user, project=projA, node=nA, label="v1")
 
     rows = await dao.update_metadata(db_session, rec.id, projB.id, fields={"summary": "hack"})
     assert rows == 0
@@ -205,12 +197,12 @@ async def test_dao_update_metadata_empty_fields_raises(db_session, dao):
 # ─────────────── M05-DAO-T6 clear_current_flag / set_current_flag ───────────────
 
 
-async def test_dao_clear_current_flag_resets_existing(db_session, dao, make_project, make_node):
+async def test_dao_clear_current_flag_resets_existing(
+    db_session, dao, make_project, make_node, make_version
+):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    cur = await _make_version(
-        db_session, user=user, project=proj, node=node, label="v1", is_current=True
-    )
+    cur = await make_version(user=user, project=proj, node=node, label="v1", is_current=True)
 
     rows = await dao.clear_current_flag(db_session, node.id, proj.id)
     assert rows == 1
@@ -218,10 +210,10 @@ async def test_dao_clear_current_flag_resets_existing(db_session, dao, make_proj
     assert cur.is_current is False
 
 
-async def test_dao_set_current_flag_marks(db_session, dao, make_project, make_node):
+async def test_dao_set_current_flag_marks(db_session, dao, make_project, make_node, make_version):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    rec = await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    rec = await make_version(user=user, project=proj, node=node, label="v1")
 
     rows = await dao.set_current_flag(db_session, rec.id, proj.id)
     assert rows == 1
@@ -229,13 +221,13 @@ async def test_dao_set_current_flag_marks(db_session, dao, make_project, make_no
     assert rec.is_current is True
 
 
-async def test_dao_clear_current_flag_blocks_cross_tenant(db_session, dao, make_project, make_node):
+async def test_dao_clear_current_flag_blocks_cross_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    cur = await _make_version(
-        db_session, user=user, project=projA, node=nA, label="v1", is_current=True
-    )
+    cur = await make_version(user=user, project=projA, node=nA, label="v1", is_current=True)
 
     rows = await dao.clear_current_flag(db_session, nA.id, projB.id)
     assert rows == 0
@@ -246,10 +238,10 @@ async def test_dao_clear_current_flag_blocks_cross_tenant(db_session, dao, make_
 # ─────────────── M05-DAO-T7 delete_by_id ───────────────
 
 
-async def test_dao_delete_by_id(db_session, dao, make_project, make_node):
+async def test_dao_delete_by_id(db_session, dao, make_project, make_node, make_version):
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
-    rec = await _make_version(db_session, user=user, project=proj, node=node, label="v1")
+    rec = await make_version(user=user, project=proj, node=node, label="v1")
 
     rows = await dao.delete_by_id(db_session, rec.id, proj.id)
     assert rows == 1
@@ -257,11 +249,13 @@ async def test_dao_delete_by_id(db_session, dao, make_project, make_node):
     assert found is None
 
 
-async def test_dao_delete_by_id_blocks_cross_tenant(db_session, dao, make_project, make_node):
+async def test_dao_delete_by_id_blocks_cross_tenant(
+    db_session, dao, make_project, make_node, make_version
+):
     user, projA = await make_project(name_suffix="-A")
     _, projB = await make_project(name_suffix="-B")
     nA = await make_node(projA.id, name="A")
-    rec = await _make_version(db_session, user=user, project=projA, node=nA, label="v1")
+    rec = await make_version(user=user, project=projA, node=nA, label="v1")
 
     rows = await dao.delete_by_id(db_session, rec.id, projB.id)
     assert rows == 0

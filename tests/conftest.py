@@ -244,6 +244,51 @@ async def make_node(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_version(db_session):
+    """工厂 fixture：建一条 version_records 行（M05）。
+
+    R1-B P1-01 立修（M05 sprint，2026-05-08）：从 test_m05_dao.py 内联 _make_version
+    迁入 conftest，保持"跨测试 helper 必须迁入 conftest"规则（M04 R1-B C1 同款）。
+
+    用法：
+      rec = await make_version(user=user, project=proj, node=node, label="v1")
+      cur = await make_version(..., label="v2", is_current=True)
+    """
+    from api.models.version_record import VersionRecord
+
+    async def _make(
+        *,
+        user,
+        project,
+        node,
+        label: str,
+        is_current: bool = False,
+        summary: str = "s",
+        details: str | None = None,
+        change_type: str = "added",
+        release_mode: str = "release",
+        snapshot_data: dict | None = None,
+    ):
+        rec = VersionRecord(
+            node_id=node.id,
+            project_id=project.id,
+            version_label=label,
+            summary=summary,
+            details=details,
+            change_type=change_type,
+            release_mode=release_mode,
+            is_current=is_current,
+            snapshot_data=snapshot_data,
+            created_by=user.id,
+        )
+        db_session.add(rec)
+        await db_session.flush()
+        return rec
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_dim_type(db_session):
     """工厂 fixture：建 dimension_types 行（可选同时建 ProjectDimensionConfig）。
 

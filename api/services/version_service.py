@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dao.node_dao import NodeDAO
 from api.dao.version_dao import VersionDAO
 from api.errors.exceptions import (
+    ConflictError,
     VersionLabelDuplicateError,
     VersionNotFoundError,
 )
@@ -142,7 +143,17 @@ class VersionService:
         try:
             await self.dao.create(db, rec)
         except IntegrityError as e:
-            # A9: UNIQUE(node_id, version_label) 冲突 → 干净起步不裸抛 500
+            # R1-C P1-01 立修：区分约束名，避免错误码语义误导 caller。
+            # uq_version_node_label: (node_id, version_label) 重复 → VersionLabelDuplicateError
+            # uq_version_node_is_current: 部分唯一索引（is_current=true 同 node 已存在）
+            #   并发场景下 clear_current_flag 后另一连接重新 set_current → IntegrityError
+            #   → ConflictError（"另一并发请求已设当前版本，请刷新后重试"）
+            err_text = str(e.orig) if e.orig else str(e)
+            if "uq_version_node_is_current" in err_text:
+                raise ConflictError(
+                    "Another version was concurrently set as current; please refresh"
+                ) from e
+            # 默认归到 label 重复（含 uq_version_node_label 命中 + 未知 IntegrityError 兜底）
             raise VersionLabelDuplicateError(
                 node_id=str(node_id),
                 version_label=version_label,
