@@ -134,10 +134,67 @@ cross-sprint punt 池 / bypass log），命中任一 → A 或 C 栏。**B 栏 =
 - 在 SQLAlchemy create_savepoint 测试 fixture 下叠加第二个 AsyncSession 在同一 db_connection 上会触发 greenlet 桥接冲突（asyncpg 一连接一活跃操作 / SAVEPOINT 嵌套被两个 session 各自管理）。妥协做法：测试 fixture 把 `compensation_session` 函数本身 monkeypatch 成 yield 同一 db_session（共享 session）。生产路径独立 commit boundary 的真实隔离留生产或专门集成 e2e 验证。
 - 同一 service 函数内不要在 `await db.commit()` 失败补偿前再插一次 `await db.rollback()`：listener `_restart_savepoint` 触发的 `sync_session.begin_nested()` 会跑出 greenlet 上下文，下一次 dao.update 抛 MissingGreenlet。范式：service 触发失败补偿时不主动 rollback 业务 session，业务 session rollback 由 router/Queue worker 异常分支兜底。
 
-### 子片 1-5 实施期（待 sprint 内回写）
+### 子片 1-5 实施期（2026-05-09 完成）
 
-待 R1 + R2 spawn subagent 跑完后填充：
+**子片 1+2+3 commits**：
+- `b806931` 子片 1（model + alembic + ActionType+8 + TargetType+1 + 36 model tests）
+- `f41ad25` 子片 2（DAO + tenant filter + idempotency 7d + dead_letter 30d + 28 unit）
+- `9229759` 子片 3（Service + Schema + 8 ErrorCode + Queue + WS + AI Orchestration / 1003 行 service / 40 新测试）
+- `d558b5f` R1 立修（3 subagent 并行审 / 8 P1 合并去重立修）
+- `[hash]` 子片 4（Router 7 REST + 1 WS endpoint + 24 e2e）
+- `dcf7024` R2 立修（1 合并 Opus 单审 / 4 P1 立修）
+- 子片 5 关闸（本 commit）
 
-- R1 命中数据 / R2 命中数据
-- 闸门 2.5 三栏第十二次 B 栏 0 项实证（M05-M17 十二连）
-- §14.5 L3 实证子选项回写
+**回归数据**：1213 PASS / 4 skipped / 0 fail / R13-1 124（M17 +8）/ L12+L13+R14 全过 / ruff 净
+
+**R1 命中数据**（3 subagent 并行 / 元教训防御）：
+- R1-A spec+quality Opus：2 P1（partial_failed unreachable IMPL-NOTE / IntegrityError 区分约束名）+ 4 P2 + 6 P3
+- R1-B reuse Sonnet：1 P1（make_import_task 迁 conftest / 十二连规则延续）+ 3 重复实现 D1-D3 标记观察
+- R1-C quality+efficiency Sonnet：6 P1（N+1 _upsert_dimension_type / publish_progress 3 处 suppress / IntegrityError 同款 / consolidate_step3 set 重建 / awaiting_review→cancelled 缺测 / dimension upsert 调用次数缺测）
+- 合并去重：8 P1 立修（commit d558b5f）
+- M02-M17 R1 第十五数据点：3 subagent 并行范式稳定（Sprint 复杂度 high 时 R1=3 subagent 范式有效）
+
+**R2 命中数据**（1 合并 Opus 单审 endpoint）：
+- 4 P1 立修（commit dcf7024）：WS endpoint 0 e2e（4 鉴权拒绝矩阵 / golden punt integration）+ 413 vs 422 design 字面漂移裁决 + filename sanitize 字面验输出 + IntegrityError race 路径 docstring 注释
+- 3 P2 punt（list endpoint viewer 200 矩阵 / get_review viewer 200 / confirm/cancel/retry 失败路径 db.rollback 隐式）
+- 4 P3 nit（lazy import / docstring 字面 vs 实装漂移 / NULL byte 测试 / Response import 提到顶部）
+- M02-M17 R2 第十四数据点：1 合并 Opus 单审 endpoint 形态稳定
+
+**闸门 2.5 三栏第十二次 B 栏 0 项实证**（M05+M06+M07+M08+M10+M11+M12+M13+M14+M15+M16+M17 十二连稳定 / B 栏 = 0 时禁列 B 栏元规则继续守护）
+
+### §14.5 L3 实证子选项回写
+
+- **R-X1 第二实例对照（最终）**：见上方对照表 + R-X1 helper（compensation_session）零摩擦实证 — M11 第一实例迁移在子片 0 prep / M17 直接复用，无重新实装成本；R-X1 helper 横切设计验证有效
+- **闸门 2.6 mini-sprint 是否单独 commit**：合并到子片 0 prep（commit ad069c0 启动期 + 7a6327f 子片 0 prep）单 commit 落地，TaskPayload + SYSTEM_USER_UUID + queue/base scaffold + orchestrator_helpers 同 sprint 同 commit 链
+- **arq @task + Redis worker 部署**：arq 实际部署 docker-compose 段落 punt 后续运维 sprint（M17 sprint 范围仅 @task 函数定义 + Queue worker 自起 SessionLocal 范式实证；实际 enqueue 由 router 转 Queue 真接通在生产部署 sprint）
+
+### M17 sprint 实施期元贡献清单
+
+1. **R-X1 第二实例零摩擦验证** — compensation_session helper 横切设计成本控制有效（M11 第一实例 / M17 第二实例 / 后续 R-X1 caller 直接复用）
+2. **WebSocket endpoint 首发 + Query Bearer 鉴权范式** — design §8 audit B6 每命令 task_id 重校实装 + 4 鉴权拒绝矩阵 e2e + golden integration sprint 推迟
+3. **idempotency_key 含 project_id（B1 修复）实装实证** — UNIQUE(user_id, project_id, source_hash) + service.find_idempotent 7d 复用窗口 + IntegrityError 端到端 catch（清单 6 落地）
+4. **N+1 防护批量 cache 范式** — _upsert_dimension_type 循环改批量 unique key 预查 cache（5 dim / 2 unique key → 2 次 upsert 而非 5）/ 后续 sprint dimension_type_key 路径复用
+5. **filename sanitize 字面验输出范式** — M11 R2 P1-03 立 / M17 R2 P1-03 强化（不仅 not-crash 必字面验 source_uri 输出）
+6. **partial_failed IMPL-NOTE 范式** — design §10 字面 vs 实装 §4 single-tx all-or-nothing 决策的实装 gap 显式登记（防未来误判 / 入边 enum 字面保留备 ai_step2 chunk 化）
+7. **R-X1 第二实例 sprint 元发现：design §7 字面 status code 漂移**（413 vs 422）— 立规 sink 候选：每 sprint 关闸 R2 必跑 reconcile checkbox（design 字面异常契约 vs router 抛的 AppError.http_status）
+
+### M17 sprint 元教训新教训 sink memory 候选
+
+1. **WS endpoint 测试矩阵立规**（feedback_ws_endpoint_test_matrix.md 候选）：WS endpoint sprint 必须包含 5-test 矩阵（invalid token / wrong type claim / cross-tenant / cross-owner / golden accept）；不能用 broker 单测代替 endpoint e2e。R-X1 第二实例首发漏洞实证。
+2. **filename sanitize horizontal 化触发条件**：第三实例（M18+ multipart 上传）触发横切到 api/utils/upload_helpers.py；同时 sanitize 测试必须字面验输出（M17 R2 P1-03 立规 / 不仅 not-crash）
+3. **multipart 上限分级表**（engineering-spec §X 立）：小文件 10MB（M11 cold_start CSV）/ 大归档包 100MB（M17 zip / git_bundle）/ 超大场景明示
+
+### bypass log #2 配套验收
+
+- **spawn subagent 已恢复**：M17 R1 = 3 subagent 并行（A/B/C 不同模型 spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）+ R2 = 1 合并 Opus subagent；累计 bypass = 2 次（M16 sprint）/ M17 已恢复，触发线计数不复位 → 下次 bypass = 3 次 → 触发对闸门 3.4 L1 总则的 review
+- **spawn prompt 含 ls/find 穷举要求**：✅ R1 三 subagent + R2 prompt 全含 cross-sprint 元发现 #5 立规字面要求（"穷举要求 / 不能凭'看了主要文件'判断完整性"）
+
+### cross-sprint Punt 池接通
+
+子片 5 同 commit 内：
+- punt #7（R-X1 失败补偿 commit boundary）✅ DONE 已在子片 0 prep commit 标记
+- 新 punt 入池：
+  - WS golden e2e（R2 P1-01 punt integration sprint）
+  - _sanitize_filename horizontal 化（M11+M17 重复 / 第三实例触发立规）
+  - confirm_review 绕过 _transition 缺 import_status_changed event（R1-A P2-3）
+  - 6 处 lazy import from api.core.db / from api.queue.import_tasks 抽 helper（R1-A P3-3）

@@ -61,6 +61,10 @@ policy:
 | **13** | **M04-1 dimension_records (updated_by, updated_at) 联合索引未建** ⏳ 2026-05-09 M17 子片 0 prep 验证：现仅有 (project_id, updated_at) 索引（model:52），(updated_by, updated_at) 仍缺 / STILL_PUNT | M04 R1-A A2 | M15/M19 | medium — dimension_records 是 M13/M14 写大量行的源表，缺联合索引会让 activity_stream 时间线查询慢 | 与 #1 同 sprint 评估是否提前建 |
 | **14** | **M04-8 db.get(DimensionType) 三处未走 DAO** ⏳ 2026-05-09 M17 子片 0 prep 验证仍 STILL_PUNT（service:349/428/474）；M17 不触 dimension_service，本期不清 | M04 R1-B B2.4 | M15 启动前（已过）| low — 风格统一性；service:349/428/474 三处 | M16 启动顺手清 |
 | **15** | **M04-R2 A1 DimensionResponse 缺 dimension_type_key/updated_by_name join 字段** | M04 R2 A1 | 前端真用时补 join | medium — 与 #3 IssueResponse 同款契约缺口；前端真用时必补 selectinload | 与 #3 一并 M16 启动拍 |
+| **16** | **WS golden e2e（accept 后 service push + client receive）** | M17 R2 P1-01 punt | M18 集成 sprint 或专门 WS integration sprint | medium — sync TestClient + async fixture 桥接复杂；当前 4 鉴权拒绝矩阵已覆盖安全边界，golden 留 integration | M18+ 启动评估是否落 integration helper |
+| **17** | **_sanitize_filename horizontal 化** | M17 R2 sink #1 | 第三实例（M18+ multipart 上传）触发 | medium — M11 cold_start + M17 import 重复实装；第三实例触发立规迁 api/utils/upload_helpers.py | 第三 multipart sprint 启动时迁 |
+| **18** | **M17 confirm_review 绕过 _transition 缺 import_status_changed event** | M17 R1-A P2-3 | M18+ 顺手补 | low — design §10 期望每次状态扭转都有 status_changed event；当前缺 awaiting_review→ai_step3 一条 | M18+ 启动顺手补 |
+| **19** | **M17 import_tasks.py 6 处 lazy import 抽 helper** | M17 R1-A P3-3 | 后续重构 sprint | low — 风格统一性；6 处重复 from api.core.db import SessionLocal + from api.services.import_service import ImportService | 后续重构 sprint 顺手抽 |
 
 ---
 

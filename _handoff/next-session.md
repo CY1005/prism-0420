@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (post-M16-sprint-complete)
+last_updated: 2026-05-09 (post-M17-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,38 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-M16-sprint-complete）
+## 0. 状态快照（更新于 2026-05-09 post-M17-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%
-- **Phase 2.1 业务模块**：⏳ 80%（M01-M08+M10+M11+M12+M13+M14+M15+M16 完成；下一站 M17 AI 导入；M09 superseded by M18 不实装）
+- **Phase 2.1 业务模块**：⏳ 85%（M01-M08+M10+M11+M12+M13+M14+M15+M16+M17 完成；下一站 M18 语义搜索；M09 superseded by M18 不实装）
+- **2026-05-09 M17 sprint 完成**（7 commit / 1213 PASS / R13-1 116→124 / L12+L13+R14 全过 / **首个 R-X1 第二实例 + 异步 Queue + WebSocket endpoint pilot + bypass log #2 配套已恢复**）：
+  - commits:
+    - `ad069c0` 启动期（闸门 2.6 mini-sprint + R-X1 helper compensation_session + L1 总则修订 3 类例外 + IntegrityError 立规清单 6 + ci-lint R15 守护立规）
+    - `7a6327f` 子片 0 prep（M11 ColdStart R-X1 第一实例迁移到 compensation_session helper / cold_start_router 失败分支精简 / R2 P1-01 punt #7 关闭 / cross-sprint punt 触发点 A 4 项 STILL_PUNT 验证）
+    - `b806931` 子片 1（ImportTask + ImportTaskItem model 11+5 状态 + 3 source_type + UNIQUE B1 修复 + alembic m17_ai_import + ActionType+8 + TargetType+1 + 36 model tests）
+    - `f41ad25` 子片 2（ImportTaskDAO + ImportTaskItemDAO + tenant filter + find_idempotent 7d + find_dead_letter_orphans 30d + 28 unit tests）
+    - `9229759` 子片 3（ImportService 1003 行 + AIOrchestrationService + Schema + 8 ErrorCode + 6 arq @task + WS handler + R-X1 第二实例 + 40 新测试 / conftest 加 import_service 到 _MODULES）
+    - `d558b5f` R1 立修 8 P1（3 subagent 并行审：spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）
+    - `[hash]` 子片 4（Router 7 REST + 1 WS endpoint + multipart 100MB + idempotency 200 复用 + 24 e2e）
+    - `dcf7024` R2 立修 4 P1（1 合并 Opus 单审 endpoint：WS endpoint 4 鉴权拒绝矩阵 + 413/422 design 漂移裁决 + filename sanitize 字面验输出 + IntegrityError race 路径注释）
+    - 子片 5 关闸（本 commit）
+  - **1213 PASS / 4 skipped / R13-1 116→124 / L12+L13+R14 全过 / ruff 净**
+  - **闸门 2.5 第十二次 B 栏 0 项实证**：M05-M17 十二连稳定
+  - **bypass log #2 配套已恢复**：M17 R1 = 3 subagent 并行 + R2 = 1 合并 Opus（spawn prompt 含 ls/find 穷举要求 / 不复位累计触发线 / 下次 bypass 第 3 次 → 触发闸门 3.4 L1 review）
+  - **R1 + R2 命中数据**：R1=3 subagent 8 P1 立修（合并去重 / spec+quality Opus 2 / reuse Sonnet 1 / quality+efficiency Sonnet 6）/ R2=1 合并 Opus 4 P1 立修；M02-M17 R1 第十五数据点 + R2 第十四数据点稳定
+  - **元贡献 7 项 sink**（audit/m17-pilot-template-validation.md "M17 sprint 实施期元贡献清单" 段）：
+    1. R-X1 第二实例零摩擦验证 — compensation_session helper 横切设计成本控制有效（M11 第一实例 / M17 第二实例直接复用）
+    2. WebSocket endpoint Query Bearer 鉴权 + audit B6 每命令 task_id 重校 + 4 鉴权拒绝矩阵 e2e
+    3. idempotency_key 含 project_id（B1 修复）实装实证 + IntegrityError 端到端 catch（清单 6 落地）
+    4. N+1 防护批量 cache 范式（_upsert_dimension_type 5 dim / 2 unique key → 2 次 upsert）
+    5. filename sanitize 字面验输出范式（M11 R2 P1-03 立 / M17 R2 P1-03 强化必字面验 source_uri）
+    6. partial_failed IMPL-NOTE 范式（design §10 字面 vs §4 single-tx 实装 gap 显式登记）
+    7. design §7 字面 status code 漂移立规 sink 候选（每 sprint R2 reconcile checkbox）
+  - **R1+R2 sink 立规候选 3 项**：
+    1. **WS endpoint 5-test 矩阵立规**（feedback_ws_endpoint_test_matrix.md 候选）— invalid token / wrong type claim / cross-tenant / cross-owner / golden accept；不能用 broker 单测代替 endpoint e2e
+    2. **filename sanitize horizontal 化触发条件** — 第三实例（M18+ multipart 上传）触发横切到 api/utils/upload_helpers.py + sanitize 测试必须字面验输出
+    3. **multipart 上限分级表**（engineering-spec §X 立）— 小文件 10MB / 大归档包 100MB / 超大场景明示
+  - **cross-sprint punt 池接通**：punt #7（R-X1 失败补偿 commit boundary）✅ DONE 子片 0 prep；新增 4 punt：WS golden e2e（R2 P1-01）/ _sanitize_filename horizontal（M18+ 触发）/ confirm_review 绕 _transition（R1-A P2-3）/ 6 处 lazy import 抽 helper（R1-A P3-3）
 - **2026-05-09 M16 sprint 完成**（7 commit / 1063 PASS / R13-1 116=116 / R14 守护通过 / L12+L13 / **§12B 后台 fire-and-forget 子模板首战 + L1 R14 立规重大事件 + 7 业务模块 41 处 service action_type 过去式机械批量 + 4 NEW enum + write_event 真 INSERT + R1+R2 self-审 bypass log #2**）：
   - commits:
     - `9e9eb68` 子片 0 prep（M16 design §14.5 + M15 design §10 R14 段立规 + activity_log_service docstring 修 "module"→"node"）

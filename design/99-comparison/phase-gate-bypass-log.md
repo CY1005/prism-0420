@@ -19,6 +19,11 @@ purpose: |
 
 - 累计 ≥ 2 次绕闸 → 必须停下来 review 闸门规则本身（是不是闸门定错了 / 闸门项是否需要分级 / 是否需要"等价替代"明确写入）
 - 当前累计：**2 次** ✅ **已 review + 修订完成 2026-05-09**（M17 启动期）
+- **bypass #2 配套承诺验收 2026-05-09**（M17 sprint 关闸）：
+  - ✅ M17 R1 = 3 subagent 并行（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）实际跑（commit d558b5f 8 P1 立修）
+  - ✅ M17 R2 = 1 合并 Opus subagent endpoint 单审实际跑（commit dcf7024 4 P1 立修）
+  - ✅ spawn prompt 含 ls/find 穷举要求（cross-sprint 元发现 #5 立规字面要求）
+  - 触发线不复位继续累计；下次 bypass = 3 次 → 触发对条款 b 本身 review（"累计 self-审 ≥2 连续"独立触发）
   - 修订内容：00-phase-gate.md 闸门 3.4 L1 总则"触发例外"段从 1 类（≥80% SKIP）
     扩到 3 类（a ≥80% SKIP + b context budget pressure + c 临时合并 = bypass log）
   - **b "context budget pressure" 条款双前置条件 + 3 配套承诺**（不是无条件降级）：
