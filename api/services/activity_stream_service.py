@@ -101,6 +101,16 @@ class ActivityStreamService:
         统一抛 ActivityStreamProjectNotFoundError 不泄露 project 存在性；项目成员
         但 role=viewer → ActivityStreamForbiddenError 403（前端可区分"无项目权限"vs
         "无审计权限"语义）。
+
+        R2 P2-1 注释（2026-05-08 子片 5 关闸）：
+        ActivityStreamForbiddenError e2e 路径 **不可达**——Router 层 check_project_access
+        (role="editor") rank 系统对 viewer 抢先抛 PermissionDeniedError（403 通用 code），
+        本 _check 在 e2e 中永远先经过 router 拦截。本路径仅在 service unit 测中可达
+        （test_check_access_viewer_raises_forbidden）。这是 design §8 双层防御范式（非
+        dead code）：service 层防御未来 caller 跳过 router 直调（如 Background task /
+        admin 后台 / future GraphQL resolver）。与 R1 P1-1 立修的 InvalidFilterError
+        "schema 注册无 raise"不同结论：那是真 dead exception；本项是 router 抢先 +
+        service 防御未来。
         """
         stmt = (
             select(Project, ProjectMember)

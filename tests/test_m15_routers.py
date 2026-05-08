@@ -389,6 +389,45 @@ async def test_get_stream_page_size_over_max_returns_422(auth_client, make_user)
     assert r.status_code == 422
 
 
+async def test_get_stream_member_of_both_only_sees_self_project(auth_client, make_user, db_session):
+    """R2 P2-2 punt 处理：member-of-both 场景验证 cross-project tenant 强过滤
+    （DAO 层已 unit 测；e2e 显式补"用户既是 A 又是 B 的成员，访问 A 不混入 B 事件"）。"""
+    user_a = await make_user()
+    user_b = await make_user()
+    pid_a = await _create_project(auth_client, user_a.id, name="A")
+    pid_b = await _create_project(auth_client, user_b.id, name="B")
+    db_session.add(ProjectMember(project_id=pid_b, user_id=user_a.id, role="editor"))
+    from api.models.activity_log import ActivityLog
+
+    db_session.add_all(
+        [
+            ActivityLog(
+                project_id=pid_a,
+                user_id=user_a.id,
+                action_type="project_created",
+                target_type="project",
+                target_id=pid_a,
+                summary="A event",
+            ),
+            ActivityLog(
+                project_id=pid_b,
+                user_id=user_b.id,
+                action_type="project_created",
+                target_type="project",
+                target_id=pid_b,
+                summary="B event",
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    r = await auth_client.get(f"/api/projects/{pid_a}/activity-stream", headers=_bearer(user_a.id))
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["summary"] == "A event"
+
+
 async def test_get_stream_unknown_action_type_returns_422(auth_client, make_user):
     """R2 P1-2 立修：未知 action_type → Pydantic StrEnum 校验 422。"""
     user = await make_user()
