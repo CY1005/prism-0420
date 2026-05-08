@@ -365,9 +365,14 @@ async def test_svc_delete(db_session, svc, make_project):
 
 
 async def test_svc_orphan_by_node_id_sets_null_writes_activity_log(
-    db_session, svc, make_project, make_node
+    db_session, svc, make_project, make_node, monkeypatch
 ):
-    """**R-X2 第三真注入关键测试**：orphan UPDATE SET NULL + 每条 orphan event。"""
+    """**R-X2 第三真注入关键测试**：orphan UPDATE SET NULL + 每条 orphan event。
+
+    R1-C P1-02 立修（M07 sprint，2026-05-08）：M04/M06 同款范式 — monkeypatch
+    write_event 捕获 events 列表，验证 N 条独立 orphan 事件 + metadata 字段
+    （之前仅验 node_id IS NULL，未覆盖 R10-1 R-X2 写 N 条独立 activity_log 不变量）。
+    """
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     i1 = await svc.create(
@@ -390,9 +395,17 @@ async def test_svc_orphan_by_node_id_sets_null_writes_activity_log(
     )
     i1_id, i2_id = i1.id, i2.id
 
+    # 捕获 orphan 路径写出的 activity_log events（M04/M06 同款 monkeypatch 范式）
+    captured: list[dict] = []
+
+    async def fake_write_event(**kwargs):
+        captured.append(kwargs)
+
+    monkeypatch.setattr("api.services.issue_service.write_event", fake_write_event)
+
     await svc.orphan_by_node_id(db_session, node.id, proj.id, user.id)
 
-    # 直 SQL 验证（避免 ORM cache 问题）
+    # 直 SQL 验证 node_id IS NULL（避免 ORM cache 问题）
     res = await db_session.execute(
         text("SELECT id, node_id FROM issues WHERE id IN (:i1, :i2)"),
         {"i1": i1_id, "i2": i2_id},
@@ -400,6 +413,21 @@ async def test_svc_orphan_by_node_id_sets_null_writes_activity_log(
     rows = {r[0]: r[1] for r in res.fetchall()}
     assert rows[i1_id] is None
     assert rows[i2_id] is None
+
+    # R-X2 R10-1 不变量：每条 issue 独立 orphan event（含 cascade_source metadata）
+    orphan_events = [
+        e for e in captured if e.get("action_type") == "orphan" and e.get("target_type") == "issue"
+    ]
+    assert len(orphan_events) == 2, (
+        f"应为每条 issue 写 1 条 orphan event，实得 {len(orphan_events)}"
+    )
+    target_ids = {e["target_id"] for e in orphan_events}
+    assert target_ids == {str(i1_id), str(i2_id)}
+    for e in orphan_events:
+        # M07 metadata key 与 M04/M06 不同（M07: old_node_id+reason; M04/M06: node_id+cascade_source）
+        # — punt 进 m07 audit "跨模块 metadata key 命名一致性"，本测试按当前实装验
+        assert e["metadata"]["old_node_id"] == str(node.id)
+        assert e["metadata"]["reason"] == "cascade_from_node_delete"
 
 
 async def test_svc_orphan_by_node_id_empty_no_op(db_session, svc, make_project, make_node):

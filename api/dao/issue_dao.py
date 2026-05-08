@@ -88,8 +88,14 @@ class IssueDAO:
         *,
         status: str | None = None,
     ) -> int:
-        """count_by_project（M13/M16 跨模块只读消费可能用）。"""
-        stmt = select(func.count()).where(Issue.project_id == project_id)
+        """count_by_project（M13/M16 跨模块只读消费可能用）。
+
+        R1-C P1-01 立修（2026-05-08）：用 ``count(Issue.id).select_from(Issue)``
+        让 PG planner 走 ix_issue_project_status / ix_issue_project_category index-only
+        scan（visibility map 兜底，无 heap fetch）；裸 ``count()`` 缺 select_from
+        会被规划成全表 seq scan。
+        """
+        stmt = select(func.count(Issue.id)).select_from(Issue).where(Issue.project_id == project_id)
         if status is not None:
             stmt = stmt.where(Issue.status == status)
         result = await db.execute(stmt)

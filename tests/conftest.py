@@ -289,6 +289,44 @@ async def make_version(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_issue(db_session):
+    """工厂 fixture：建一条 issues 行（M07）。
+
+    R1-B P1-01 立修（M07 sprint，2026-05-08）：从 test_m07_dao.py 内联 _make_issue
+    迁入 conftest，规则四连延续：M04 R1-B B1.1（_seed_dim_type）+ M05 R1-B P1-01
+    （_make_version）+ M06 R1-B P1-01（_make_competitor/_ref）+ M07 R1-B P1-01。
+    """
+    from api.models.issue import Issue
+
+    async def _make(
+        *,
+        user,
+        project,
+        node=None,
+        category: str = "bug",
+        status: str = "open",
+        title: str = "t",
+        description: str = "d",
+        tags: list[str] | None = None,
+    ):
+        i = Issue(
+            project_id=project.id,
+            node_id=node.id if node else None,
+            category=category,
+            status=status,
+            title=title,
+            description=description,
+            tags=tags if tags is not None else [],
+            created_by=user.id,
+        )
+        db_session.add(i)
+        await db_session.flush()
+        return i
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_competitor(db_session):
     """工厂 fixture：建一条 competitors 行（M06）。
 

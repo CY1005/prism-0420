@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-08（M06 sprint 完成: 6 commit + R1+R2 闭环 / L1+L2+L3 节奏第五次实证 / 闸门 2.5 三栏第二次 B 栏 0 项实证 / R-X2 第二真注入零摩擦实证）
-current_phase: Phase 2.1 进行中（M01-M06 完成；下一站 M07 问题沉淀）
+last_updated: 2026-05-08（M07 sprint 完成: 7 commit + R1+R2 闭环 / L1+L2+L3 节奏第六次实证 / 闸门 2.5 三栏第三次 B 栏 0 项实证 / R-X2 第三真注入 orphan 语义实证 / 元教训"M06 P1 范式 M07 复发 + 应用立修"首次实证）
+current_phase: Phase 2.1 进行中（M01-M07 完成；下一站 M08 模块关系图）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -27,7 +27,7 @@ current_phase: Phase 2.1 进行中（M01-M06 完成；下一站 M07 问题沉淀
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
-Phase 2.1 业务模块  ⏳ ███████░░░░░░░░░  35%  ← M01-M06 完成；下一步 M07 问题沉淀
+Phase 2.1 业务模块  ⏳ ████████░░░░░░░░  40%  ← M01-M07 完成；下一步 M08 模块关系图
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -171,6 +171,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [ ] M04 维度记录
 - [x] M05 版本时间线 ✅ 2026-05-08 (6 子片 811d6bc→{TBD} + R1+R2 闭环 / 412 PASS / R13-1 49=49 / L12 守护 / 闸门 2.5 B 栏 0 项首次实证)
 - [x] M06 竞品对标 ✅ 2026-05-08 (子片 0 c84f6f2 + 1 d01c5ad + 2 f7211fb + 3 86195cc + R1 立修 c792263 + 子片 4 [hash] + R2 闭环 0 P1 + 子片 5 关闸; 473+ PASS / R13-1 53=53; R-X2 第二真注入零摩擦; L1 第五数据点)
+- [x] M07 问题沉淀 ✅ 2026-05-08 (子片 0 b81c0d8 + 1 13152e1 + 2 a917235 + 3 e6e0873 + R1 立修 6a1072f + 子片 4 [hash] + R2 立修 8246984 + 子片 5 关闸; 538+ PASS / R13-1 59=59; R-X2 第三真注入 **orphan 语义** + 接口共享行为契约分化 7 处 anchor; L1 第六数据点 + 元教训"M06 P1 范式 M07 复发立修"首次实证)
 - [ ] M07 问题沉淀
 - [ ] M08 模块关系
 - [ ] M10 项目总览（聚合）
@@ -306,4 +307,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-07 | M03 sprint 完成（5 子片 + R1+R2 闭环；285 PASS / R13-1 41=41 / L12 守护；§14.5 prep + design §6.X A4/A5/A6 + §3 description + §10 metadata + audit/m03-pilot-template-validation.md）；Phase 2.1 15→20%；下一站 M04 | CY + AI |
 | 2026-05-08 | M05 sprint 完成（6 子片 811d6bc 子片 0 prep / de53192 子片 1 model + alembic + Node back_populates / d3374fe 子片 2 DAO / 063cbd4 子片 3 Service+ErrorCode / 5e0e239 R1 P1 立修 / 56da878 R2 P1 立修 + 子片 5 design 回写；412 PASS / R13-1 49=49 / L12 守护；闸门 2.5 三栏首次 B 栏 0 项实证 = 5 步分层分析法防假决策价值首次产出）；Phase 2.1 25→30%；下一站 M06 | CY + AI |
 | 2026-05-08 | M06 sprint 完成（c84f6f2 子片 0 prep + ck_clause 别名规范化 / d01c5ad 子片 1 双表 model+migration+Node back_populates / f7211fb 子片 2 DAO / 86195cc 子片 3 Service+R-X2 第二真注入+4 ErrorCode / c792263 R1 3 P1 立修 + 子片 4 Router 8 endpoints + R2 0 P1 + 子片 5 关闸；473+ PASS / R13-1 53=53 / L12 守护；**R-X2 第二真注入零摩擦实证**（M04 Protocol 4 参升级元教训复用价值首次产出）+ **闸门 2.5 三栏 B 0 项第二次实证**（M05 立 / M06 复用，防御未来非修复存量）+ L1 第五数据点稳定）；Phase 2.1 30→35%；下一站 M07 问题沉淀 | CY + AI |
+| 2026-05-08 | M07 sprint 完成（b81c0d8 子片 0 prep + §14.5 默认范式复用 + §5 预防性消歧 / 13152e1 子片 1 Issue model+migration+Node back_populates **passive_deletes** orphan 语义 / a917235 子片 2 DAO+SELECT FOR UPDATE+orphan_by_node_id / e6e0873 子片 3 IssueService+R-X2 第三真注入(orphan)+6 ErrorCode+状态机 4 状态 / 6a1072f R1 1 P1 立修 get_for_embedding 空字符串 / 子片 4 Router 7 endpoints+15 e2e tests / 8246984 R2 1 P1 立修 viewer 写 4 端点全覆盖（**M06 元教训复发立修**）+ 子片 5 关闸；538+ PASS / R13-1 59=59 / L12 守护；**R-X2 第三真注入 orphan 语义实证**（接口共享 / 行为契约分化 / 7 处代码 anchor 防误读）+ **闸门 2.5 三栏 B 0 项第三次实证** + L1 第六数据点稳定 + **元教训"M06 P1 立修不自动横切到下一模块" 首次实证 + actionable 防御** sink 进 feedback_problem_layered_analysis 失效信号）；Phase 2.1 35→40%；下一站 M08 模块关系图 | CY + AI |
 | _（未来变更追加在这里）_ | | |

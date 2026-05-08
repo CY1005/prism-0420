@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M06-sprint-complete)
+last_updated: 2026-05-08 (post-M07-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,19 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M06-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M07-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 35%（M01-M06 完成；下一站 M07 问题沉淀）
+- **Phase 2.1 业务模块**：⏳ 40%（M01-M07 完成；下一站 M08 模块关系图）
+- **2026-05-08 M07 sprint 完成**（7 commit + R1+R2 闭环 / L1+L2+L3 第六次实证 / 闸门 2.5 三栏 B 0 项第三次实证 / **R-X2 第三真注入 orphan 语义实证** / 元教训"M06 P1 范式 M07 复发立修"首次产出）：
+  - commits: `b81c0d8` 子片 0 prep（§14.5 + §5 预防性消歧）+ `13152e1` 子片 1 Issue model + alembic + Node passive_deletes + `a917235` 子片 2 DAO + SELECT FOR UPDATE + orphan_by_node_id + `e6e0873` 子片 3 Service + R-X2 第三真注入 + 状态机 4 状态 + `6a1072f` R1 1 P1 立修 get_for_embedding 空字符串 + 子片 4 Router 7 endpoints + 15 e2e tests + `8246984` R2 1 P1 立修 viewer 写 4 端点全覆盖 + 子片 5 关闸
+  - **538+ PASS / 0 fail / ruff 净 / R13-1 59=59 + L12 守护通过**
+  - **R-X2 第三真注入 orphan 语义**（接口共享 / 行为契约分化 — UPDATE SET NULL vs DELETE）+ **7 处代码 anchor 防误读**（design / model / migration / DAO / service / Protocol / lifespan）
+  - **关键元教训**（**首次"复发 + 应用立修"实证**）：M06 R2 立的"viewer 写**所有**写端点 403"P1 范式在 M07 复发；R1/R2 prompt 提了仍漏 → R2 抓到 → 立修。**根因**：单条 P1 立修不自动横切到下一模块；纯靠"下一 sprint reviewer 比对 M_{N-1} audit"被动传递；仪式化提示 ≠ 实施时真做。**修法 sink 到 feedback_problem_layered_analysis 失效信号**：跨模块测试契约（如三层权限 testpoint）应升级到 design 公共段或 testpoint 模板，让"模块 design 必须含 X testpoint"成为闸门 3 检查项
+  - **R1 命中**：3 subagent 共 1 P1 立修（去重）+ 8 P2 punt；R1-A 0 P1（A7 §5 预防性消歧避免漂移）；R1-B 复用率 ~95%；R1-C 1 P1（get_for_embedding 空字符串）
+  - **R2 命中**：1 合并 Opus 1 P1 立修（M06 元教训复发）+ 2 P2 punt（IssueResponse join 字段 / page_size 分页）
+
+
 - **2026-05-08 M06 sprint 完成**（6 commit + R1+R2 闭环 / L1+L2+L3 节奏第五次实证 / 闸门 2.5 三栏第二次 B 栏 0 项实证 / R-X2 第二真注入零摩擦实证）：
   - commits: `c84f6f2` 子片 0 prep（§14.5 默认范式复用 + ck_clause 别名规范化 5 处一致）+ `d01c5ad` 子片 1 双表 model + alembic + Node back_populates + 8 model tests + `f7211fb` 子片 2 DAO + 18 unit tests + `86195cc` 子片 3 Service + R-X2 第二真注入 + 4 ErrorCode + 20 service tests + lifespan register_child_service("competitor") + `c792263` R1 3 P1 立修（design §5 多表事务消歧 + IntegrityError 区分约束名 + write_event 异常传播测试）+ {子片 4 commit hash} R2 0 P1 + 子片 5 关闸 commit
   - **473+ PASS / 0 fail / ruff 净 / R13-1 53=53 + L12 守护通过**
@@ -127,7 +136,39 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M07 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M08 sprint 实施代码启动（**当前推荐**）
+
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M08 — 模块关系图（module-relation）" 段；启动当天复制对应 prompt 段落（M07 commits b81c0d8 → 子片 5 关闸 commit / 538+ PASS / Phase 2.1 40%）。
+
+M08 模块特定要素提示：
+- **不是 R-X2 child service**（关系图节点附属，可能走 DB CASCADE 兜过；design §10 R10-1 batch3 是否要求 per-record activity_log → sprint 启动闸门 2.5 复审）
+- 双向关系 vs 单向 + OR 查询：design 应已决；闸门 2.5 不复议
+- 图查询防 N+1：邻接表 vs 物化视图 vs 递归 CTE — design 应已选
+
+**M07 sprint punt 池本期到期项核对**（详见 `design/audit/m07-pilot-template-validation.md` Punt 池总表 8 项）：
+- B4 IssueCategoryInvalidError R13-1 parity 注释 → M08 sprint 启动前一并清
+- B5 _make_issue 跨文件触发时迁 conftest → M08 sprint 启动前评估
+- **元教训防御 actionable**：M08 sprint 启动 reconcile 时主动比对 M02-M07 R1/R2 punt 池中"跨模块测试契约"项（**viewer 写**所有**写端点 403** / write_event 异常传播测试 / cross-tenant 404 / 等），**sprint 实施时主动复制不等 R2 抓**
+
+### Prompt 0' — M07 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
+
+```
+继续 prism-0420 M07 sprint 实施代码（M07 问题沉淀 / R-X2 第三真注入方 / orphan 语义；M06 sprint 已完成 commits c84f6f2 → 子片 5 关闸 / 473+ PASS / Phase 2.1 35%）。
+
+参 _handoff/sprint-prompts-M05-M20.md § "## M07 — 问题沉淀（issue）" 段。
+
+特定要素：
+- R-X2 第三真注入方（orphan 语义 SET NULL，与 M04/M06 delete 不同）
+- 状态机 4 状态 + SELECT FOR UPDATE 行锁串行化（design §5）
+- M13 pilot list_by_project pass-through（无代码改动；service 层加 method）
+
+红线：
+- ON DELETE SET NULL + passive_deletes=True（与 M04/M06 cascade='all,delete-orphan' 显式区分）
+- 7 处代码 anchor 标注 orphan 语义防误读
+- viewer 写**所有**写端点 403 测试（M06 R2 P1-02 立的元教训）— **不要漏**
+```
+
+### Prompt 0'' — M06 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
 
 参 `_handoff/sprint-prompts-M05-M20.md` § "## M07 — 问题沉淀（issue）" 段；启动当天复制对应 prompt 段落，替换 `M{N-1} commits ... / N PASS / Phase 2.1 X%` 为真实最新值（M06 commits c84f6f2 → {子片 5 关闸 commit} / 473+ PASS / Phase 2.1 35%）。
 

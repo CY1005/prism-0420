@@ -240,6 +240,8 @@ class IssueService:
         if existing is None:
             raise IssueNotFoundError(issue_id=str(issue_id))
         old_status = existing.status
+        # R1-A P1-1 立修：捕获取消认领前的 assignee（in_progress→open 写独立 unassigned event）
+        previous_assignee_id = existing.assigned_to
 
         if old_status == "closed":
             raise IssueClosedError(issue_id=str(issue_id))
@@ -291,6 +293,24 @@ class IssueService:
                 "note": note,
             },
         )
+        # R1-A P1-1 立修：in_progress→open 取消认领必须额外写独立 `unassigned` event
+        # （design §4 P5 audit F-3 + design §10 R10-1 6 事件清单字面要求）
+        if old_status == "in_progress" and target_status == "open":
+            await write_event(
+                db=db,
+                actor_user_id=actor_user_id,
+                project_id=project_id,
+                action_type="unassigned",
+                target_type="issue",
+                target_id=str(issue_id),
+                summary=f"Unassigned issue '{existing.title}'",
+                metadata={
+                    "previous_assignee_id": (
+                        str(previous_assignee_id) if previous_assignee_id else None
+                    ),
+                    "reason": note,
+                },
+            )
         return existing
 
     async def delete(
