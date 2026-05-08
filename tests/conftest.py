@@ -860,3 +860,101 @@ async def make_ai_snapshot_task(db_session):
         return task
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_embedding(db_session):
+    """工厂 fixture：建一行 embeddings（M18 sprint 子片 2）。
+
+    跨文件 helper 规则十三连（M03→M17 + M18）：DAO + BackfillDAO + 后续子片复用。
+    R1-B P1-01 立修：直接迁 conftest，防内联漂移。
+
+    用法：
+      e = await make_embedding(project_id=p.id, target_type="node", target_id=n.id)
+    """
+    from uuid import uuid4
+
+    from api.models.embedding import Embedding
+
+    async def _make(
+        *,
+        project_id,
+        target_type: str = "node",
+        target_id=None,
+        modality: str = "text",
+        provider: str = "mock",
+        model_name: str = "mock-default",
+        model_version: str = "v1",
+        dim: int = 512,
+        content_hash: str | None = None,
+        **extra,
+    ) -> Embedding:
+        tid = target_id or uuid4()
+        vector_512 = [0.1] * 512 if dim == 512 else None
+        vector_1536 = [0.1] * 1536 if dim == 1536 else None
+        vector_3072 = [0.1] * 3072 if dim == 3072 else None
+        e = Embedding(
+            project_id=project_id,
+            modality=modality,
+            target_type=target_type,
+            target_id=tid,
+            provider=provider,
+            model_name=model_name,
+            model_version=model_version,
+            dim=dim,
+            embedding_512=vector_512,
+            embedding_1536=vector_1536,
+            embedding_3072=vector_3072,
+            content_hash=content_hash or uuid4().hex,
+            **extra,
+        )
+        db_session.add(e)
+        await db_session.flush()
+        return e
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_embedding_task(db_session):
+    """工厂 fixture：建一行 embedding_tasks（M18 sprint 子片 2）。
+
+    跨文件 helper 规则十三连（M03→M17 + M18）：DAO + Cron + worker 三处复用。
+    R1-B P1-01 立修：直接迁 conftest，防内联漂移。
+
+    用法：
+      t = await make_embedding_task(project_id=p.id, target_type="node",
+                                    target_id=n.id, status="pending")
+    """
+    from uuid import uuid4
+
+    from api.models.embedding import EmbeddingTask, EmbeddingTaskStatus
+
+    async def _make(
+        *,
+        project_id,
+        target_type: str = "node",
+        target_id=None,
+        provider: str = "mock",
+        model_name: str = "mock-default",
+        model_version: str = "v1",
+        status: str = EmbeddingTaskStatus.pending.value,
+        enqueued_by: str = "incremental",
+        **extra,
+    ) -> EmbeddingTask:
+        emb_task = EmbeddingTask(
+            project_id=project_id,
+            target_type=target_type,
+            target_id=target_id or uuid4(),
+            provider=provider,
+            model_name=model_name,
+            model_version=model_version,
+            status=status,
+            enqueued_by=enqueued_by,
+            **extra,
+        )
+        db_session.add(emb_task)
+        await db_session.flush()
+        return emb_task
+
+    yield _make
