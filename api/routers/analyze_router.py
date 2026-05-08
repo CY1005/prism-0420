@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 from uuid import UUID
 
@@ -37,10 +38,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth.check_project_access import ProjectAccess, check_project_access
 from api.core.db import get_db
 from api.errors.exceptions import (
+    AnalysisNodeNotFoundError,
     AnalysisProviderError,
     AnalysisProviderNotConfiguredError,
     AnalysisQuotaExceededError,
     AnalysisTimeoutError,
+    ProjectNotFoundError,
 )
 from api.schemas.analyze_schema import (
     AffectedNodesResponse,
@@ -97,6 +100,7 @@ async def stream_requirement_analysis(
 
     async def generator() -> AsyncIterator[bytes]:
         full_chunks: list[str] = []
+        t_start = time.monotonic()
         try:
             async with asyncio.timeout(_STREAM_TIMEOUT_SECONDS):
                 async for chunk in svc.analyze_stream(
@@ -117,6 +121,8 @@ async def stream_requirement_analysis(
                         SSEChunkEvent(text=chunk, level=payload.analysis_level),
                     )
             # 流式自然完成 → complete 事件含 metadata 给前端做 save payload
+            # R2 P2-4 立修：design §7 line 437 字面 metadata 应含 analysis_time_ms
+            elapsed_ms = int((time.monotonic() - t_start) * 1000)
             yield _sse_format(
                 "complete",
                 SSECompleteEvent(
@@ -128,6 +134,7 @@ async def stream_requirement_analysis(
                         "ai_provider": access.project.ai_provider or "",
                         "ai_model": getattr(access.project, "ai_model", None) or "",
                         "analysis_level": payload.analysis_level.value,
+                        "analysis_time_ms": elapsed_ms,
                     },
                 ),
             )
@@ -163,7 +170,19 @@ async def stream_requirement_analysis(
                     error_code="analysis_provider_not_configured",
                 ),
             )
-        except Exception as e:  # pragma: no cover — 兜底（design §12 字段⑤）
+        except (AnalysisNodeNotFoundError, ProjectNotFoundError):
+            # R2 P1-1 立修：generator 内 race（NodeService.breadcrumb / get_for_user 中途
+            # 抛 NodeNotFound/ProjectNotFound）应映射 analysis_node_not_found 而非兜底
+            # provider_error。design §13 line 723 字面：M03 get_by_id None → AnalysisNodeNotFoundError
+            yield _sse_format(
+                "error",
+                SSEErrorEvent(
+                    error="目标节点不存在或已被删除",
+                    error_code="analysis_node_not_found",
+                ),
+            )
+        except Exception as e:
+            # R2 P1-1 立修延伸：兜底 except 留给真未知异常（不再吃 NodeNotFound/ProjectNotFound）
             logger.exception("analyze_stream unexpected error: %s", e)
             yield _sse_format(
                 "error",

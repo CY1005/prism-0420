@@ -509,3 +509,78 @@ async def test_save_pydantic_text_length_bounds(auth_client, make_user, text_len
         headers=_bearer(user.id),
     )
     assert r.status_code == 422
+
+
+# ─────────────── R2 立修配套测试（2026-05-08）───────────────
+
+
+async def test_stream_requirement_cross_project_node_returns_sse_error_event(
+    auth_client, make_user, db_session, monkeypatch
+):
+    """R2 P1-2 立修：SSE 端点 cross-project node 应映射 analysis_node_not_found
+    （元教训 4/6：cross-project node 404 / 3 端点全覆盖；与 save + affected-nodes 对齐）。"""
+    user = await make_user()
+    pidA = await _create_project(auth_client, user.id, name="A")
+    pidB = await _create_project(auth_client, user.id, name="B")
+    nidB = await _create_node(auth_client, user.id, pidB)
+    await _set_ai_provider(db_session, pidA, "mock")
+
+    _patch_provider(monkeypatch, MockProvider())
+
+    r = await auth_client.post(
+        f"/api/projects/{pidA}/nodes/{nidB}/analyze/requirement",
+        json={"requirement_text": "x", "analysis_level": "L1"},
+        headers=_bearer(user.id),
+    )
+    # SSE generator 已 200 OK，错误以 event:error 报
+    assert r.status_code == 200
+    events = _parse_sse_lines(r.text)
+    err_events = [d for e, d in events if e == "error"]
+    assert len(err_events) == 1
+    assert err_events[0]["error_code"] == "analysis_node_not_found"
+
+
+async def test_stream_requirement_complete_metadata_includes_analysis_time_ms(
+    auth_client, make_user, db_session, monkeypatch
+):
+    """R2 P2-4 升 P1：design §7 line 437 metadata 字面要求 analysis_time_ms。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid)
+    await _set_ai_provider(db_session, pid, "mock")
+
+    _patch_provider(monkeypatch, MockProvider(chunks=["a", "b", "c"]))
+
+    r = await auth_client.post(
+        f"/api/projects/{pid}/nodes/{nid}/analyze/requirement",
+        json={"requirement_text": "x", "analysis_level": "L1"},
+        headers=_bearer(user.id),
+    )
+    events = _parse_sse_lines(r.text)
+    complete_events = [d for e, d in events if e == "complete"]
+    assert len(complete_events) == 1
+    md = complete_events[0]["metadata"]
+    assert "analysis_time_ms" in md
+    assert isinstance(md["analysis_time_ms"], int)
+    assert md["analysis_time_ms"] >= 0
+
+
+async def test_save_analysis_pydantic_negative_time_ms_returns_422(auth_client, make_user):
+    """R2 P2-3 立修：analysis_time_ms <0 应被 Pydantic Field(ge=0) 拦 422。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid)
+    r = await auth_client.post(
+        f"/api/projects/{pid}/nodes/{nid}/analyze/save",
+        json={
+            "analysis_result": "r",
+            "analysis_level": "L1",
+            "affected_node_ids": [],
+            "ai_provider": "mock",
+            "ai_model": "m",
+            "analysis_time_ms": -1,
+            "requirement_text": "t",
+        },
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 422
