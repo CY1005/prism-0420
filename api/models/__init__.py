@@ -4,6 +4,7 @@ from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixi
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
 from api.models.issue import Issue
+from api.models.module_relation import ModuleRelation, RelationTypeEnum
 from api.models.node import Node, NodeType
 from api.models.project import (
     DimensionType,
@@ -39,6 +40,8 @@ __all__ = [
     "InviteCode",
     "Issue",
     "MemberRole",
+    "ModuleRelation",
+    "RelationTypeEnum",
     "Node",
     "NodeType",
     "PasswordResetToken",
