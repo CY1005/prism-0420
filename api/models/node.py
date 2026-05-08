@@ -122,3 +122,11 @@ class Node(Base, TimestampMixin):
         back_populates="node",
         cascade="all, delete-orphan",
     )
+    # M07 sprint 加：design §3 ER 双向链（A1 闸门 2.5 reconcile）— **orphan 语义**
+    # 不带 cascade='all, delete-orphan'（与 M04/M06 不同）— FK ON DELETE SET NULL DB 兜底
+    # passive_deletes=True 让 SQLAlchemy 不在 Node 删除时主动 UPDATE issues
+    issues: Mapped[list["Issue"]] = relationship(  # noqa: F821
+        "Issue",
+        back_populates="node",
+        passive_deletes=True,
+    )

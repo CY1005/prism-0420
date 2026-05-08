@@ -3,6 +3,7 @@
 from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixin
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
+from api.models.issue import Issue
 from api.models.node import Node, NodeType
 from api.models.project import (
     DimensionType,
@@ -36,6 +37,7 @@ __all__ = [
     "EmailChangeRequest",
     "ImmutableMixin",
     "InviteCode",
+    "Issue",
     "MemberRole",
     "Node",
     "NodeType",
