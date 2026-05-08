@@ -6,9 +6,11 @@ R-X3 精神：DAO 接受外部 session，不自 commit / 不自 begin。
 主查询模式（design §9）：所有 list/get/update/delete 强制
 ``WHERE project_id = ?`` tenant 过滤。豁免清单：无。
 
-A6 covering 索引（M05 sprint 闸门 2.5 B1 候选 C 实证）：
+A6 ordered 索引（M05 sprint 闸门 2.5 B1 候选 C 实证 / R1-C P2-03 名实修正）：
 ix_version_node_proj_created (node_id, project_id, created_at DESC)
-→ list_by_node ORDER BY created_at DESC + LIMIT 走 index scan，无 sort 步骤。
+→ list_by_node ORDER BY created_at DESC + LIMIT 走 index ordered scan **无 sort 步骤**；
+非真 covering index（SELECT VersionRecord 拉全列仍需 heap fetch），但 sort 步骤已避免。
+count_by_node 用 ``count(*)`` 让 PG planner 走 index-only scan（无需 heap）。
 """
 
 from collections.abc import Sequence
@@ -76,9 +78,14 @@ class VersionDAO:
         return result.scalar_one_or_none()
 
     async def count_by_node(self, db: AsyncSession, node_id: UUID, project_id: UUID) -> int:
-        """节点下版本数量（M16 pilot 基线补丁追加，design §6 R-X3 对外契约）。"""
+        """节点下版本数量（M16 pilot 基线补丁追加，design §6 R-X3 对外契约）。
+
+        R1-C P2-03 立修：``count()`` 替代 ``count(VersionRecord.id)`` 让 PG planner
+        走 index-only scan（id 不在 ix_version_node_proj_created 索引中，count(id)
+        需 heap fetch；count(*) 仅看 visibility map）。
+        """
         result = await db.execute(
-            select(func.count(VersionRecord.id)).where(
+            select(func.count()).where(
                 VersionRecord.node_id == node_id,
                 VersionRecord.project_id == project_id,
             )

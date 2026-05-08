@@ -171,6 +171,24 @@ async def test_svc_count_by_node(db_session, svc, make_project, make_node):
     assert await svc.count_by_node(db_session, project_id=proj.id, node_id=node.id) == 2
 
 
+async def test_svc_count_by_node_blocks_cross_tenant_node(db_session, svc, make_project, make_node):
+    """R1-C P1-02 立修：cross-tenant node_id 走 NotFoundError 而非静默返 0。"""
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+    await svc.create(
+        db_session,
+        project_id=projA.id,
+        node_id=nA.id,
+        version_label="v1",
+        summary="x",
+        actor_user_id=user.id,
+    )
+
+    with pytest.raises(VersionNotFoundError):
+        await svc.count_by_node(db_session, project_id=projB.id, node_id=nA.id)
+
+
 # ─────────────── M05-SVC-T3 get_by_id ───────────────
 
 

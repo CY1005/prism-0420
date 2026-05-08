@@ -1,8 +1,13 @@
 """M04 DimensionService — design/02-modules/M04-feature-archive/00-design.md §6.
 
-事务边界：所有"产生副作用 + 写 activity_log"的方法用 ``async with db.begin():`` 包裹。
-M11/M17 batch_create_in_transaction / M03 delete_by_node_id 接受外部 db session（R-X3），
-不自开事务。
+事务边界（M05 sprint R1-A P1 立修顺修 docstring 漂移，2026-05-08）：
+  - **Router 层管 commit**；本 service 接受外部 AsyncSession，不调 ``async with db.begin():``。
+  - SQLAlchemy autobegin + Router endpoint 末 ``await db.commit()``；异常由 FastAPI
+    捕获不调 commit → implicit transaction 自动回滚保证原子性。
+  - R-X3 跨模块入口（M11/M17 batch_create_in_transaction / M03 delete_by_node_id /
+    M12 batch_get_by_nodes / M13 get_latest+create_dimension_record / M18 get_for_embedding）：
+    同款语义——接受外部 db session，由 caller orchestrator 控制事务边界。
+  - 详见 design §5 多人架构 4 维必答段（M05 sprint 已消歧）。
 
 # Scaffold 简化决策（2026-05-07，子片 3 — A5 enqueue 推迟 / get_for_embedding A 现在建）
 # ① 决策内容：M04 sprint 期 create / update / delete commit 后**不调** embedding_service.enqueue

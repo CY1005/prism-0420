@@ -2,10 +2,11 @@
 
 1 表：version_records（节点版本快照；project_id 冗余 tenant 字段）
 
-# 索引设计（M05 sprint 闸门 2.5 A6 升级 / B1 候选 C 实证 / 2026-05-08）：
-# 主查询路径 list_by_node 是 ORDER BY created_at DESC + LIMIT —— covering 范式要求
-# 索引尾部含 created_at；§3 原列出的 (node_id, project_id) 升级为
-# (node_id, project_id, created_at DESC)，一索引服务主查询 + 时间线排序 + tenant 过滤。
+# 索引设计（M05 sprint 闸门 2.5 A6 升级 / B1 候选 C 实证 / R1-C P2-03 名实修正 / 2026-05-08）：
+# 主查询路径 list_by_node 是 ORDER BY created_at DESC + LIMIT —— ordered 索引避免 sort step。
+# (node_id, project_id, created_at DESC) 服务主查询 + 时间线 ordered scan + tenant 过滤；
+# **非真 covering index**（SELECT VersionRecord 拉全列仍需 heap fetch）；count_by_node 用
+# count(*) 让 PG planner 走 index-only scan（visibility map 兜底，无 heap fetch）。
 # §6 R-X3 段引用的 ix_version_records_node_created 已统一为本索引名 ix_version_node_proj_created。
 
 # project_id 冗余 tenant 字段（design §3 CY 2026-04-21 ack 批量统一）：

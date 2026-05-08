@@ -1,7 +1,15 @@
 """M05 VersionService — design/02-modules/M05-version-timeline/00-design.md §6.
 
-事务边界：所有"产生副作用 + 写 activity_log"的方法用 ``async with db.begin():`` 包裹。
-M05 当前无 R-X3 跨模块入口，全部为主流程入口（CY 2026-04-21 ack：版本回滚归 M04）。
+事务边界（R1-A P1 + R1-C P1-01 立修，2026-05-08）：
+  - **Router 层管 commit**（与 M02-M04 一致范式）；本 service 接受外部 AsyncSession，
+    不调 ``async with db.begin():`` / 不主动 commit / 不主动 rollback。
+  - SQLAlchemy autobegin：第一次 add/execute 自动启动 implicit transaction，
+    Router 在 endpoint 末尾 ``await db.commit()`` 是唯一 commit 点；中途异常由
+    FastAPI 框架捕获不调 commit → autobegin transaction 自动回滚（含 set_current
+    路径的 clear_current_flag + INSERT + write_event 三段，原子性由 implicit
+    transaction 兜底）。
+  - design §3 / §9 sample 中的 ``with db.begin():`` 是设计期写法，sprint 关闸
+    audit 时统一回写为本 docstring 范式（M02-M05 同款 docstring 漂移）。
 
 权限：三层防御
   - Server Action / Router check_project_access（外层）
@@ -79,7 +87,12 @@ class VersionService:
         return await self.dao.list_by_node(db, node_id, project_id, limit=limit)
 
     async def count_by_node(self, db: AsyncSession, *, project_id: UUID, node_id: UUID) -> int:
-        """节点版本数（M16 pilot 基线补丁；纯读）。"""
+        """节点版本数（M16 pilot 基线补丁；纯读）。
+
+        R1-C P1-02 立修：cross-tenant node_id 静默返 0 是安全盲区，加 node 归属校验
+        与 list_by_node 行为一致；M16 R-X3 caller 拿到 NotFoundError 而非 0 误判。
+        """
+        await self._check_node_belongs_to_project(db, node_id, project_id)
         return await self.dao.count_by_node(db, node_id, project_id)
 
     async def get_by_id(
