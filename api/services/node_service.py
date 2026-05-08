@@ -44,11 +44,12 @@ class NodeChildrenServiceProtocol(Protocol):
     """M04 / M06 / M07 各 sprint 注入 concrete impl（design §6 R-X2）。
 
     delete_node 调用方按 target_type 分发：
-      - target_type="dimension" → M04 DimensionService.delete_by_node_id（真删）
-      - target_type="competitor" → M06 CompetitorService.delete_by_node_id（真删）
-      - target_type="issue"      → M07 IssueService.orphan_by_node_id（SET NULL，FK 语义）
+      - target_type="dimension"       → M04 DimensionService.delete_by_node_id（真删）
+      - target_type="competitor"      → M06 CompetitorService.delete_by_node_id（真删）
+      - target_type="issue"           → M07 IssueService.orphan_by_node_id（SET NULL，FK 语义）
+      - target_type="module_relation" → M08 ModuleRelationService.delete_by_node_id（真删 + 双向 OR：source 或 target 命中）
     各 service 自写 activity_log（防 DB CASCADE 绕过 R-X2）。
-    M03 sprint 期注册表为空 → noop（M04/M06/M07 表此期不存在，无下游数据需清）。
+    M03 → M08 sprint 期累计注入 4 项（M03 期注册表为空 → noop）。
 
     **异常契约 (R1-C P1-01 修)**：concrete impl **必须**让所有异常向上传播，
     不得在内部 catch-all 吞掉错误。M03 delete_node 事务正确性依赖此契约——

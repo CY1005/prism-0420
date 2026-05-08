@@ -130,7 +130,9 @@ async def test_delete_relation_returns_204(auth_client, make_user):
 # ─────────────── G2: 错误码 ───────────────
 
 
-async def test_create_relation_self_loop_returns_422(auth_client, make_user):
+async def test_create_relation_self_loop_returns_422_with_code(auth_client, make_user):
+    """R2 P1-01 立修：self_loop 422 必含 code=relation_self_loop（与同 endpoint
+    其他错误码 duplicate/cross_project/not_found 一致 contract）。"""
     user = await make_user(email="m08-loop@example.com")
     pid = await _create_project(auth_client, user.id)
     n1 = await _create_node(auth_client, user.id, pid, name="A")
@@ -144,10 +146,16 @@ async def test_create_relation_self_loop_returns_422(auth_client, make_user):
         headers=_bearer(user.id),
     )
     assert r.status_code == 422
+    assert r.json()["code"] == "relation_self_loop"
 
 
-async def test_create_relation_cross_project_node_returns_404(auth_client, make_user):
-    """节点不属于该 project → RelationNodeNotInProjectError (404)。"""
+async def test_create_relation_cross_project_node_returns_422(auth_client, make_user):
+    """节点不属于该 project → RelationNodeNotInProjectError (422)。
+
+    R1-B P1-02 立修（M08 sprint，2026-05-08）：http_status 由 404 → 422 与
+    M06 CompetitorCrossProjectError + M07 IssueNodeCrossProjectError 范式对齐
+    （跨 project 引用校验 = 422 validation 而非 404 资源不存在）。
+    """
     user = await make_user(email="m08-xpn@example.com")
     pidA = await _create_project(auth_client, user.id, name="A")
     pidB = await _create_project(auth_client, user.id, name="B")
@@ -163,7 +171,7 @@ async def test_create_relation_cross_project_node_returns_404(auth_client, make_
         },
         headers=_bearer(user.id),
     )
-    assert r.status_code == 404
+    assert r.status_code == 422
     assert r.json()["code"] == "relation_node_not_in_project"
 
 

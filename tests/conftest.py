@@ -289,6 +289,40 @@ async def make_version(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_module_relation(db_session):
+    """工厂 fixture：建一条 module_relations 行（M08）。
+
+    R1-B P1-01 立修（M08 sprint，2026-05-08）：从 test_m08_dao.py 内联 _make_relation
+    迁入 conftest，规则五连延续：M04 R1-B B1.1 + M05 R1-B P1-01 + M06 R1-B P1-01 +
+    M07 R1-B P1-01 + M08 R1-B P1-01。
+    """
+    from api.models.module_relation import ModuleRelation
+
+    async def _make(
+        *,
+        user,
+        project,
+        source_node,
+        target_node,
+        relation_type: str = "depends_on",
+        notes: str | None = None,
+    ):
+        r = ModuleRelation(
+            project_id=project.id,
+            source_node_id=source_node.id,
+            target_node_id=target_node.id,
+            relation_type=relation_type,
+            notes=notes,
+            created_by=user.id,
+        )
+        db_session.add(r)
+        await db_session.flush()
+        return r
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_issue(db_session):
     """工厂 fixture：建一条 issues 行（M07）。
 

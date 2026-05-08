@@ -61,8 +61,14 @@ class ModuleRelationDAO:
         return result.scalar_one_or_none()
 
     async def count_by_project(self, db: AsyncSession, project_id: UUID) -> int:
+        """R1-C P1-01 立修（M08 sprint，2026-05-08 / M07 P1-01 同款延续）：
+        ``count(ModuleRelation.id).select_from(ModuleRelation)`` 让 PG planner
+        走 index-only scan（visibility map 兜底无 heap fetch），裸 ``count()``
+        缺 select_from 会被规划成全表 seq scan。"""
         result = await db.execute(
-            select(func.count()).where(ModuleRelation.project_id == project_id)
+            select(func.count(ModuleRelation.id))
+            .select_from(ModuleRelation)
+            .where(ModuleRelation.project_id == project_id)
         )
         return int(result.scalar_one())
 

@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-08（M07 sprint 完成: 7 commit + R1+R2 闭环 / L1+L2+L3 节奏第六次实证 / 闸门 2.5 三栏第三次 B 栏 0 项实证 / R-X2 第三真注入 orphan 语义实证 / 元教训"M06 P1 范式 M07 复发 + 应用立修"首次实证）
-current_phase: Phase 2.1 进行中（M01-M07 完成；下一站 M08 模块关系图）
+last_updated: 2026-05-08（M08 sprint 完成: 9 commit + R1+R2 闭环 / L1+L2+L3 节奏第七次实证 / 闸门 2.5 三栏第四次 B 栏 0 项实证 / R-X2 第四真注入双向 + delete 语义 / 元教训防御 actionable 主动应用首次实证）
+current_phase: Phase 2.1 进行中（M01-M08 完成；下一站 M10 全景图）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -27,7 +27,7 @@ current_phase: Phase 2.1 进行中（M01-M07 完成；下一站 M08 模块关系
 Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
-Phase 2.1 业务模块  ⏳ ████████░░░░░░░░  40%  ← M01-M07 完成；下一步 M08 模块关系图
+Phase 2.1 业务模块  ⏳ █████████░░░░░░░  45%  ← M01-M08 完成；下一步 M10 全景图（M09 superseded by M18）
 Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
@@ -172,6 +172,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [x] M05 版本时间线 ✅ 2026-05-08 (6 子片 811d6bc→{TBD} + R1+R2 闭环 / 412 PASS / R13-1 49=49 / L12 守护 / 闸门 2.5 B 栏 0 项首次实证)
 - [x] M06 竞品对标 ✅ 2026-05-08 (子片 0 c84f6f2 + 1 d01c5ad + 2 f7211fb + 3 86195cc + R1 立修 c792263 + 子片 4 [hash] + R2 闭环 0 P1 + 子片 5 关闸; 473+ PASS / R13-1 53=53; R-X2 第二真注入零摩擦; L1 第五数据点)
 - [x] M07 问题沉淀 ✅ 2026-05-08 (子片 0 b81c0d8 + 1 13152e1 + 2 a917235 + 3 e6e0873 + R1 立修 6a1072f + 子片 4 [hash] + R2 立修 8246984 + 子片 5 关闸; 538+ PASS / R13-1 59=59; R-X2 第三真注入 **orphan 语义** + 接口共享行为契约分化 7 处 anchor; L1 第六数据点 + 元教训"M06 P1 范式 M07 复发立修"首次实证)
+- [x] M08 模块关系图 ✅ 2026-05-08 (子片 0 eed7749 + 1 fc142ad + 2 1fe57fe + 3 7b3d3eb + 子片 4 [hash] + R1 立修 + R2 P1 立修 self_loop code 映射 + 子片 5 关闸; 586+ PASS / R13-1 64=64; **R-X2 第四真注入 双向 OR + delete 语义** 与 M07 orphan 对照 / R-X2 接口共享行为契约分化第二次实证; L1 第七数据点稳定 + 闸门 2.5 B 0 第四次 + **元教训"M07 P1 防御 actionable 主动应用"首次实证**（viewer 写 3 端点全覆盖主动写不等 R2 抓 + R2 没抓出新点 = 元教训内化生效）)
 - [ ] M07 问题沉淀
 - [ ] M08 模块关系
 - [ ] M10 项目总览（聚合）
@@ -308,4 +309,5 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 | 2026-05-08 | M05 sprint 完成（6 子片 811d6bc 子片 0 prep / de53192 子片 1 model + alembic + Node back_populates / d3374fe 子片 2 DAO / 063cbd4 子片 3 Service+ErrorCode / 5e0e239 R1 P1 立修 / 56da878 R2 P1 立修 + 子片 5 design 回写；412 PASS / R13-1 49=49 / L12 守护；闸门 2.5 三栏首次 B 栏 0 项实证 = 5 步分层分析法防假决策价值首次产出）；Phase 2.1 25→30%；下一站 M06 | CY + AI |
 | 2026-05-08 | M06 sprint 完成（c84f6f2 子片 0 prep + ck_clause 别名规范化 / d01c5ad 子片 1 双表 model+migration+Node back_populates / f7211fb 子片 2 DAO / 86195cc 子片 3 Service+R-X2 第二真注入+4 ErrorCode / c792263 R1 3 P1 立修 + 子片 4 Router 8 endpoints + R2 0 P1 + 子片 5 关闸；473+ PASS / R13-1 53=53 / L12 守护；**R-X2 第二真注入零摩擦实证**（M04 Protocol 4 参升级元教训复用价值首次产出）+ **闸门 2.5 三栏 B 0 项第二次实证**（M05 立 / M06 复用，防御未来非修复存量）+ L1 第五数据点稳定）；Phase 2.1 30→35%；下一站 M07 问题沉淀 | CY + AI |
 | 2026-05-08 | M07 sprint 完成（b81c0d8 子片 0 prep + §14.5 默认范式复用 + §5 预防性消歧 / 13152e1 子片 1 Issue model+migration+Node back_populates **passive_deletes** orphan 语义 / a917235 子片 2 DAO+SELECT FOR UPDATE+orphan_by_node_id / e6e0873 子片 3 IssueService+R-X2 第三真注入(orphan)+6 ErrorCode+状态机 4 状态 / 6a1072f R1 1 P1 立修 get_for_embedding 空字符串 / 子片 4 Router 7 endpoints+15 e2e tests / 8246984 R2 1 P1 立修 viewer 写 4 端点全覆盖（**M06 元教训复发立修**）+ 子片 5 关闸；538+ PASS / R13-1 59=59 / L12 守护；**R-X2 第三真注入 orphan 语义实证**（接口共享 / 行为契约分化 / 7 处代码 anchor 防误读）+ **闸门 2.5 三栏 B 0 项第三次实证** + L1 第六数据点稳定 + **元教训"M06 P1 立修不自动横切到下一模块" 首次实证 + actionable 防御** sink 进 feedback_problem_layered_analysis 失效信号）；Phase 2.1 35→40%；下一站 M08 模块关系图 | CY + AI |
+| 2026-05-08 | M08 sprint 完成（eed7749 子片 0 prep + §14.5 默认范式复用 + §5 预防性消歧 / fc142ad 子片 1 ModuleRelation model+migration+UNIQUE 三元组+self-loop CHECK / 1fe57fe 子片 2 DAO+双向 OR / 7b3d3eb 子片 3 ModuleRelationService+R-X2 第四真注入(双向 delete)+5 ErrorCode+IntegrityError 区分约束名 / 子片 4 Router 5 endpoints+12 e2e tests + R1 立修 R3-2 R-X2 cross-project 422 / R2 P1 立修 self_loop code 映射 design §13 ValidationException Handler 字面 drift（移 schema 层 model_validator → service 层独家 raise 范式与 M02-M07 一致）+ 子片 5 关闸；586+ PASS / R13-1 64=64 / L12 守护；**R-X2 第四真注入 双向 OR + delete 语义**（与 M04/M06 同 delete / 与 M07 orphan 对照）+ R-X2 接口共享行为契约分化第二次实证 + L1 第七数据点稳定 + 闸门 2.5 B 0 第四次 + **元教训"M07 P1 防御 actionable 主动应用"首次实证**（viewer 写 3 端点全覆盖主动写不等 R2 抓 + R2 没抓出新点 = 元教训内化生效）；Phase 2.1 40→45%；下一站 M10 全景图（M09 superseded by M18） | CY + AI |
 | _（未来变更追加在这里）_ | | |

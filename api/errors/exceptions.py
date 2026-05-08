@@ -434,12 +434,20 @@ class RelationSelfLoopError(ValidationError):
 
 
 class RelationNodeNotInProjectError(ValidationError):
+    """R1-B P1-02 立修（M08 sprint，2026-05-08）：http_status 由 404 → 422 与
+    M06 CompetitorCrossProjectError + M07 IssueNodeCrossProjectError 范式对齐
+    （跨 project 引用校验 = 422 validation，非 404 资源不存在）。"""
+
     code = ErrorCode.RELATION_NODE_NOT_IN_PROJECT
-    http_status = 404
+    http_status = 422
     message = "One or both nodes do not belong to the given project"
 
 
 class RelationTypeInvalidError(ValidationError):
+    """R1-A P1-01 立修（M08 sprint，2026-05-08）：Pydantic Enum 先拦，本 ErrorCode
+    保留备用（R13-1 parity；与 M03 NodeNameEmptyError / M07 IssueCategoryInvalidError
+    同款 pattern）。"""
+
     code = ErrorCode.RELATION_TYPE_INVALID
     http_status = 422
     message = "Invalid relation_type value"

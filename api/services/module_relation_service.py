@@ -52,9 +52,17 @@ class ModuleRelationService:
         target_node_id: UUID,
         project_id: UUID,
     ) -> None:
-        """校验 source/target 都属于该 project（design §8 第三层防御）。"""
-        s = await self.node_dao.get_by_id(db, source_node_id, project_id)
-        t = await self.node_dao.get_by_id(db, target_node_id, project_id)
+        """校验 source/target 都属于该 project（design §8 第三层防御）。
+
+        R1-C P1-02 立修（2026-05-08）：两次 node 校验独立无依赖，
+        用 ``asyncio.gather`` 并行执行 → 节省 1 次 DB RTT（每次 create 必走路径）。
+        """
+        import asyncio
+
+        s, t = await asyncio.gather(
+            self.node_dao.get_by_id(db, source_node_id, project_id),
+            self.node_dao.get_by_id(db, target_node_id, project_id),
+        )
         if s is None or t is None:
             raise RelationNodeNotInProjectError(
                 source_node_id=str(source_node_id),
