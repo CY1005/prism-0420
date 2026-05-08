@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-08 (post-M07-sprint-complete)
+last_updated: 2026-05-08 (post-M08-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,24 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-08 post-M07-sprint-complete）
+## 0. 状态快照（更新于 2026-05-08 post-M08-sprint-complete）
 
 - **Phase 2.0 工程基线**：✅ 100%（B1-B10 + 决策类全 accepted；commit b91c8d5）
-- **Phase 2.1 业务模块**：⏳ 40%（M01-M07 完成；下一站 M08 模块关系图）
+- **Phase 2.1 业务模块**：⏳ 45%（M01-M08 完成；下一站 M10 全景图，M09 superseded by M18 不实装）
+- **2026-05-08 M08 sprint 完成**（9 commit + R1+R2 闭环 / L1+L2+L3 第七次实证 / 闸门 2.5 三栏 B 0 项第四次实证 / **R-X2 第四真注入双向 + delete 语义** / **元教训"M07 P1 防御 actionable 主动应用"首次实证**）：
+  - commits: `eed7749` 子片 0 prep + `fc142ad` 子片 1 model + `1fe57fe` 子片 2 DAO 双向 OR + `7b3d3eb` 子片 3 Service R-X2 第四真注入(双向 delete) + `de57b28` 子片 4 Router 5 endpoints + `868d290` R1+R2 P1 共 8 项立修（5 步分层全 L3 范式应用）+ 子片 5 关闸
+  - **586+ PASS / 0 fail / ruff 净 / R13-1 64=64 + L12 守护通过**
+  - **R-X2 实证 4 数据点对照表**（详见 audit/m08-pilot-template-validation.md）：
+    - M04: 单向 delete (CASCADE)
+    - M06: 单向 delete (CASCADE)
+    - M07: orphan SET NULL (passive_deletes)
+    - M08: **双向 OR delete**（source/target 两 FK 同款 CASCADE）
+    - 接口共享（Protocol 4 参签名）+ 业务语义分化（DELETE/UPDATE/双向）= L1 锁 + L2 决策合理抽象
+  - **元教训首次实证 actionable**：M07 立的"viewer 写所有写端点 403 全覆盖"P1 范式被 M08 sprint **启动 reconcile A7 主动列入清单**+ 子片 4 router test cases 列表全覆盖 + 子片 3 service test write_event 异常传播 monkeypatch — R2 没抓出 viewer 写覆盖问题（验证元教训内化生效）。新元教训 sink 进 audit "M02-M_{N-1} 跨模块测试契约主动复制清单" actionable 范本
+  - **R1 命中**：3 subagent 共 **7 P1 立修**（5 步分层全 L3 范式应用，含 RelationTypeInvalidError R13-1 注释 / docstring 双重防御消歧 / Protocol target_type 分发表 / _make_relation conftest 五连规则 / RelationNodeNotInProjectError 404→422 范式对齐 / count_by_project index-only / asyncio.gather 并行）+ 多 P2
+  - **R2 命中**：1 P1 立修（self_loop code 映射 design §13 字面 drift；移 schema model_validator → service 层独家范式与 M02-M07 一致）+ 2 P2 punt
+
+
 - **2026-05-08 M07 sprint 完成**（7 commit + R1+R2 闭环 / L1+L2+L3 第六次实证 / 闸门 2.5 三栏 B 0 项第三次实证 / **R-X2 第三真注入 orphan 语义实证** / 元教训"M06 P1 范式 M07 复发立修"首次产出）：
   - commits: `b81c0d8` 子片 0 prep（§14.5 + §5 预防性消歧）+ `13152e1` 子片 1 Issue model + alembic + Node passive_deletes + `a917235` 子片 2 DAO + SELECT FOR UPDATE + orphan_by_node_id + `e6e0873` 子片 3 Service + R-X2 第三真注入 + 状态机 4 状态 + `6a1072f` R1 1 P1 立修 get_for_embedding 空字符串 + 子片 4 Router 7 endpoints + 15 e2e tests + `8246984` R2 1 P1 立修 viewer 写 4 端点全覆盖 + 子片 5 关闸
   - **538+ PASS / 0 fail / ruff 净 / R13-1 59=59 + L12 守护通过**
@@ -136,7 +150,26 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M08 sprint 实施代码启动（**当前推荐**）
+### Prompt 0 — M10 sprint 实施代码启动（**当前推荐**）
+
+参 `_handoff/sprint-prompts-M05-M20.md` § "## M10 — 全景图（overview）" 段；启动当天复制对应 prompt 段落（M08 commits eed7749 → 子片 5 关闸 / 586+ PASS / Phase 2.1 45%）。
+
+**M09 superseded by M18 不实装**（详见 design/00-roadmap.md §6.2）。
+
+M10 模块特定要素提示（详见 sprint-prompts M10 段）：
+- 跨模块只读聚合（同 M09 范式）— 项目首页全景视图：节点树 + 维度填充率 + 最近活动
+- 与 M15 activity_stream 集成（最近活动；M15 sprint 期可能仍是 B2.3 stub log）
+- 全景图 hot path 性能 + ADR-003 规则 2 豁免严守
+- G7 删 US-C1.1 → out of scope（M10 不实装"添加节点"功能）
+
+**M08 sprint 元教训防御 actionable 清单**（M10 sprint 启动 reconcile 时主动复制不等 R2 抓）：
+1. viewer 写**所有**写端点 403 全覆盖（M07 R2 P1-01 / M08 主动应用）
+2. write_event 异常传播测试（M04/M06/M07/M08 R1-C 范式）
+3. cross-tenant 404 (project_not_found，M02 范式)
+4. cross-project node 422（M06+M07+M08 范式对齐）
+5. IntegrityError 区分约束名（M05 P1-01 立规延续）
+
+### Prompt 0' — M08 sprint 实施代码启动（已完成 2026-05-08，仅供历史追溯）
 
 参 `_handoff/sprint-prompts-M05-M20.md` § "## M08 — 模块关系图（module-relation）" 段；启动当天复制对应 prompt 段落（M07 commits b81c0d8 → 子片 5 关闸 commit / 538+ PASS / Phase 2.1 40%）。
 
