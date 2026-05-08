@@ -151,6 +151,27 @@ class DimensionService:
             "completion_rate": rate,
         }
 
+    async def batch_get_by_nodes(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        node_ids: list[UUID],
+        dimension_type_ids: list[int] | None = None,
+    ) -> list[DimensionRecord]:
+        """M12 矩阵聚合接口（R-X3 跨模块只读 / 共享外部 session 不 commit）。
+
+        薄 wrapper over DAO.list_by_nodes：双重 tenant 过滤（project_id + node_id IN）
+        在 DAO 层执行；service 层提供 keyword-only 签名与 M04 其他对外接口一致风格。
+        M12 sprint 接通（M04 sprint scaffold "caller sprint 实装" 到期，2026-05-08）。
+        """
+        return await self.dao.list_by_nodes(
+            db,
+            node_ids=node_ids,
+            project_id=project_id,
+            dimension_type_ids=dimension_type_ids,
+        )
+
     async def get_for_embedding(
         self, db: AsyncSession, record_id: UUID, project_id: UUID
     ) -> str | None:

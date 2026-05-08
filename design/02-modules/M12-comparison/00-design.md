@@ -674,6 +674,30 @@ class ComparisonSnapshotConflictError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M11 九数据点稳定后 M12 复用默认范式）
+
+> 按闸门 3.4 L1 总则要求落本 sprint review 计划。M12 是**常规 own + 跨模块只读模块**
+> （非 R-X1 orchestrator / 非 R-X2 child service / 无文件上传 / 无 Queue），
+> 复用 M02-M11 默认范式：R1=3 subagent 并行 + R2=1 合并 Opus + 子片 5 不单跑。
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（ComparisonService + get_matrix_data 调 M04 + create_snapshot 多表事务 + 乐观锁 rename） | 子片 0 + 1 + 2 + 3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| M02-M11 九数据点稳定；M12 多表事务（snapshots + items + activity_log）+ 跨模块只读（M04 batch_get_by_nodes）+ 乐观锁 rename 必合并审才能审到一致性 |
+| **R2** | 子片 4 完成（Router 6 endpoints + check_project_access + 乐观锁 expected_version + 错误响应映射） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| endpoint 层契约漂移 + viewer 写 3 端点 403 全覆盖 + cross-tenant 404 + cross-project node 422（comparison_node_not_found）是 R2 高命中区 |
+
+**子片 5 不单跑**（≥80% SKIP 例外）；**子片 0 prep + §14.5 段 + DimensionService.batch_get_by_nodes 实装**同 commit；**M12 无独立 schema 子片**（子片 1 = own model + alembic）。
+
+**特殊触发点**：
+- DimensionService.batch_get_by_nodes 是 M04 sprint scaffold 决策延期"caller sprint 实装"项；M12 是首 caller，子片 0 prep 同 commit 接通（DAO `list_by_nodes` 已实装，service 加薄 wrapper + R-X3 共享外部 session 不主动 commit）
+- 元教训防御 actionable 主动复制（不等 R2 抓）：viewer 写 3 端点 403 全覆盖（M07 立 / M08+M11 应用）/ write_event 异常传播测试（M04+ 范式）/ cross-tenant 404（M02 范式）/ cross-project node 422（M06+M07+M08 范式 → comparison_node_not_found）/ IntegrityError 区分约束名（M05 P1-01 立规延续）
+- R-X1 / R-X2 / 文件上传相关红线 — **N/A**（design §1 in scope 明确，不触发）
+
+**L3 实证回写承诺**：sprint 结束时把 R1/R2 命中比例 + 多表事务 + 跨模块只读 R-X3 范式首次实证 + 闸门 2.5 B 0 项第七次写到 `../../audit/m12-pilot-template-validation.md`。
+
+**Async 范式回写说明**：本 design 节 6/9 同步代码示例（`db.query()` / `Session`）写于 2026-04-21（预 M02 async 范式）；实施按 M02-M11 既有 async 范式落地（`async def` / `AsyncSession` / `select` + `await db.execute`），子片 5 关闸时 design 节 6/9 代码段同步刷成 async（与 M05/M06/M07 sprint 关闸 design 回写惯例一致）。
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 1：职责边界 in/out scope 完整（引 US-A3.3 + PRD Q3；G4 值快照策略）

@@ -614,3 +614,78 @@ async def test_svc_batch_create_in_transaction_creates_multiple(
     )
     assert len(created) == 2
     assert {r.dimension_type_id for r in created} == {t1, t2}
+
+
+# ─────────────── M12 sprint R-X3 batch_get_by_nodes smoke（caller 接通） ───────────────
+
+
+async def test_svc_batch_get_by_nodes_aggregates_matrix(
+    db_session, svc, make_project, make_node, make_dim_type
+):
+    """M12 sprint 接通：跨模块只读聚合（R-X3 共享外部 session 不主动 commit）。"""
+    user, proj = await make_project()
+    nA = await make_node(proj.id, name="A")
+    nB = await make_node(proj.id, name="B")
+    t1 = await make_dim_type(key="m12g1", project_id=proj.id)
+    t2 = await make_dim_type(key="m12g2", project_id=proj.id)
+    await svc.batch_create_in_transaction(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        dimensions_data=[
+            {"node_id": nA.id, "dimension_type_id": t1, "content": {"v": "a1"}},
+            {"node_id": nA.id, "dimension_type_id": t2, "content": {"v": "a2"}},
+            {"node_id": nB.id, "dimension_type_id": t1, "content": {"v": "b1"}},
+        ],
+    )
+
+    rows = await svc.batch_get_by_nodes(
+        db_session,
+        project_id=proj.id,
+        node_ids=[nA.id, nB.id],
+        dimension_type_ids=[t1, t2],
+    )
+    assert len(rows) == 3
+    pairs = {(r.node_id, r.dimension_type_id) for r in rows}
+    assert (nA.id, t1) in pairs
+    assert (nA.id, t2) in pairs
+    assert (nB.id, t1) in pairs
+
+
+async def test_svc_batch_get_by_nodes_blocks_cross_tenant(
+    db_session, svc, make_project, make_node, make_dim_type
+):
+    """跨 project 的 project_id 过滤——传错 project_id 返回空（M02 范式延续）。"""
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(owner=user, name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+    t1 = await make_dim_type(key="m12cross", project_id=projA.id)
+    await svc.batch_create_in_transaction(
+        db_session,
+        project_id=projA.id,
+        actor_user_id=user.id,
+        dimensions_data=[
+            {"node_id": nA.id, "dimension_type_id": t1, "content": {"v": "a"}},
+        ],
+    )
+
+    rows = await svc.batch_get_by_nodes(
+        db_session,
+        project_id=projB.id,
+        node_ids=[nA.id],
+        dimension_type_ids=[t1],
+    )
+    assert rows == []
+
+
+async def test_svc_batch_get_by_nodes_empty_inputs_return_empty(db_session, svc, make_project):
+    """node_ids 空 → []；dimension_type_ids=[] → []（DAO list_by_nodes 早返回分支）。"""
+    _, proj = await make_project()
+    rows = await svc.batch_get_by_nodes(
+        db_session, project_id=proj.id, node_ids=[], dimension_type_ids=[1]
+    )
+    assert rows == []
+    rows = await svc.batch_get_by_nodes(
+        db_session, project_id=proj.id, node_ids=[uuid4()], dimension_type_ids=[]
+    )
+    assert rows == []
