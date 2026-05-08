@@ -70,3 +70,9 @@ class ErrorCode(StrEnum):
     DIMENSION_TYPE_NOT_FOUND = "dimension_type_not_found"
     DIMENSION_CONTENT_INVALID = "dimension_content_invalid"
     DIMENSION_DUPLICATE = "dimension_duplicate"
+
+    # M05 版本演进时间线 (design §13)
+    # B3 (闸门 2.5) C 栏决策：snapshot_data 不深校验，VERSION_SNAPSHOT_INVALID 保留作未来扩展点
+    VERSION_NOT_FOUND = "version_not_found"
+    VERSION_LABEL_DUPLICATE = "version_label_duplicate"
+    VERSION_SNAPSHOT_INVALID = "version_snapshot_invalid"

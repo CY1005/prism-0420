@@ -323,3 +323,24 @@ class DimensionDuplicateError(ConflictError):
     code = ErrorCode.DIMENSION_DUPLICATE
     http_status = 409
     message = "Dimension record already exists for this node and type"
+
+
+# ─────────────── M05 版本演进时间线 ───────────────
+
+
+class VersionNotFoundError(NotFoundError):
+    code = ErrorCode.VERSION_NOT_FOUND
+    http_status = 404
+    message = "Version record not found"
+
+
+class VersionLabelDuplicateError(ConflictError):
+    code = ErrorCode.VERSION_LABEL_DUPLICATE
+    http_status = 409
+    message = "A version with this label already exists for the node"
+
+
+class VersionSnapshotInvalidError(ValidationError):
+    code = ErrorCode.VERSION_SNAPSHOT_INVALID
+    http_status = 422
+    message = "snapshot_data does not match expected format"
