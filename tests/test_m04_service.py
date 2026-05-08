@@ -689,3 +689,126 @@ async def test_svc_batch_get_by_nodes_empty_inputs_return_empty(db_session, svc,
         db_session, project_id=proj.id, node_ids=[uuid4()], dimension_type_ids=[]
     )
     assert rows == []
+
+
+# ─────────────── M13 sprint create_dimension_record + get_latest smoke（caller 接通） ───────────────
+
+
+async def test_svc_create_dimension_record_upserts_type_and_writes_event(
+    db_session, svc, make_project, make_node
+):
+    """M13 sprint 接通：首次调用 upsert dimension_types 行（key='requirement_analysis'）+
+    写一条 create activity_log（含 caller 传入的 extra_activity_metadata 合并）。
+    不走 _check_dimension_type_enabled（系统寄生写入豁免 PDC，design 灰区裁决 2026-05-08）。
+
+    重复 save (同 node, 同 dim_type) 在 M04 UNIQUE(node_id, dim_type_id) 约束下抛
+    IntegrityError——具体语义（overwrite vs error）留给子片 2 AnalyzeService 拍。
+    本 smoke 用 2 个不同 node 验 type upsert 幂等单行。
+    """
+    from sqlalchemy import select as _select
+
+    from api.models.project import DimensionType
+
+    user, proj = await make_project()
+    nA = await make_node(proj.id, name="NA")
+    nB = await make_node(proj.id, name="NB")
+
+    extra = {
+        "ai_provider": "claude",
+        "ai_model": "claude-sonnet-4-5",
+        "analysis_level": "L2",
+        "analysis_time_ms": 1234,
+    }
+    rec_a = await svc.create_dimension_record(
+        db_session,
+        project_id=proj.id,
+        node_id=nA.id,
+        dimension_type_key="requirement_analysis",
+        content={"summary": "node A 概要"},
+        user_id=user.id,
+        extra_activity_metadata=extra,
+    )
+    assert rec_a.id is not None
+    assert rec_a.project_id == proj.id
+    assert rec_a.node_id == nA.id
+    assert rec_a.content["summary"] == "node A 概要"
+
+    # 第二次调用相同 key 不同 node 应复用同一 dimension_type 行（upsert 幂等）
+    rec_b = await svc.create_dimension_record(
+        db_session,
+        project_id=proj.id,
+        node_id=nB.id,
+        dimension_type_key="requirement_analysis",
+        content={"summary": "node B 概要"},
+        user_id=user.id,
+    )
+    assert rec_b.dimension_type_id == rec_a.dimension_type_id
+
+    result = await db_session.execute(
+        _select(DimensionType).where(DimensionType.key == "requirement_analysis")
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 1
+
+
+async def test_svc_create_dimension_record_blocks_cross_tenant_node(
+    db_session, svc, make_project, make_node
+):
+    """跨 project node_id → DimensionNotFoundError（不暴露 forbidden 信息，三层防御第三层）。"""
+    user, projA = await make_project(name_suffix="-A")
+    _, projB = await make_project(owner=user, name_suffix="-B")
+    nA = await make_node(projA.id, name="A")
+
+    with pytest.raises(DimensionNotFoundError):
+        await svc.create_dimension_record(
+            db_session,
+            project_id=projB.id,
+            node_id=nA.id,
+            dimension_type_key="requirement_analysis_x1",
+            content={"k": "v"},
+            user_id=user.id,
+        )
+
+
+async def test_svc_get_latest_returns_newest_or_none(db_session, svc, make_project, make_node):
+    """M13 affected-nodes 走此接口：拿最新一条；type 不存在或无记录 → None。"""
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="N1")
+
+    # type 不存在 → None
+    none_rec = await svc.get_latest(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        dimension_type_key="never_registered_x2",
+    )
+    assert none_rec is None
+
+    # 写一条 → get_latest 拿到该条
+    r1 = await svc.create_dimension_record(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        dimension_type_key="requirement_analysis_x2",
+        content={"v": "first"},
+        user_id=user.id,
+    )
+    latest = await svc.get_latest(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        dimension_type_key="requirement_analysis_x2",
+    )
+    assert latest is not None
+    assert latest.id == r1.id
+    assert latest.content["v"] == "first"
+
+    # 跨 project 隔离：换 project_id 应拿不到（双重 tenant 过滤）
+    _, projB = await make_project(owner=user, name_suffix="-B2")
+    cross = await svc.get_latest(
+        db_session,
+        project_id=projB.id,
+        node_id=node.id,
+        dimension_type_key="requirement_analysis_x2",
+    )
+    assert cross is None

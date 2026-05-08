@@ -740,6 +740,40 @@ class AnalysisInvalidLevelError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M12 十数据点稳定后 M13 复用默认范式 + LLM/SSE 首发增强）
+
+> 按闸门 3.4 L1 总则要求落本 sprint review 计划。M13 是 **R-X3 跨模块只读聚合 + 写 M04（save 路径）+ §12A 流式 SSE pilot + LLM 集成首发** 的混合形态——
+> 复用 M02-M12 默认范式（R1=3 subagent 并行 + R2=1 合并 Opus + 子片 5 不单跑），R2 增强覆盖 SSE 流式特化（chunk 顺序 / aclose 调用 / cancel 路径）。
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（AI Provider 抽象 + MockProvider + ClaudeProvider + AnalyzeService 聚合 prompt + 调 provider.analyze + parse + save 路径写 M04 + ProviderRegistry + AES 解密接通 + Pydantic SSE event schema + 7 ErrorCode）| 子片 0+1+2+3 合并 | spec-reviewer + code-quality-reviewer + simplify 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| M02-M12 十数据点稳定；M13 跨模块只读 M02/M03/M07 + 写 M04（save）+ AI Provider 抽象 + AES 接通必合并审才能审到一致性；**spec+quality Opus 必审 PEP 533 aclose 协议在真 SDK / Mock 双实现是否对等可断言** |
+| **R2** | 子片 4 完成（Router 3 endpoints：POST /analyze/requirement SSE / POST /analyze/save / GET /analyze/affected-nodes + check_project_access editor + asyncio.timeout(300) + is_disconnected → provider.aclose()） | 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| endpoint 层契约漂移 + viewer 写 2 端点 403（POST /analyze/requirement + POST /analyze/save，GET 是 viewer 可读）+ cross-tenant 404 + cross-project node 404 是 R2 高命中区；**SSE 流式特化必审**：chunk 顺序 e2e + complete 后 save 端到端 + AbortController 取消 server 真停（含 `aclose_called` 断言）+ JWT 中途过期窗口 |
+
+**子片 5 不单跑**（≥80% SKIP 例外）；**子片 0 prep + §14.5 段 + DimensionService.create_dimension_record + get_latest 实装**同 commit；**M13 无 schema 子片**（schema 与 ErrorCode 在子片 3 与 AnalyzeService 同 commit）。
+
+**特殊触发点**：
+- `DimensionService.create_dimension_record` + `get_latest` 是 M04 sprint scaffold 决策延期"M13 sprint 期实装"项；M13 是首 caller，子片 0 prep 同 commit 接通（含 `dimension_types` 表 `key="requirement_analysis"` 自动 upsert，accepted 同期补丁 #1 一并落地）
+- **真 SDK provider 范围（CY 拍）**：本 sprint 实装 Mock + Claude（anthropic httpx stream）；Kimi/Codex/DeepSeek 后续 sprint 顺手抄 prism。Integration smoke 走 `tests/integration/test_provider_smoke.py` + `@pytest.mark.skipif(not os.getenv('ANTHROPIC_API_KEY'))`，CI 默认跳过，本机手动 export key 跑一次记 audit
+- **AES 接通范围（CY 拍）**：本 sprint M02 ProjectService → AES 解密 ai_api_key_enc → ProviderRegistry.get(provider, api_key) → SDK 全链路打通
+- 元教训防御 actionable 主动复制（不等 R2 抓）：
+  - viewer 写 2 端点 403 全覆盖（M07 立 / M08+M11+M12 应用；M13 写端点 = `POST /analyze/requirement` + `POST /analyze/save`）
+  - write_event 异常传播测试（M04+ 范式；M13 save 路径调 `M04.create_dimension_record`，M04 内部 write_event 失败应向上传播）
+  - cross-tenant 404（M02 范式；3 endpoint 全）
+  - cross-project node 404（M06+M07+M08+M12 范式；analyze_node_not_found 走 404 而非 422，与 M13 §13 对齐）
+  - **NEW from M11 文件上传契约** N/A（M13 无上传，但 SSE 端点鉴权路径仿 M11 思路：连接级 auth + 无 chunk 级鉴权 design §8 已锁）
+  - **NEW from M12 元自审**：L1 范式既锁的 R-X3 / SSE / aclose 裁决型 P1 不让 CY 拍，AI 自决落 disambiguation
+- **LLM 集成专属红线**（feedback_monkeypatch_not_verification 触发）：
+  - MockProvider 必须实装 `aclose_called: bool` 标志可断言（design §12 字段⑥ 显式要求）
+  - DONE 必区分 unit pass vs integration pass：unit 全走 MockProvider；至少 1 个 integration smoke 用真 anthropic SDK 跑 + 手动验 aclose 协议；NEEDS_CONTEXT 标 integration smoke 是否真跑过
+  - feedback_llm_hotpath_math 4 数字+3 红线 **N/A**（M13 是 user-triggered SSE 不是 cron/scan/per-event hot path）
+
+**L3 实证回写承诺**：sprint 结束时把 R1/R2 命中比例 + LLM 集成首发实证 + §12A 流式 SSE 子模板首次实战 + AES 全链路接通 + R-X3 写 M04 范式（与 M11 R-X1 batch_create / M12 R-X3 只读 对照）+ 闸门 2.5 B 0 项第八次写到 `../../audit/m13-pilot-template-validation.md`。
+
+**Async 范式回写说明**：本 design 节 6/9 同步代码示例（`db.query()` / `Session`）写于 2026-04-25（预 M02 async 范式）；实施按 M02-M12 既有 async 范式落地（`async def` / `AsyncSession` / `select` + `await db.execute`），子片 5 关闸时 design 节 6/9 代码段同步刷成 async（与 M05/M06/M07/M12 sprint 关闸 design 回写惯例一致）。
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 0：frontmatter 12 字段（status=draft 待 accepted）

@@ -172,6 +172,37 @@ class DimensionService:
             dimension_type_ids=dimension_type_ids,
         )
 
+    async def get_latest(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        node_id: UUID,
+        dimension_type_key: str,
+    ) -> DimensionRecord | None:
+        """M13 baseline-patch 被动接口（design M04 §6 + M13 §6 / R-X3 跨模块只读）。
+
+        按 dimension_type_key 拿 (project_id, node_id) 上最新一条记录
+        （ORDER BY created_at DESC LIMIT 1）；纯读，不写 activity_log，不开事务。
+        双重 tenant 过滤：project_id + DimensionType.key WHERE 走 join。
+        type 不存在 → 直接返回 None（非错误：M13 affected-nodes 在首次分析前可能未登记）。
+        M13 sprint 接通（M04 sprint scaffold "M13 sprint 期实装" 到期，2026-05-08）。
+        """
+        dt = await self._get_dimension_type_by_key(db, dimension_type_key)
+        if dt is None:
+            return None
+        result = await db.execute(
+            select(DimensionRecord)
+            .where(
+                DimensionRecord.project_id == project_id,
+                DimensionRecord.node_id == node_id,
+                DimensionRecord.dimension_type_id == dt.id,
+            )
+            .order_by(DimensionRecord.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def get_for_embedding(
         self, db: AsyncSession, record_id: UUID, project_id: UUID
     ) -> str | None:
@@ -216,6 +247,89 @@ class DimensionService:
             )
             created.append(rec)
         return created
+
+    async def _get_dimension_type_by_key(self, db: AsyncSession, key: str) -> DimensionType | None:
+        """按 key 查 DimensionType（系统级表，无 project_id 过滤）。"""
+        result = await db.execute(select(DimensionType).where(DimensionType.key == key))
+        return result.scalar_one_or_none()
+
+    async def _upsert_dimension_type(self, db: AsyncSession, key: str) -> DimensionType:
+        """M13 baseline-patch helper：按 key upsert dimension_types 表。
+
+        首次调用时自动登记 ``key="requirement_analysis"`` 等系统寄生 key
+        （M13 design line 175-177 + accepted 同期补丁 #1，无 alembic 迁移）。
+        已存在则直接返回。系统级表，无 tenant 过滤。
+        """
+        dt = await self._get_dimension_type_by_key(db, key)
+        if dt is not None:
+            return dt
+        dt = DimensionType(key=key, name=key.replace("_", " ").title())
+        db.add(dt)
+        await db.flush()  # 取 id 给 caller，由 caller 控制 commit
+        return dt
+
+    async def create_dimension_record(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: UUID,
+        node_id: UUID,
+        dimension_type_key: str,
+        content: dict[str, Any],
+        user_id: UUID,
+        extra_activity_metadata: dict[str, Any] | None = None,
+    ) -> DimensionRecord:
+        """M13 baseline-patch R-X3 入口（design M04 §6 + M13 §6.M13 save 路径）。
+
+        语义边界（disambiguation 注释 — 与 ``create()`` 主流程入口区分）：
+          - 接受 ``dimension_type_key`` 而非 id；首次调用自动 upsert ``dimension_types`` 行
+            （accepted 同期补丁 #1：M04 Service 实现 ``key="requirement_analysis"`` 幂等登记）
+          - **不走 ``_check_dimension_type_enabled`` PDC 启用校验**（design 灰区裁决，2026-05-08）：
+            AI 分析结果是系统寄生写入（design M13 line 127 / ADR-003 规则 1），
+            不受 project_dimension_configs 启用/禁用控制；与用户业务 ``create()`` 路径区分
+          - 接受外部 db session，不自开事务；caller (M13 AnalyzeService) 控制 commit
+          - 写一条 ``create`` activity_log；metadata 含 {node_id, type_id, content_size,
+            dimension_type_key} + caller 传入 ``extra_activity_metadata`` 合并
+        M13 sprint 接通（M04 sprint scaffold "M13 sprint 期实装" 到期，2026-05-08）。
+        """
+        # node 归属校验（三层防御第三层；与 create() 同款）
+        await self._check_node_belongs_to_project(db, node_id, project_id)
+
+        # upsert dimension_type by key（首次自动登记 requirement_analysis）
+        dt = await self._upsert_dimension_type(db, dimension_type_key)
+
+        rec = DimensionRecord(
+            id=uuid4(),
+            node_id=node_id,
+            project_id=project_id,
+            dimension_type_id=dt.id,
+            content=content or {},
+            created_by=user_id,
+            updated_by=user_id,
+        )
+        await self.dao.insert(db, rec)
+        await db.refresh(rec, attribute_names=["created_at", "updated_at"])
+
+        merged_metadata: dict[str, Any] = {
+            "node_id": str(node_id),
+            "dimension_type_id": dt.id,
+            "dimension_type_key": dt.key,
+            "content_size": len(str(content or {})),
+        }
+        if extra_activity_metadata:
+            merged_metadata.update(extra_activity_metadata)
+
+        await write_event(
+            db=db,
+            actor_user_id=user_id,
+            project_id=project_id,
+            action_type="create",
+            target_type="dimension_record",
+            target_id=str(rec.id),
+            summary=f"Created dimension '{dt.key}'",
+            metadata=merged_metadata,
+        )
+        return rec
 
     async def create(
         self,
