@@ -377,7 +377,10 @@ class TestBoundaries:
         assert r.json()["status"] == "completed"
 
     async def test_filename_sanitize_path_traversal(self, auth_client, make_user, submit_zip_form):
-        """M11 范式复用：filename 含 path traversal / CRLF → router 应 sanitize 不抛错。"""
+        """**R2 P1-03 立修**：M11 范式复用 + sanitize 字面验输出（不仅 not-crash）。
+
+        attacker filename 含路径穿越 + CRLF → sanitize 后 source_uri 必须无控制字符 + 无 / \\ \\r \\n。
+        """
         user = await make_user(email="m17-fnsan@example.com")
         pid = await _create_project_with_ai(auth_client, user.id)
         r = await auth_client.post(
@@ -392,8 +395,22 @@ class TestBoundaries:
             },
             headers=_bearer(user.id),
         )
-        # router 不应抛错，sanitize 后正常处理（落 source_uri="upload://passwd"）
         assert r.status_code == 201, r.text
+        # **R2 P1-03 立修**：字面验 source_uri sanitize 结果（不仅 201）
+        body = r.json()
+        source_uri = body["source_uri"]
+        assert source_uri.startswith("upload://"), source_uri
+        filename_part = source_uri.split("://", 1)[1]
+        # sanitize 必须杀掉路径穿越（os.path.basename）+ 真实控制字符（CRLF 已被 httpx
+        # 客户端 URL-encode 为 %0D%0A，到 server 端是文本字符串而非控制字节，不构成
+        # header injection 风险——源攻击面已闭合）
+        assert "../" not in filename_part
+        assert "\\" not in filename_part
+        assert "\r" not in filename_part  # 真实 CR 字节
+        assert "\n" not in filename_part  # 真实 LF 字节
+        assert "/" not in filename_part  # path 穿越的根本攻击面
+        # basename 必须从 "passwd" 起头（os.path.basename 杀掉 ../../ + /etc/）
+        assert filename_part.startswith("passwd"), filename_part
 
 
 # ─────────────── 三层权限 / 元教训 actionable ───────────────
@@ -540,10 +557,96 @@ class TestPermissions:
         assert r.status_code == 403
 
 
+# ─────────────── WS endpoint 鉴权（R2 P1-01 立修 / 5 矩阵）───────────────
+# WS endpoint 用 starlette TestClient.websocket_connect 同步测试鉴权 close code（design §8 audit B6）。
+# Golden path（成功 accept + service push + client receive）需要 DB 状态——
+# 在异步 fixture 注入 + 同步 TestClient 桥接复杂；当前矩阵覆盖 4 个鉴权拒绝路径
+# （JWT 无效 / type≠access / sub 缺失 / cross-owner check_task_access 失败），
+# 这是元教训"endpoint 形态不免除契约纪律"+ audit B6 关键。Golden e2e 留 integration sprint。
+
+
+class TestWebSocketAuth:
+    """WS 握手鉴权 4 矩阵（R2 P1-01 立修 / design §8 audit B6 字面）。"""
+
+    def test_ws_missing_token_returns_403(self):
+        """无 token query → FastAPI Query(...) 必填校验失败 → 403（accept 前拒绝）。"""
+        from fastapi.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from api.main import app
+
+        client = TestClient(app)
+        # missing token → FastAPI 在 accept 前校验 Query → 拒绝（WebSocketDisconnect 抛出）
+        with (
+            pytest.raises(WebSocketDisconnect),
+            client.websocket_connect(f"/api/projects/{uuid4()}/imports/{uuid4()}/progress"),
+        ):
+            pass
+
+    def test_ws_invalid_token_closes_1008(self):
+        """无效 JWT → decode_jwt 抛 → close 1008 policy violation。"""
+        from fastapi.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from api.main import app
+
+        client = TestClient(app)
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            client.websocket_connect(
+                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token=bogus"
+            ),
+        ):
+            pass
+        assert exc.value.code == 1008, f"expected 1008 policy violation, got {exc.value.code}"
+
+    def test_ws_refresh_token_type_closes_1008(self):
+        """access claim type ≠ "access"（refresh / 其他）→ close 1008（防 refresh token 被误用）。"""
+        from fastapi.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from api.main import app
+
+        client = TestClient(app)
+        # 制造合法但 type='refresh' 的 token
+        bad_type_token = encode_jwt(uuid4(), extra_claims={"type": "refresh"})
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            client.websocket_connect(
+                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={bad_type_token}"
+            ),
+        ):
+            pass
+        assert exc.value.code == 1008
+
+    def test_ws_task_not_owned_closes_1008(self):
+        """合法 access JWT 但 user 不是 task creator → check_task_access 失败 → 1008。
+
+        简化路径：用 random task_id（不存在）+ 合法 token → service.check_task_access 抛
+        ImportTaskNotFoundError → 1008 close。
+        """
+        from fastapi.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from api.main import app
+
+        client = TestClient(app)
+        token = encode_jwt(uuid4(), extra_claims={"type": "access"})
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            client.websocket_connect(
+                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={token}"
+            ),
+        ):
+            pass
+        assert exc.value.code == 1008
+
+
 __all__ = [
     "TestBoundaries",
     "TestPermissions",
     "TestReadEndpoints",
     "TestStateActions",
     "TestSubmitGolden",
+    "TestWebSocketAuth",
 ]

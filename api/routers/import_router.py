@@ -25,6 +25,7 @@ idempotency 命中（design §13 字面）：ImportTaskDuplicateError.http_statu
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -37,6 +38,7 @@ from fastapi import (
     File,
     Form,
     Query,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -101,11 +103,13 @@ async def submit_import(
 ) -> ImportTaskResponse:
     """提交 AI 智能导入任务。
 
-    异常契约：
+    异常契约（R2 P1-02 disambiguation 2026-05-09 / design §7 字面 413 与实装 422 漂移裁决）：
     - 401 未登录 / 403 viewer 写 → check_project_access
-    - 413 文件过大 / 422 zip 解析失败 / 422 git URL 不可达 → ImportInvalidSourceError
+    - **422 文件过大 / zip 解析失败 / git URL 不可达 / 入参不合法 → ImportInvalidSourceError**
+      （design §7 草案写 413，但 M17 选择统一 ImportInvalidSourceError 422 with reason=file_too_large；
+       不单独立 ImportFileTooLargeError 413——与 M11 ColdStartFileTooLargeError 范式分化但
+       业务语义一致：均"业务级输入参数无效"）
     - 200 idempotency 命中 → ImportTaskDuplicateError.http_status=200（design §13）
-    - 422 缺 git_url 或 file 入参不合法
 
     multipart 范式：
     - source_type=zip / git_bundle：file 必填，走 file.size 预检 + filename sanitize
@@ -167,13 +171,13 @@ async def submit_import(
         await db.commit()
         return ImportTaskResponse.model_validate(task, from_attributes=True)
     except ImportTaskDuplicateError as e:
-        # design §13 字面：idempotency 命中 = 200（不抛错）；router 改 200 + 复用 task
-        # service.find_idempotent 命中前未做任何写操作，无需 rollback；
-        # IntegrityError race 路径 service 内已 db.rollback()。
+        # design §13 字面：idempotency 命中 = 200（不抛错）；router 改 200 + 复用 task。
+        # 两条路径（R2 P1-04 注释）：
+        # ① find_idempotent 命中：service 未做任何写，无需 rollback
+        # ② IntegrityError race：service 内已 await db.rollback() + 再 select 拿 existing
+        # 两条路径 caller（本 catch）都安全调 svc.get_task 走 SELECT
         existing_id = UUID(e.details["existing_task_id"])
         existing = await svc.get_task(db, task_id=existing_id, project_id=access.project.id)
-        from fastapi import Response
-
         return Response(
             content=ImportTaskResponse.model_validate(
                 existing, from_attributes=True
@@ -219,6 +223,7 @@ async def get_import(
                     "user_id",
                     "source_type",
                     "source_hash",
+                    "source_uri",
                     "status",
                     "progress",
                     "error_message",
@@ -415,8 +420,6 @@ async def import_progress_ws(
 
     # 3) accept + 进入主循环
     await websocket.accept()
-    import contextlib
-
     with contextlib.suppress(WebSocketDisconnect):
         await handle_import_progress_ws(
             websocket,

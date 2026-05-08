@@ -72,6 +72,7 @@ class ImportTaskResponse(BaseModel):
     user_id: UUID
     source_type: ImportSourceTypeEnum
     source_hash: str
+    source_uri: str  # R2 P1-03 立修：暴露 source_uri 字段，让 e2e 可字面验 sanitize 结果
     status: ImportTaskStatusEnum
     progress: int = Field(..., ge=0, le=100)
     error_message: str | None = None
