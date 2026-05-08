@@ -21,7 +21,6 @@ from uuid import uuid4
 
 import pytest
 
-from api.auth.crypto import encrypt
 from api.errors.exceptions import (
     AnalysisNodeNotFoundError,
     AnalysisProviderError,
@@ -46,32 +45,6 @@ from api.services.analyze_service import REQUIREMENT_ANALYSIS_KEY, AnalyzeServic
 @pytest.fixture
 def svc():
     return AnalyzeService()
-
-
-async def _add_member(db_session, project, user, *, role="owner"):
-    """make_project 不自动建 ProjectMember，service 层 get_for_user 校验 member 关系——
-    M13 service 测试都依赖此校验，所以测试 setup 中显式 add 一条 owner ProjectMember。"""
-    from api.models.project import ProjectMember
-
-    db_session.add(ProjectMember(project_id=project.id, user_id=user.id, role=role))
-    await db_session.flush()
-
-
-async def _set_project_ai(db_session, project, *, provider="mock", api_key=None, model=None):
-    """配置 project 的 ai_provider / ai_api_key_enc / ai_model 字段。"""
-    project.ai_provider = provider
-    if api_key is not None:
-        project.ai_api_key_enc = encrypt(api_key)
-    if model is not None:
-        project.ai_model = model
-    await db_session.flush()
-
-
-async def _make_proj_with_member(make_project, db_session, *, name_suffix="", owner=None):
-    """make_project + add owner membership（M13 service 测试默认形态）。"""
-    user, proj = await make_project(name_suffix=name_suffix, owner=owner)
-    await _add_member(db_session, proj, user)
-    return user, proj
 
 
 class _ScriptedProvider(LLMProvider):
@@ -110,9 +83,9 @@ def _patch_get_provider(monkeypatch, fixed_provider: LLMProvider):
 
 
 async def test_analyze_stream_raises_when_ai_provider_unset(
-    db_session, svc, make_project, make_node
+    db_session, svc, make_project_with_member, set_project_ai, make_node
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
     # 不配 ai_provider
     with pytest.raises(AnalysisProviderNotConfiguredError) as ei:
@@ -129,9 +102,9 @@ async def test_analyze_stream_raises_when_ai_provider_unset(
 
 
 async def test_analyze_stream_raises_when_api_key_decrypt_fails(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
     proj.ai_provider = "claude"
     proj.ai_api_key_enc = "this-is-not-valid-base64!!!" * 3  # 触发 decrypt 错
@@ -150,9 +123,9 @@ async def test_analyze_stream_raises_when_api_key_decrypt_fails(
 
 
 async def test_analyze_stream_unknown_provider_wraps_to_not_configured(
-    db_session, svc, make_project, make_node
+    db_session, svc, make_project_with_member, set_project_ai, make_node
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
     proj.ai_provider = "gpt-9000"  # 未知
     await db_session.flush()
@@ -172,11 +145,11 @@ async def test_analyze_stream_unknown_provider_wraps_to_not_configured(
 
 
 async def test_analyze_stream_yields_provider_chunks(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
-    await _set_project_ai(db_session, proj, provider="mock")
+    await set_project_ai(proj, provider="mock")
 
     fixed = MockProvider(chunks=["chunk-1", "chunk-2", "chunk-3"])
     _patch_get_provider(monkeypatch, fixed)
@@ -195,11 +168,11 @@ async def test_analyze_stream_yields_provider_chunks(
 
 
 async def test_analyze_stream_wraps_provider_timeout(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
-    await _set_project_ai(db_session, proj, provider="mock")
+    await set_project_ai(proj, provider="mock")
 
     scripted = _ScriptedProvider(
         chunks=["partial"], raise_exc=ProviderTimeoutError("scripted", 5.0)
@@ -221,11 +194,11 @@ async def test_analyze_stream_wraps_provider_timeout(
 
 
 async def test_analyze_stream_wraps_rate_limited_to_quota_exceeded(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
-    await _set_project_ai(db_session, proj, provider="mock")
+    await set_project_ai(proj, provider="mock")
 
     scripted = _ScriptedProvider(chunks=["a"], raise_exc=ProviderError("scripted", "rate_limited"))
     _patch_get_provider(monkeypatch, scripted)
@@ -243,11 +216,11 @@ async def test_analyze_stream_wraps_rate_limited_to_quota_exceeded(
 
 
 async def test_analyze_stream_wraps_other_provider_error(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
-    await _set_project_ai(db_session, proj, provider="mock")
+    await set_project_ai(proj, provider="mock")
 
     scripted = _ScriptedProvider(
         chunks=[], raise_exc=ProviderError("scripted", "upstream_error_500")
@@ -270,14 +243,14 @@ async def test_analyze_stream_wraps_other_provider_error(
 
 
 async def test_analyze_stream_blocks_cross_tenant_project(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
     """跨 user 访问 project → ProjectNotFoundError（M02 范式）。"""
-    userA, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    userB, _projB = await _make_proj_with_member(make_project, db_session, name_suffix="-B")
+    userA, projA = await make_project_with_member(name_suffix="-A")
+    userB, _projB = await make_project_with_member(name_suffix="-B")
     # userB 不是 projA 成员
     node = await make_node(projA.id, name="N1")
-    await _set_project_ai(db_session, projA, provider="mock")
+    await set_project_ai(projA, provider="mock")
 
     _patch_get_provider(monkeypatch, MockProvider())
 
@@ -294,13 +267,13 @@ async def test_analyze_stream_blocks_cross_tenant_project(
 
 
 async def test_analyze_stream_blocks_cross_project_node(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
     """node 不在传入 project 下 → AnalysisNodeNotFoundError 404（design §13）。"""
-    user, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    _, projB = await _make_proj_with_member(make_project, db_session, owner=user, name_suffix="-B")
+    user, projA = await make_project_with_member(name_suffix="-A")
+    _, projB = await make_project_with_member(owner=user, name_suffix="-B")
     node_b = await make_node(projB.id, name="NB")
-    await _set_project_ai(db_session, projA, provider="mock")
+    await set_project_ai(projA, provider="mock")
 
     _patch_get_provider(monkeypatch, MockProvider())
 
@@ -335,9 +308,9 @@ class _PromptCapturingProvider(LLMProvider):
 
 
 async def test_analyze_stream_includes_subtree_and_issues_in_prompt_context(
-    db_session, svc, make_project, make_node, make_issue, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, make_issue, monkeypatch
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     root = await make_node(proj.id, name="root-feature")
     child1 = await make_node(proj.id, name="子节点-A", parent=root)
     await make_node(proj.id, name="孙节点-A1", parent=child1)  # 2 层深
@@ -347,7 +320,7 @@ async def test_analyze_stream_includes_subtree_and_issues_in_prompt_context(
         user=user, project=proj, node=root, title="登录失败概率", category="bug", status="open"
     )
 
-    await _set_project_ai(db_session, proj, provider="mock")
+    await set_project_ai(proj, provider="mock")
 
     capture = _PromptCapturingProvider()
     _patch_get_provider(monkeypatch, capture)
@@ -381,8 +354,10 @@ async def test_analyze_stream_includes_subtree_and_issues_in_prompt_context(
 # ─────────────── save_analysis ───────────────
 
 
-async def test_save_analysis_persists_record_and_metadata(db_session, svc, make_project, make_node):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+async def test_save_analysis_persists_record_and_metadata(
+    db_session, svc, make_project_with_member, set_project_ai, make_node
+):
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
 
     aff_ids = [uuid4(), uuid4()]
@@ -405,9 +380,11 @@ async def test_save_analysis_persists_record_and_metadata(db_session, svc, make_
     assert set(rec.content["affected_node_ids"]) == {str(x) for x in aff_ids}
 
 
-async def test_save_analysis_blocks_cross_project_node(db_session, svc, make_project, make_node):
-    user, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    _, projB = await _make_proj_with_member(make_project, db_session, owner=user, name_suffix="-B")
+async def test_save_analysis_blocks_cross_project_node(
+    db_session, svc, make_project_with_member, set_project_ai, make_node
+):
+    user, projA = await make_project_with_member(name_suffix="-A")
+    _, projB = await make_project_with_member(owner=user, name_suffix="-B")
     nB = await make_node(projB.id, name="NB")
 
     with pytest.raises(AnalysisNodeNotFoundError):
@@ -426,10 +403,10 @@ async def test_save_analysis_blocks_cross_project_node(db_session, svc, make_pro
 
 
 async def test_save_analysis_wraps_underlying_failure_to_save_failed_error(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
     """M04 create_dimension_record 抛非 NodeNotFound → AnalysisSaveFailedError."""
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
 
     async def boom(*args, **kwargs):
@@ -453,10 +430,12 @@ async def test_save_analysis_wraps_underlying_failure_to_save_failed_error(
     assert isinstance(ei.value.__cause__, RuntimeError)
 
 
-async def test_save_analysis_blocks_cross_tenant_project(db_session, svc, make_project, make_node):
+async def test_save_analysis_blocks_cross_tenant_project(
+    db_session, svc, make_project_with_member, set_project_ai, make_node
+):
     """跨 user 访问 project → ProjectNotFoundError；写入路径同样防越权（M02 范式）。"""
-    _userA, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    userB, _projB = await _make_proj_with_member(make_project, db_session, name_suffix="-B")
+    _userA, projA = await make_project_with_member(name_suffix="-A")
+    userB, _projB = await make_project_with_member(name_suffix="-B")
     nA = await make_node(projA.id, name="NA")
 
     with pytest.raises(ProjectNotFoundError):
@@ -478,9 +457,9 @@ async def test_save_analysis_blocks_cross_tenant_project(db_session, svc, make_p
 
 
 async def test_get_affected_nodes_returns_empty_when_no_history(
-    db_session, svc, make_project, make_node
+    db_session, svc, make_project_with_member, set_project_ai, make_node
 ):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
 
     res = await svc.get_affected_nodes(
@@ -492,8 +471,10 @@ async def test_get_affected_nodes_returns_empty_when_no_history(
     assert res.analysis_saved_at is None
 
 
-async def test_get_affected_nodes_returns_latest_record(db_session, svc, make_project, make_node):
-    user, proj = await _make_proj_with_member(make_project, db_session)
+async def test_get_affected_nodes_returns_latest_record(
+    db_session, svc, make_project_with_member, set_project_ai, make_node
+):
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
     aff = [uuid4(), uuid4(), uuid4()]
     rec = await svc.save_analysis(
@@ -518,9 +499,11 @@ async def test_get_affected_nodes_returns_latest_record(db_session, svc, make_pr
     assert res.analysis_saved_at is not None
 
 
-async def test_get_affected_nodes_blocks_cross_tenant(db_session, svc, make_project, make_node):
-    _, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    userB, _ = await _make_proj_with_member(make_project, db_session, name_suffix="-B")
+async def test_get_affected_nodes_blocks_cross_tenant(
+    db_session, svc, make_project_with_member, set_project_ai, make_node
+):
+    _, projA = await make_project_with_member(name_suffix="-A")
+    userB, _ = await make_project_with_member(name_suffix="-B")
     nA = await make_node(projA.id, name="NA")
     with pytest.raises(ProjectNotFoundError):
         await svc.get_affected_nodes(
@@ -529,10 +512,10 @@ async def test_get_affected_nodes_blocks_cross_tenant(db_session, svc, make_proj
 
 
 async def test_get_affected_nodes_404_on_cross_project_node(
-    db_session, svc, make_project, make_node
+    db_session, svc, make_project_with_member, set_project_ai, make_node
 ):
-    user, projA = await _make_proj_with_member(make_project, db_session, name_suffix="-A")
-    _, projB = await _make_proj_with_member(make_project, db_session, owner=user, name_suffix="-B")
+    user, projA = await make_project_with_member(name_suffix="-A")
+    _, projB = await make_project_with_member(owner=user, name_suffix="-B")
     nB = await make_node(projB.id, name="NB")
     with pytest.raises(AnalysisNodeNotFoundError):
         await svc.get_affected_nodes(
@@ -552,14 +535,14 @@ async def test_requirement_analysis_key_constant():
 
 
 async def test_save_analysis_propagates_write_event_failure_via_save_failed(
-    db_session, svc, make_project, make_node, monkeypatch
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
 ):
     """M04 内部 write_event 异常 → M04 抛 → M13 wrap AnalysisSaveFailedError（不吞错）。
 
     M04+ 元教训应用：write_event 异常传播测试覆盖；本场景 monkeypatch
     DimensionService 内部的 write_event 走 fault path，验异常向上传播 + wrap 形态。
     """
-    user, proj = await _make_proj_with_member(make_project, db_session)
+    user, proj = await make_project_with_member()
     node = await make_node(proj.id, name="N1")
 
     async def fake_write_event(**kwargs):
@@ -581,3 +564,196 @@ async def test_save_analysis_propagates_write_event_failure_via_save_failed(
             analysis_time_ms=1,
         )
     assert isinstance(ei.value.__cause__, RuntimeError)
+
+
+# ─────────────── R1 立修配套测试（2026-05-08）───────────────
+
+
+async def test_save_analysis_metadata_includes_requirement_text_hash(
+    db_session, svc, make_project_with_member, make_node
+):
+    """R1-A P1-1 立修：design §10 line 559 字面要求 metadata.requirement_text_hash
+    （SHA256；审计回溯锚点 — 不存明文）。"""
+    import hashlib
+
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+    text = "我要加微信扫码登录功能"
+    expected_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    captured: list[dict] = []
+
+    async def fake_write_event(**kwargs):
+        captured.append(kwargs)
+
+    from unittest.mock import patch
+
+    with patch("api.services.dimension_service.write_event", side_effect=fake_write_event):
+        await svc.save_analysis(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            user_id=user.id,
+            analysis_result="r",
+            requirement_text=text,
+            level=AnalysisLevel.L2,
+            ai_provider="claude",
+            ai_model="claude-sonnet-4-5",
+            analysis_time_ms=99,
+        )
+
+    assert len(captured) == 1
+    md = captured[0]["metadata"]
+    assert md["requirement_text_hash"] == expected_hash
+    assert md["requirement_text_length"] == len(text)
+    assert md["ai_provider"] == "claude"
+    assert md["analysis_time_ms"] == 99
+
+
+async def test_analyze_stream_wraps_breadcrumb_node_not_found_race(
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
+):
+    """R1-A P1-2 立修：_fetch_node_context 内的 breadcrumb 在 race 下抛 NodeNotFoundError，
+    应被 wrap 为 AnalysisNodeNotFoundError 不裸泄漏。"""
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+    await set_project_ai(proj, provider="mock")
+
+    _patch_get_provider(monkeypatch, MockProvider())
+
+    # 让 NodeService.breadcrumb 模拟 race 下 raise
+    from api.errors.exceptions import NodeNotFoundError
+
+    async def fake_breadcrumb(*args, **kwargs):
+        raise NodeNotFoundError(node_id=str(node.id))
+
+    monkeypatch.setattr(svc.nodes, "breadcrumb", fake_breadcrumb)
+
+    with pytest.raises(AnalysisNodeNotFoundError):
+        async for _ in svc.analyze_stream(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            user_id=user.id,
+            requirement_text="...",
+            level=AnalysisLevel.L1,
+        ):
+            pass
+
+
+async def test_save_analysis_preserves_conflict_error_409(
+    db_session, svc, make_project_with_member, make_node, monkeypatch
+):
+    """R1-A P1-5 立修：M04 ConflictError（乐观锁冲突）应保留 409 不吞为 SaveFailed 500。"""
+    from api.errors.exceptions import ConflictError
+
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+
+    async def boom_conflict(*args, **kwargs):
+        raise ConflictError("race in dimension write")
+
+    monkeypatch.setattr(svc.dimensions, "create_dimension_record", boom_conflict)
+
+    with pytest.raises(ConflictError):
+        await svc.save_analysis(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            user_id=user.id,
+            analysis_result="r",
+            requirement_text="t",
+            level=AnalysisLevel.L1,
+            ai_provider="mock",
+            ai_model="m",
+            analysis_time_ms=1,
+        )
+
+
+async def test_save_analysis_preserves_dimension_duplicate_error(
+    db_session, svc, make_project_with_member, make_node, monkeypatch
+):
+    """R1-A P1-5 立修：M04 DimensionDuplicateError 应保留 409 不吞为 500。"""
+    from api.errors.exceptions import DimensionDuplicateError
+
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+
+    async def boom_dup(*args, **kwargs):
+        raise DimensionDuplicateError(node_id=str(node.id), dimension_type_id=1)
+
+    monkeypatch.setattr(svc.dimensions, "create_dimension_record", boom_dup)
+
+    with pytest.raises(DimensionDuplicateError):
+        await svc.save_analysis(
+            db_session,
+            project_id=proj.id,
+            node_id=node.id,
+            user_id=user.id,
+            analysis_result="r",
+            requirement_text="t",
+            level=AnalysisLevel.L1,
+            ai_provider="mock",
+            ai_model="m",
+            analysis_time_ms=1,
+        )
+
+
+async def test_analyze_stream_propagates_aclose_to_inner_provider(
+    db_session, svc, make_project_with_member, set_project_ai, make_node, monkeypatch
+):
+    """R1-C P1-01 立修：AnalyzeService.analyze_stream 必须 try/finally aclose
+    inner provider stream，否则 caller 主动 aclose 时 ClaudeProvider httpx 资源泄漏。
+    用 MockProvider.aclose_called 断言协议传播路径。"""
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+    await set_project_ai(proj, provider="mock")
+
+    inner = MockProvider(chunks=["a", "b", "c", "d", "e"])
+    _patch_get_provider(monkeypatch, inner)
+
+    outer_stream = svc.analyze_stream(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        user_id=user.id,
+        requirement_text="...",
+        level=AnalysisLevel.L1,
+    )
+    seen = []
+    async for c in outer_stream:
+        seen.append(c)
+        if len(seen) == 2:
+            break
+    # caller 主动 aclose AnalyzeService 返回的 generator
+    await outer_stream.aclose()
+    # AnalyzeService finally 应把 GeneratorExit 传给 inner.analyze() generator
+    assert inner.aclose_called is True
+    assert seen == ["a", "b"]
+
+
+async def test_get_affected_nodes_returns_datetime_not_str(
+    db_session, svc, make_project_with_member, make_node
+):
+    """R1-C P1-03 立修：AffectedNodesResult.analysis_saved_at 类型应为 datetime（非 str），
+    与 Pydantic AffectedNodesResponse.analysis_saved_at: datetime | None 一致；router 序列化。"""
+    from datetime import datetime as _dt
+
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id, name="N1")
+    await svc.save_analysis(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        user_id=user.id,
+        analysis_result="r",
+        requirement_text="t",
+        level=AnalysisLevel.L1,
+        ai_provider="mock",
+        ai_model="m",
+        analysis_time_ms=1,
+    )
+    res = await svc.get_affected_nodes(
+        db_session, project_id=proj.id, node_id=node.id, user_id=user.id
+    )
+    assert isinstance(res.analysis_saved_at, _dt)

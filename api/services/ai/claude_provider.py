@@ -107,15 +107,22 @@ class ClaudeProvider(LLMProvider):
                         continue
                     if event.get("type") != "content_block_delta":
                         continue
-                    text = event.get("delta", {}).get("text", "")
+                    delta = event.get("delta", {})
+                    # R1-A P1-3 立修：anthropic 同名事件下 delta 有多种 type
+                    # （text_delta / input_json_delta / thinking_delta / signature_delta）。
+                    # 只 yield text_delta；防 thinking_delta 文本污染输出（design §12 字段③）。
+                    if delta.get("type") != "text_delta":
+                        continue
+                    text = delta.get("text", "")
                     if text:
                         yield text
         except httpx.TimeoutException as e:
             raise ProviderTimeoutError("claude", self._timeout_seconds) from e
-        except httpx.HTTPStatusError:
-            # 已在 _raise_for_status 内 wrap
-            raise
-        except (httpx.RequestError, httpx.NetworkError) as e:
+        except httpx.RequestError as e:
+            # R1-C P1-02 立修：删 `except httpx.HTTPStatusError: raise` 死代码
+            # （_raise_for_status 抛 ProviderError 子类，httpx.HTTPStatusError 此路径不会触发）。
+            # httpx.RequestError 是基类，覆盖 NetworkError / ConnectError / ProxyError 等
+            # （httpx.NetworkError 是 RequestError 的子类，单一捕获已足）。
             raise ProviderError("claude", f"network_error: {type(e).__name__}") from e
 
     @staticmethod

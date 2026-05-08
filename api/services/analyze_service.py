@@ -35,8 +35,10 @@ dimension_type_key 常量 ``REQUIREMENT_ANALYSIS_KEY``：design line 175-177 字
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -50,9 +52,12 @@ from api.errors.exceptions import (
     AnalysisQuotaExceededError,
     AnalysisSaveFailedError,
     AnalysisTimeoutError,
+    ConflictError,
+    DimensionDuplicateError,
     DimensionNotFoundError,
     NodeNotFoundError,
 )
+from api.models.dimension_record import DimensionRecord
 from api.models.node import Node
 from api.schemas.analyze_schema import AnalysisLevel
 from api.services.ai import (
@@ -81,7 +86,9 @@ class AffectedNodesResult:
     node_id: UUID
     affected_node_ids: list[UUID]
     analysis_record_id: UUID | None
-    analysis_saved_at: str | None
+    # R1-C P1-03 立修：与 AffectedNodesResponse.analysis_saved_at 类型一致 (datetime)；
+    # router 序列化交给 Pydantic/FastAPI（避免 service 层提前 isoformat 导致漂移）
+    analysis_saved_at: datetime | None
 
 
 class AnalyzeService:
@@ -120,17 +127,19 @@ class AnalyzeService:
         project = await self.projects.get_for_user(db, project_id, user_id)
         provider = self._build_provider_from_project(project)
 
-        # ② 校验 node 在 project 内（cross-tenant 攻击防御）
+        # ② + ③ 校验 node + 聚合 prompt context（R1-A P1-2 立修：把 _fetch_node_context
+        # / _fetch_issue_context 包进同一 try，里面 NodeService.breadcrumb 在 race 下会
+        # 抛 NodeNotFoundError——必须 wrap 为 AnalysisNodeNotFoundError 404 不裸泄漏）
         try:
             target = await self.nodes.get_node(db, node_id, project_id)
+            breadcrumb_nodes, subtree_nodes = await self._fetch_node_context(
+                db, project_id=project_id, target_node=target
+            )
+            issue_briefs = await self._fetch_issue_context(
+                db, project_id=project_id, node_id=node_id
+            )
         except NodeNotFoundError as e:
             raise AnalysisNodeNotFoundError(node_id=str(node_id)) from e
-
-        # ③ 聚合 prompt context（M02 project + M03 node + subtree + M07 issues）
-        breadcrumb_nodes, subtree_nodes = await self._fetch_node_context(
-            db, project_id=project_id, target_node=target
-        )
-        issue_briefs = await self._fetch_issue_context(db, project_id=project_id, node_id=node_id)
 
         target_brief = NodeBrief(id=target.id, name=target.name, description=target.description)
         breadcrumb_briefs = [
@@ -147,7 +156,9 @@ class AnalyzeService:
             level=level,
         )
 
-        # ④ 调 provider 流式；异常逐项 wrap
+        # ④ 调 provider 流式；异常逐项 wrap + R1-C P1-01 立修：finally aclose 释放底层资源
+        # （PEP 533；caller 主动 aclose AnalyzeService 返回的 generator 时，把 GeneratorExit
+        # 传播到 inner stream 才能让 ClaudeProvider 嵌套 async with httpx 真释放）
         stream = provider.analyze(user_prompt, context=system_context)
         try:
             async for chunk in stream:
@@ -156,6 +167,8 @@ class AnalyzeService:
             raise AnalysisTimeoutError() from e
         except ProviderError as e:
             raise self._wrap_provider_error(e) from e
+        finally:
+            await stream.aclose()
 
     # ─── 保存分析 ───
 
@@ -173,7 +186,7 @@ class AnalyzeService:
         ai_model: str,
         analysis_time_ms: int,
         affected_node_ids: list[UUID] | None = None,
-    ) -> Any:
+    ) -> DimensionRecord:
         """单条写入 dimension_records；R-X3 共享外部 db session。
 
         M13 不直写 activity_log——交给 M04.create_dimension_record 在同事务内代写
@@ -183,6 +196,9 @@ class AnalyzeService:
         await self.projects.get_for_user(db, project_id, user_id)
 
         affected_ids = affected_node_ids or []
+        # R1-A P1-1 立修：design §10 line 559 字面要求 metadata 含 requirement_text_hash
+        # （SHA256 锚点 — 留审计回溯但不存明文；未来按 hash 反查"这条分析对应什么需求"）
+        text_hash = hashlib.sha256(requirement_text.encode("utf-8")).hexdigest()
         content = {
             "requirement_text": requirement_text,
             "analysis_result": analysis_result,
@@ -195,6 +211,7 @@ class AnalyzeService:
             "analysis_level": level.value,
             "analysis_time_ms": analysis_time_ms,
             "affected_node_count": len(affected_ids),
+            "requirement_text_hash": text_hash,
             "requirement_text_length": len(requirement_text),
         }
 
@@ -212,8 +229,12 @@ class AnalyzeService:
             # M04 _check_node_belongs_to_project 抛 DimensionNotFoundError(reason=node_not_in_project)；
             # NodeService.get_node 抛 NodeNotFoundError——两者都 → 404 AnalysisNodeNotFoundError
             raise AnalysisNodeNotFoundError(node_id=str(node_id)) from e
+        except (ConflictError, DimensionDuplicateError):
+            # R1-A P1-5 立修：M04 显式语义错（乐观锁冲突 / 同 node+type 重复）应保留 409，
+            # 不吞成 SaveFailed 500（M05 P1-01 元教训延续——区分 race 类错和真正写失败）
+            raise
         except Exception as e:
-            # M04 写失败（IntegrityError / write_event 异常 / 等）→ wrap
+            # 其他真"写失败"（IntegrityError 非约束 / write_event 异常 / 等）→ wrap 500
             # 不吞错——异常对象保留 in __cause__ 供 logging
             raise AnalysisSaveFailedError() from e
         return rec
@@ -264,7 +285,7 @@ class AnalyzeService:
             node_id=node_id,
             affected_node_ids=affected_ids,
             analysis_record_id=rec.id,
-            analysis_saved_at=rec.created_at.isoformat() if rec.created_at else None,
+            analysis_saved_at=rec.created_at,
         )
 
     # ─── 内部 helpers ───

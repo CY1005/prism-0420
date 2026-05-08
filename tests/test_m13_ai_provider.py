@@ -166,14 +166,31 @@ async def test_claude_skips_non_data_lines_and_other_events(fake_httpx):
     fake_httpx.next_lines = [
         "event: message_start",  # 非 data: 行，跳过
         'data: {"type": "message_start"}',  # 非 content_block_delta，跳过
-        'data: {"type": "content_block_delta", "delta": {"text": "ok"}}',
+        'data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "ok"}}',
         "data: not-json-skip",  # JSONDecodeError 跳过
-        'data: {"type": "content_block_delta", "delta": {"text": "done"}}',
+        'data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "done"}}',
         "data: [DONE]",
     ]
     p = ClaudeProvider(api_key="sk-test")
     out = [c async for c in p.analyze("p")]
     assert out == ["ok", "done"]
+
+
+async def test_claude_skips_non_text_delta_types(fake_httpx):
+    """R1-A P1-3 立修验证：anthropic content_block_delta 下 delta.type 多种
+    （text_delta / input_json_delta / thinking_delta / signature_delta），
+    只 yield text_delta；防 thinking_delta 文本污染输出（design §12 字段③）。"""
+    fake_httpx.next_lines = [
+        'data: {"type": "content_block_delta", "delta": {"type": "thinking_delta", "thinking": "let me think..."}}',
+        'data: {"type": "content_block_delta", "delta": {"type": "input_json_delta", "partial_json": "{\\"a\\":"}}',
+        'data: {"type": "content_block_delta", "delta": {"type": "signature_delta", "signature": "abc"}}',
+        'data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "real output"}}',
+        "data: [DONE]",
+    ]
+    p = ClaudeProvider(api_key="sk-test")
+    out = [c async for c in p.analyze("p")]
+    # 只应拿到 text_delta；thinking/json/signature 三类全 skip
+    assert out == ["real output"]
 
 
 async def test_claude_401_maps_to_provider_config_error(fake_httpx):

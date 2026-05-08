@@ -583,6 +583,50 @@ async def make_cold_start_task(db_session):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def make_project_with_member(db_session, make_project):
+    """工厂 fixture：make_project + 自动 add owner ProjectMember 行（M13 sprint 抽出）。
+
+    M13 R1-B P1-02 立修（2026-05-08）：M13 service 测试 26 次内联 ``_make_proj_with_member``
+    + ``_add_member``——M16-ai-snapshot sprint 起所有调用 ProjectService.get_for_user 的
+    service test 都需要此前提（make_project 不自动建 ProjectMember）。
+    跨文件 helper 规则九连：M03/M04/M05/M06/M07/M11/M12/M13。
+
+    用法：user, proj = await make_project_with_member(name_suffix="-A")
+    """
+    from api.models.project import ProjectMember
+
+    async def _make(*, name_suffix: str = "", owner=None, role: str = "owner"):
+        user, proj = await make_project(name_suffix=name_suffix, owner=owner)
+        db_session.add(ProjectMember(project_id=proj.id, user_id=user.id, role=role))
+        await db_session.flush()
+        return user, proj
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def set_project_ai(db_session):
+    """工厂 fixture：配置 project 的 ai_provider/ai_api_key_enc/ai_model 字段（M13 sprint 抽出）。
+
+    M13 R1-B P1-01 立修（2026-05-08）：M13 service 测试 8 次内联 _set_project_ai；
+    M16-ai-snapshot design 确认同样需要读 project.ai_provider + 解密路径，必复用。
+
+    用法：await set_project_ai(proj, provider="mock", api_key=None, model=None)
+    """
+    from api.auth.crypto import encrypt as _encrypt
+
+    async def _set(project, *, provider: str = "mock", api_key=None, model=None):
+        project.ai_provider = provider
+        if api_key is not None:
+            project.ai_api_key_enc = _encrypt(api_key)
+        if model is not None:
+            project.ai_model = model
+        await db_session.flush()
+
+    yield _set
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def make_snapshot(db_session):
     """工厂 fixture：建一行 comparison_snapshots（M12）。
 
