@@ -339,6 +339,69 @@ async def test_get_stream_pagination_second_page_no_total(auth_client, make_user
     assert data["has_more"] is False  # 3 items total / page 2 returns 1 < 2 → no more
 
 
+# ─────────────── M15-E2E-R2-P1-1 metadata 字段 e2e 字面映射（M13 NEW 元教训）───────────────
+
+
+async def test_get_stream_metadata_field_literal_in_response(auth_client, make_user, db_session):
+    """R2 P1-1 立修：design §7 字面 metadata key + service _to_item 把 SA event_metadata
+    重映射为 schema metadata；e2e 字面验证防字段名漂移（M13 R2 NEW "metadata 字段集
+    每条 e2e 字面验"教训复用强化）。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    from api.models.activity_log import ActivityLog
+
+    db_session.add(
+        ActivityLog(
+            project_id=pid,
+            user_id=user.id,
+            action_type="node_updated",
+            target_type="node",
+            target_id=str(uuid4()),
+            summary="x",
+            event_metadata={"updated_fields": ["title", "description"], "k": "v"},
+        )
+    )
+    await db_session.flush()
+
+    r = await auth_client.get(f"/api/projects/{pid}/activity-stream", headers=_bearer(user.id))
+    assert r.status_code == 200
+    item = r.json()["items"][0]
+    # 字段名字面（防 _to_item 误写 "event_metadata" 静默丢字段）
+    assert "metadata" in item
+    assert "event_metadata" not in item
+    # 值映射字面（防字段名换了但值丢）
+    assert item["metadata"] == {"updated_fields": ["title", "description"], "k": "v"}
+
+
+# ─────────────── M15-E2E-R2-P1-2 Pydantic Filter 422 边界 ───────────────
+
+
+async def test_get_stream_page_size_over_max_returns_422(auth_client, make_user):
+    """R2 P1-2 立修：page_size > 200 → Pydantic Field le=200 422。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+
+    r = await auth_client.get(
+        f"/api/projects/{pid}/activity-stream",
+        params={"page_size": 201},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 422
+
+
+async def test_get_stream_unknown_action_type_returns_422(auth_client, make_user):
+    """R2 P1-2 立修：未知 action_type → Pydantic StrEnum 校验 422。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+
+    r = await auth_client.get(
+        f"/api/projects/{pid}/activity-stream",
+        params={"action_type": "not_a_real_action_type"},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 422
+
+
 # ─────────────── M15-E2E-T12 全局事件不召回（M14 baseline-patch project_id=None）───────────────
 
 
