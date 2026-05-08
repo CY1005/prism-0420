@@ -209,10 +209,14 @@ erDiagram
 ### Alembic 要点
 
 - 唯一约束：`UNIQUE(node_id, version_label)`（同一节点不能有重名版本）
-- 索引：
-  - `(node_id, project_id)` 主查询
-  - `(project_id)` tenant 过滤
-  - `(node_id, is_current)` 快速找当前版本（部分索引 `WHERE is_current = true`）
+- 索引（**M05 sprint 闸门 2.5 A6 升级 / R1-A P1-2 命名统一 / R1-C P2-01 量级标注**）：
+  - `ix_version_node_proj_created` `(node_id, project_id, created_at DESC)` —
+    主查询 ordered scan：`list_by_node ORDER BY created_at DESC + LIMIT` 命中
+    本索引 + tenant 过滤一索引覆盖；id DESC tie-break 由 SQL 层加（同事务 now()
+    等值场景，索引未含 id 列，PG 走 heap fetch tie-break；M16 压测时如成 hot 再加 id 尾列）
+  - `ix_version_project` `(project_id)` tenant 过滤
+  - `uq_version_node_is_current` `UNIQUE(node_id) WHERE is_current = true` —
+    PG 部分唯一索引（DB 层兜底"同 node 最多 1 当前版本"）
 - `is_current` 切换：Service 层在**单一事务内**先 UPDATE 旧 `is_current=false`，再 UPDATE 新 `is_current=true`（同表两次 UPDATE，事务包裹保证原子；非跨表事务）
 - 防并发窗口：PG 部分唯一索引 `UNIQUE (node_id) WHERE is_current = true` 在 DB 层保证同一 node 最多 1 条 is_current=true（Alembic 迁移中加入）
 
@@ -281,11 +285,12 @@ is_current 不是状态机（只是布尔标记），但存在一个业务约束
 
 ### 对外契约（R-X3，M16 pilot 基线补丁补充）
 
-- `VersionService.list_by_node(db: Session, node_id: UUID, project_id: UUID, limit: int = 50) -> list[VersionRecord]`（已有）—— 按 created_at ASC 排序，跨模块只读消费
+- `VersionService.list_by_node(db: Session, node_id: UUID, project_id: UUID, limit: int = 50) -> list[VersionRecord]`（已有）—— 按 **created_at DESC** 排序（M05 sprint R1-A P1-1 立修：与 §9 实装 + UI 时间线"最新在上"语义一致；原写 ASC 是 design 草案文字漂移）+ id DESC tie-break（同事务 now() 等值场景），跨模块只读消费
 - `VersionService.count_by_node(db: Session, node_id: UUID, project_id: UUID) -> int`（**M16 pilot 基线补丁追加**）—— 用于 M16 AC1 兜底（≥3 校验）+ M16 幂等 key 一部分
   - 双 tenant 过滤（WHERE project_id = ? AND node_id = ?）
   - 接受外部 db session（R-X3）；不开事务；不写 activity_log
-  - 复用现有 `ix_version_records_node_created` 索引（§3）；count(*) 性能验收 < 5ms p95（typical node ≤100 versions）
+  - 复用 `ix_version_node_proj_created` 索引（§3，M05 sprint R1-A P1-2 命名统一）；count(*) 走 PG index-only scan（visibility map 兜底，无 heap fetch），性能验收 < 5ms p95（typical node ≤100 versions）
+  - Service 层加 `_check_node_belongs_to_project`（M05 sprint R1-C P1-02 立修：cross-tenant node_id 不静默返 0；与 list_by_node 一致防御）
   - Phase 2 实装位置：`api/services/version_service.py`
 
 ---
@@ -318,7 +323,7 @@ class VersionCreate(BaseModel):
     snapshot_data: dict[str, Any] | None = None  # 由调用方（前端 / M16）提供
 
 class VersionUpdate(BaseModel):
-    summary: str | None = Field(None, max_length=500)
+    summary: str | None = Field(None, min_length=1, max_length=500)  # M05 sprint R2 P1-03 回写：与 Create 同 min_length=1，禁 PUT 传空串误清
     details: str | None = None
     change_type: Literal["added", "modified", "deprecated", "split", "merged", "migrated"] | None = None
     release_mode: Literal["release", "continuous"] | None = None
@@ -337,7 +342,8 @@ class VersionResponse(BaseModel):
     release_mode: str
     snapshot_data: dict[str, Any] | None
     created_by: UUID | None
-    created_by_name: str | None  # join 展示
+    # M05 sprint R2 P1-02 删除：M04 范式延续不实装 created_by_name；
+    # 前端拿 UUID 后批量查 user info（避免每个 list endpoint 加 outer join users 性能成本）
     created_at: datetime
     updated_at: datetime
 
