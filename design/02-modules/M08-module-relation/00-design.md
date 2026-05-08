@@ -302,7 +302,7 @@ class ModuleRelation(Base, TimestampMixin):
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | DAO 强制 `WHERE module_relations.project_id = ?`；Service 创建时校验 `source_node.project_id == target_node.project_id == 入参 project_id` |
-| **多表事务** | ✅ 必须 | Service 层 `with self.db.begin():` 包：① INSERT module_relations ② log activity_log；任一失败回滚（SQLAlchemy 2.x 标准事务 API）|
+| **多表事务** | ✅ 必须 | 按入口形态分两类（M08 sprint 闸门 2.5 A2 预防性顺修 / M06+M07 §5 同款消歧延续 / 2026-05-08）：<br>**(1) 主流程入口**（Router 触发的 create / update notes / delete）：Router 层 `await db.commit()` 是唯一 commit 点；service 不调 `async with db.begin():`。SQLAlchemy autobegin 保证多次 service 调用 + activity_log 写入落在同一 implicit transaction，异常自动回滚。<br>**(2) R-X3 跨模块入口**（被 M03 delete_node 调用的 `delete_by_node_id(db, node_id, project_id, actor_user_id)` + M11/M17 调用的 `batch_create_in_transaction` + M09 调用的 `search_by_keyword`）：接受外部 db session，**不自开事务**，由 caller orchestrator 控制事务边界。<br>详见 §6 对外契约段。 |
 | **异步处理** | ❌ N/A | M08 全同步——关系 CRUD 是用户即时操作，无后台任务、无 Queue、无流式 |
 | **并发控制** | ❌ N/A | 无乐观锁——关联更新只改 notes（纯文本，last-write-wins 可接受）；唯一约束防重复插入（DB 层兜底） |
 
@@ -695,6 +695,31 @@ except IntegrityError as e:
 - **tenant**：跨 project 越权读 / 越权写 / DAO 过滤覆盖
 - **权限**：viewer 写 / 未登录读 / router 拦截
 - **错误处理**：DB 唯一冲突 / 节点不存在 / 节点被删后关联残留清理
+
+---
+
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M07 六数据点稳定后默认范式复用）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md) L1 总则要求落本 sprint review 计划。
+> M02-M07 六数据点稳定（详见 `../../audit/m07-pilot-template-validation.md`），M08+ 默认范式复用：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（ModuleRelationService + 状态校验 + R-X2 第四真注入 delete_by_node_id 双向 + activity_log）| 子片 1 + 2 + 3 合并 | spec + quality + reuse + efficiency 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| 六数据点稳定 |
+| **R2** | 子片 4 完成（6 endpoints + check_project_access）| 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| 六数据点稳定 |
+
+**子片 5 不单跑** + **schema 子片禁单跑**（≥80% SKIP 例外 + 六数据点稳定结论）。
+
+**M08 sprint 特定关注点**：
+- **R-X2 第四真注入实证（双向 OR 条件 + delete 语义）**：与 M04/M06 同 delete 语义但 DAO 层 `(source == node) | (target == node)` 双向；与 M07 orphan 语义对照
+- 三元组 UNIQUE 约束（source, target, type）+ self-loop CHECK 双重防护
+- IntegrityError 区分约束名（M05 P1-01 立规延续 / design §13 已写实装范式）
+- M09 pilot search_by_keyword 跨模块调用契约 pass-through（无代码改动）
+- **M07 元教训防御 actionable**（M02-M07 punt 池"跨模块测试契约"主动复制不等 R2 抓）：
+  viewer 写**所有**写端点 403 全覆盖 / write_event 异常传播测试 / cross-tenant 404 /
+  cross-project node 422 / IntegrityError 区分约束名
+
+**L3 实证回写承诺**：sprint 结束时回写 `../../audit/m08-pilot-template-validation.md`（L1 第七数据点 + R1/R2 命中比例 + R-X2 第四真注入实证 + 元教训防御 actionable 实证 + 闸门 2.5 三栏 A 7 / B 0 / C 6）。
 
 ---
 
