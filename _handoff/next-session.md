@@ -253,14 +253,20 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 8. memory feedback_problem_layered_analysis（含 M15 NEW 失效信号 — 双层防御 service unit 不可达 e2e 是合理设计 / 与 R1 P1-1 schema 注册无 raise 结论相反）
 9. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_git_push_kb + feedback_self_decide_no_ask（标准红线集 / 含 M15 sprint 期立的 self_decide_no_ask "已批准 sprint 多子片连续做不在子片间停下来问"）
 
-**🔴 M16 sprint 必处理 punt 项（来自 cross-sprint-punt-pool.md 真漏洞 Top 10）**：
-- **M15-B1 + M15-B2 + 8 项历史联动**：write_event stub → 真 INSERT + M03-M08 service ~14 处裸 CRUD action_type 改过去式 + M05/M06/M07/M08 4 处 race window 复审（高耦合触发点 / 元发现 #1 / 工作量 4-6h）
+**🔴 M16 sprint 必处理 punt 项（来自 cross-sprint-punt-pool.md 真漏洞 Top 15 / 二审 M02-M04 audit 后扩 5 项）**：
+- **M15-B1 + M15-B2 + 9 项历史联动**：write_event stub → 真 INSERT + M03-M08 service ~14 处裸 CRUD action_type 改过去式 + **M04-9 target_type 4 处 hard-code 同 batch const 化** + **M04-10 delete_by_node_id 并发 continue 跳 activity_log** + M05/M06/M07/M08 4 处 race window 复审（高耦合触发点 / 元发现 #1 / 工作量 4-6h）
 - **M13-B16**：M02 Project.ai_model 字段 alembic add column（M14 已过未补 / 1 步迁移）
 - **M13-B13**：SSE generator AsyncSession 占 300s 异步 SSE 连接策略（M16 是 Queue 后台同款 long-lived session 风险 / 必查）
-- **M07-9**：IssueResponse 漏 join 字段（design §7 字面承诺 / 前端 N+1 / 顺手补 selectinload + schema 字段）
+- **M07-9 + M04-R2 A1**：IssueResponse + DimensionResponse 漏 join 字段（design §7 字面承诺 / 前端 N+1 / 顺手补 selectinload + schema 字段）
+- **M04-4 + M04-17 IntegrityError → 500 跨模块 3 处**（M02 project create / M04 dimension create / M04 C7.1 同根因 / 触发点 B）：立通用规则（feedback 或 design §13 R13 段：service 层 INSERT 凡 UNIQUE constraint 必 catch IntegrityError 转 *DuplicateError）
+- **M04-1**：dimension_records (updated_by, updated_at) 联合索引未建（M13/M14 高写入源表 / 与 M15-B1 同 sprint 评估提前建）
+- **M04-8**：db.get(DimensionType) 3 处未走 DAO（service:349/428/474 / 风格统一）
 - **M07-2**：update 不支持 detach (None→NULL) — 让 CY 拍是否 M16 顺手做（产品决策）
 - **M14-B12**：write_event 异常传播 update/delete/unlink 三路径 e2e（与 M15-B1 同 sprint）
 - **M10-5**：viewer /overview/stats 测试缺（启动顺手补）
+
+**M16 启动闸门 2.5 reconcile A 栏首条预录**（cross-sprint 元发现 #5 触发点 A 立规）：
+M04-1 联合索引 + M04-8 db.get→DAO + M04-9 target_type const + M04-10 delete cascade activity_log = 4 项指向 M16 sprint 同时处理
 
 任务：M16 sprint TDD 实施。
 
