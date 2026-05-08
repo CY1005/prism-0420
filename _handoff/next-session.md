@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (post-M17-sprint-complete)
+last_updated: 2026-05-09 (post-M18-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,45 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-M17-sprint-complete）
+## 0. 状态快照（更新于 2026-05-09 post-M18-sprint-complete）
+
+- **Phase 2.0 工程基线**：✅ 100%
+- **Phase 2.1 业务模块**：⏳ 90%（M01-M08+M10-M18 完成；下一站 M19 导入/导出；M09 superseded by M18 不实装）
+- **2026-05-09 M18 sprint 完成**（9 commit / 1480 PASS / R13-1 124→136 / **§12D embedding 持久化首战 + pgvector ARRAY 占位三层降级范式 + R1=3 subagent 并行 + R2=1 合并 Opus 第十六数据点 + bypass log #2 配套验收最终 ✅**）：
+  - commits:
+    - `90f7672` 启动期（design status flip draft→accepted + 闸门 2.5 reconcile pass A 8 / B 0 / C 6 + bypass log #2 配套验收）
+    - `6c27898` 子片 0 prep（EmbeddingProvider mini-sprint / abstract+Mock+factory+41 tests）
+    - `fbea749` 子片 1（4 表 model + alembic + 54 model tests + pgvector ARRAY 占位 + ivfflat 索引注释保留）
+    - `c7aca1f` 子片 2（5 DAO 含规则 4 豁免 + 45 unit tests + 2 conftest fixtures）
+    - `f2da4e2` 子片 3（Service+Schema+12 ErrorCode+SilentFailure+Queue+Cron+Provider stub+92 tests）
+    - `76c6d9b` R1 立修（16 P1 / 3 subagent 并行审 spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet 合并去重）
+    - `68e981e` 子片 4（Router 1 search + 3 admin endpoints + 42 e2e / 元教训 18 类全覆盖）
+    - `92e09d3` R2 立修（7 P1+P2 修齐 + 1 PUNT / 1 合并 Opus subagent endpoint 单审）
+    - 子片 5 关闸（本 commit）
+  - **1213 → 1480 PASS (+267) / 5 skipped / R13-1 124→136 / L12+L13+R14 全过 / ruff 净**
+  - **闸门 2.5 第十三次 B 栏 0 项实证**：M05-M18 十三连稳定
+  - **bypass log #2 配套验收最终 ✅**：M18 R1=3 subagent + R2=1 合并 Opus 真跑 / 累计 bypass 不复位（M16 bypass + M17 恢复 + M18 继续 = 2 次 bypass / 第 3 次触发闸门 3.4 L1 review）
+  - **R1+R2 命中数据**（M02-M18 第十六数据点 / 详 audit/m18-pilot-template-validation.md）：
+    - R1=3 subagent：13 P1（spec+quality Opus）+ 2 P1（reuse Sonnet）+ 5 P1（quality+efficiency Sonnet）= 20 P1 / 合并去重 16 立修 + 4 punt
+    - R2=1 合并 Opus：5 P1 + 7 P2 = 12 项 / 立修 7 + punt 5（require_platform_admin 去重 PUNT 子片 5+）
+    - **R2 真漏抓贡献**：BackfillRequest 继承 TaskPayload（R1-A 仅抓 Response 端）+ TestIntegrityErrorCatch/TestNAExplicit assert True 占位反模式
+  - **元贡献 7 项**（详 audit/m18-pilot-template-validation.md "元贡献清单"段）：
+    1. **§12D 子模板首次实战零摩擦验证** — 7 字段 PK + 异维列拆分 + 三段回填 + 双触发链 + 跨模读双路豁免 + failure 容忍 + cron 矩阵全部实装一次过 / README §12 表 §12D 行 + 2026-10-25 复用度复盘 OpenClaw cron 触发器
+    2. **R-X4 pgvector 未装库占位三层范式** — model ARRAY + DAO NotImplementedError + Service keyword_only 降级（PRD AC4 字面 / search_mode="keyword_only" + 200 不报错）/ 子片 4+ 真装 pgvector 后回写
+    3. **EmbeddingProvider 抽象仿 ADR-001 §4.1 LLMProvider 范式** — abstract base + 异常族（Error/Timeout/Config）+ Mock 确定性 sha256-seeded L2 归一化 + factory / 子片 0 prep mini-sprint scaffold 简化决策 4 字段注释
+    4. **SilentFailure 占位期降级范式**（fix v2 决策 3=B 实证）— design line 1269-1286 字面 SilentFailure(BaseException) 严格使用约束 / 占位期 enqueue_delete logger.warning 降级（不 raise SilentFailure / 防 BaseException 冒泡崩 worker）/ 子片 4+ 启用真异步 SilentFailure 语义
+    5. **R1+R2 数据点 16 稳定** — bypass log #2 配套不复位实证 / 命中比例稳态 R1 8-13 P1 / R2 4-5 P1（R-X1+R-X2+异维列等 pilot 模块为 R2 多命中区域）
+    6. **R10-2 例外应用第二实例**（embedding_failures 表）— M01 auth_audit_log 第一 + M18 embedding_failures 第二 / 三条件验证表字面 / 系统行为 vs 业务行为分类对齐（audit M7 修订）
+    7. **元教训防御 actionable 主动复制 18 类完整实证** — design §14.5 + 子片 4 e2e / 12 主动复制（write 403 / read 403 / write_event 异常传播 / cross-tenant / cross-project / IntegrityError / metadata 字面 / M14 admin endpoint 形态 / ActionType+0 / R14 ci-lint / BackgroundTasks）+ 7 N/A 显式声明（R-X1 / multipart / SSE / CAS / compensation_session / idempotency project_id / N/A 双重声明）
+  - **R1+R2 sink 立规候选 4 项**：
+    1. **EndpointRequest schema 不应继承 TaskPayload 立规** — ci-lint 守护候选 grep `class.*Request.*\(TaskPayload\)` 报警 / M19+ 横切复用
+    2. **pgvector / 异维列占位三层降级范式立规** — 三层占位必同步标注 + 解锁触发条件字面 / 未来 vector/search/embedding 模块横切
+    3. **占位 metadata 必加 _stub: True 标记立规** — 防 activity_log 假数据污染历史排查 / 子片 N+ 真接业务路径时删 _stub + e2e assert 数值合理
+    4. **测试反模式立规：assert True / assert in (a,b) 永真不算覆盖** — ci-lint 守护候选 grep `assert True\b` + 检测永真 in 元组 / N/A 声明应在 design.md docstring 落
+  - **cross-sprint punt 池接通**：本 sprint 关闭 0 / 新增 5 punt（#20 require_platform_admin 去重 PUNT 子片 5+ / #21 worker source_text 真接上游 Service.get_for_embedding / #22 noop 标记 design 未明示 / #23 PCT 维度真接 task_dao.count_completed_in_window / #24 batch_backfill 真 batch INSERT FROM unnest）/ 触发点 A 4 项 STILL_PUNT 验证（M04 不触）
+  - **半年回看触发器**：2026-10-25 §12D 子模板复用度复盘（OpenClaw cron 挂提醒 / 若仅 M18 单实例则评估降级 §12C 扩展段落）
+
+## 0a. 上一版本快照（M17 sprint 完成）
 
 - **Phase 2.0 工程基线**：✅ 100%
 - **Phase 2.1 业务模块**：⏳ 85%（M01-M08+M10+M11+M12+M13+M14+M15+M16+M17 完成；下一站 M18 语义搜索；M09 superseded by M18 不实装）
@@ -286,7 +324,79 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M17 sprint 续跑（**当前推荐 / 启动期 4 大必做项已完成 commit ad069c0 / 复制下方代码块到新 session**）
+### Prompt 0 — M19 sprint 启动（**当前推荐 / M18 已完成 9 commits 1480 PASS / 复制下方代码块到新 session**）
+
+```
+继续 prism-0420 M19 sprint（导入/导出 / complexity=low / pilot=false / Phase 2.1 90%→95%）。
+
+状态快照（已 commit + push 到 origin/main）：
+- M18 sprint ✅ 完成 / 1480 PASS / 5 skipped / R13-1 124→136 / L12+L13+R14 全过 / ruff 净
+- 累计 9 commits（90f7672 启动期 / 6c27898 子片 0 prep / fbea749 子片 1 / c7aca1f 子片 2 / f2da4e2 子片 3 / 76c6d9b R1 立修 / 68e981e 子片 4 / 92e09d3 R2 立修 / 子片 5 关闸）
+- Phase 2.1 业务模块 ⏳ 90%（M01-M08+M10-M18 完成 / M09 superseded by M18 不实装 / 下一站 M19 / M20 团队最后做）
+- bypass log #2 配套验收最终 ✅（M18 R1=3 + R2=1 真跑 / 累计 bypass 不复位 / 第 3 次触发对闸门 3.4 L1 总则 review）
+
+冷启动按序读：
+1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + 快速上手序）
+2. _handoff/next-session.md §0 状态快照（M18 完成 + 元贡献 7 项 + sink 候选 4 项 + 新 punt 5 项）
+3. _handoff/cross-sprint-punt-pool.md（M18 新增 #20-#24 / 触发点 A 4 项 STILL_PUNT / 真漏洞 #11 立规已落 dimension 修存量推迟）
+4. design/00-roadmap.md（Phase 2.1 90% / M19 [ ] 待启 / current_phase 字段）
+5. design/00-phase-gate.md（闸门 3.4 L1 总则 3 类例外 + 闸门 2.5 reconcile pass）
+6. design/02-modules/M19-import-export/00-design.md（status=accepted / pilot=false / complexity=low / 只读 export 为主）
+7. design/audit/m18-pilot-template-validation.md（M18 元贡献 7 项 + R1+R2 数据点 16）
+8. design/audit/m18-startup-reconcile.md（启动期 reconcile 三栏范式参考）
+9. api/services/import_service.py（M17 1003 行 / R-X1 第二实例 / Service 大 Class 范式 / M19 导入路径可参考）
+10. api/services/embedding.py（M18 horizontal helper / owner=M18 / 4 字段 scaffold 简化注释范式）
+11. memory：feedback_subagent_sprint（聚合：sprint 启动闸门 + subagent 接口契约 T1-T6 + R1+R2 流水线）/ feedback_decision_transparency / feedback_code_first / feedback_completion_audit / feedback_self_decide_no_ask / feedback_design_first / feedback_problem_layered_analysis（5 步分层 / B 栏 0 时禁列）/ feedback_usage_budget v3（单会话 $10 / >$15 强制开新会话）
+
+任务（M19 sprint）：
+
+启动期（必做项 + reconcile pass）：
+- 闸门 2.5 reconcile pass（A/B/C 三栏强制 / B 栏穷举 L1 锁规 / B 栏 = 0 时禁列）
+- M18 sprint 配套承诺验收：bypass log #2 累计 2 → M19 必继续真跑 R1=3 + R2=1（不复位 / 不再降级）
+- 检查 design status（M19 design status=accepted 已 2026-04-21 / 不需 audit）
+- 检查 baseline-patch（M19 design 是否触发其他模块 baseline-patch / 看 references）
+- §14.5 sprint review 拆分计划补完（参 M17/M18 范本 / 闸门 3.4 L1 总则强制段）
+
+子片拆分预期（M19 complexity=low / 估 5+ 子片）：
+- 子片 0 prep：§14.5 补齐 + scaffold 简化决策（horizontal helper 复用：write_event / TaskPayload / get_for_embedding 上游接口 / EmbeddingService.enqueue 接通 N/A 视情况）
+- 子片 1：model + alembic（如需 / M19 主要只读 export 不一定有新表 / 看 design §3）+ ActionType+N + TargetType+N（看 design §10）+ tests
+- 子片 2：DAO（export_service 只读复用 DimensionDAO/VersionDAO/CompetitorDAO/IssueDAO/NodeDAO ADR-003 规则 1 + 任何 import 路径 DAO 如有）+ tests
+- 子片 3：ImportService / ExportService + Schema + 3+ ErrorCode（EXPORT_NODE_LIMIT_EXCEEDED / EXPORT_NODE_NOT_IN_PROJECT / EXPORT_EMPTY_CONTENT）+ tests
+- 子片 4：Router + e2e（含 cross-sprint 元教训 actionable 18 类 + 主动复制 / N/A 显式声明）+ R1+R2
+- 子片 5：关闸（design 回写 / audit/m19-pilot-template-validation.md / handoff §0 / roadmap M19 + Phase 2.1 90→95% / cross-sprint punt 池接通 / require_platform_admin 去重 punt #20 评估是否本 sprint 触发）
+
+R1 + R2 范式（bypass log #2 配套继续 / 不降级 / M02-M18 第十六数据点确认稳定）：
+- R1 = 3 subagent 并行覆盖子片 1+2+3 合并审（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）
+- R2 = 1 合并 Opus subagent endpoint 单审（子片 4 router）
+- spawn prompt 必含 ls/find 穷举要求（cross-sprint 元发现 #5 立规字面）
+- spawn 后 >5min 无通知必主动 ping（feedback_subagent_completion_check）
+
+红线（M02-M18 实证 + R14 + 启动期 + R-X1 第二实例 + M17/M18 NEW）：
+- viewer 写所有写端点 403 全覆盖（admin endpoint require_platform_admin 单测 + e2e）
+- read 权限 403（M15 立规 / M18 复用 / M19 export 路径 cross-project denial）
+- write_event 异常传播测试 e2e 字面验
+- cross-tenant 404 + cross-project node 404
+- IntegrityError 区分约束名（M05 P1-01 立规 / M17 启动期 design-principles 清单 6 + ci-lint R15 守护立规）
+- M11 R-X1 失败补偿 + M11 文件上传 + M13 SSE + M14 endpoint 形态 + M15 横切表 owner enum 4 处同步 + M16 R14 + CAS UPDATE + BackgroundTasks 自起 SessionLocal + M17 R-X1 第二实例 + idempotency project_id + IntegrityError 端到端 + M18 EndpointRequest schema 不继承 TaskPayload + 占位 metadata _stub:True + 测试反模式 ci-lint 守护
+- M18 NEW EndpointRequest schema 不继承 TaskPayload（R2 sink 立规 #1 / M19 endpoint Request 必继承 BaseModel / TaskPayload 仅供 Queue payload）
+- M18 NEW 占位 metadata _stub:True 标记（R2 sink 立规 #3 / 防 activity_log 假数据 / M19 export/import endpoint 占位期严格遵守）
+- M18 NEW 测试反模式（R2 sink 立规 #4 / 不允许 assert True / assert in (永真) 占位 / N/A 声明搬 design.md docstring）
+
+启动注意：
+1. usage_budget v3 单会话 $10 上限 / >$15 强制开新会话；M19 是 complexity=low 估单会话能完成
+2. 每子片间 commit；R1 / R2 跑完看 finding 决定是否 spawn 修 subagent
+3. design 已 accepted 2026-04-21（无需 audit）但 spec+quality 子片 1+2+3 仍需 R1
+4. 1480 PASS 是 baseline / 任何子片完不能下降
+5. M20 团队是最后一个 own sprint（M19 完成后唯一剩余）
+
+任务起点：
+- 进入启动期：闸门 2.5 reconcile pass（A/B/C 三栏 / B 栏穷举 L1 锁规）+ baseline-patch 检查 + §14.5 补齐
+- 子片 0 prep：scaffold 简化决策 4 字段注释（horizontal helper 复用清单）
+- 子片 1: model + alembic（视 design §3）+ ActionType+N（视 §10）+ TargetType+N + tests
+- ...继续子片 2 → 5
+```
+
+### Prompt 0' — M18 sprint 启动（已完成 2026-05-09，仅供历史追溯）
 
 ```
 继续 prism-0420 M17 sprint 实施代码（M17 AI 导入 / Queue §12C / 首个 arq Queue 消费者 + R-X1 orchestrator 第二实例；启动期 4 大必做项已 commit ad069c0 完成 / 1063 + 16 = 1079 PASS / R13-1 116 / R14 守护 / L12+L13 / Phase 2.1 80%）。

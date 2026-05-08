@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-09 (M17 sprint 子片 0 prep)
+last_updated: 2026-05-09 (M18 sprint 完成关闸)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -65,6 +65,11 @@ policy:
 | **17** | **_sanitize_filename horizontal 化** | M17 R2 sink #1 | 第三实例（M18+ multipart 上传）触发 | medium — M11 cold_start + M17 import 重复实装；第三实例触发立规迁 api/utils/upload_helpers.py | 第三 multipart sprint 启动时迁 |
 | **18** | **M17 confirm_review 绕过 _transition 缺 import_status_changed event** | M17 R1-A P2-3 | M18+ 顺手补 | low — design §10 期望每次状态扭转都有 status_changed event；当前缺 awaiting_review→ai_step3 一条 | M18+ 启动顺手补 |
 | **19** | **M17 import_tasks.py 6 处 lazy import 抽 helper** | M17 R1-A P3-3 | 后续重构 sprint | low — 风格统一性；6 处重复 from api.core.db import SessionLocal + from api.services.import_service import ImportService | 后续重构 sprint 顺手抽 |
+| **20** | **require_platform_admin Protocol 版 vs current_user 版去重**（R2 #2 PUNT）| M18 R2 #2 | 子片 5+ 或后续 sprint | medium — api/auth/dependencies.py:91 Protocol 版（depends require_user / set_auth_service stub）vs embedding_admin_router.py:58 内联版（depends current_user 真实 DB）；直接合并会让所有 admin 测试 401（注入 fixture 缺）| 需 conftest set_auth_service fixture 配套；M19 admin endpoint 触发再做 |
+| **21** | **M18 worker source_text 真接上游 Service.get_for_embedding**（R1-A P1-3）| M18 R1-A | 子片 4+ / 接通 pgvector + 真业务 path 时 | high — 当前 source_text=f"{target_type}:{target_id}" 占位字符串 / content_hash 永远只 hash UUID / 所有 embedding 是 garbage；mock provider 测试不触发；生产 path 不可启用 | NodeService/DimensionService/CompetitorService/IssueService 加 get_for_embedding(target_id, project_id) → str 接口；M11 baseline-patch 已锁规但实施留 M18 后续 sprint |
+| **22** | **EmbeddingTargetNotFoundError noop 转 succeeded 语义**（R1-A P1-11）| M18 R1-A | design 加字面或 task DAO 加 result_label="noop" | low — 当前 worker noop 路径转 task=succeeded 但 embeddings 表无对应行；admin /stats total_embeddings vs succeeded_tasks 有 gap | design 加一句"noop 转 succeeded + error_code=embedding_target_not_found"；或 cas_complete 加新参数 result_label="noop" |
+| **23** | **M18 cron_failure_monitor PCT 维度真实施**（R1-C P2-3 / R2 #7）| M18 R1-C / R2 | 子片 4+ / 接 task_dao.count_completed_in_window | medium — 当前缺 PCT 维度只剩 ABS+PER_PROJECT 两维 / design line 1043 三维设计避免单维死参数；占位期已加 TODO 注释 | 实施 task_dao.count_completed_in_window 后接 PCT 计算分子分母 |
+| **24** | **M18 batch_backfill 真 batch INSERT INTO embedding_tasks SELECT FROM unnest**（R1-C P1-4）| M18 R1-C | 子片 4+ / 5 万条规模 | medium — 当前 for-loop 逐条 enqueue() N+1 INSERT pattern / 5 万条回填 = 5 万次 DB 往返；占位期仅适用 mock provider 测试 | EmbeddingTaskDAO 增 batch_create(ids: list[UUID]) 用 INSERT ... SELECT FROM unnest(:ids) 单 SQL 批量 |
 
 ---
 
@@ -290,6 +295,16 @@ UNVERIFIABLE 11 项
 - B12 write_event 异常传播 update/delete/unlink 三路径 e2e（→ 真漏洞 #8）
 
 UNVERIFIABLE 8 项
+
+### M18 sprint punt 池（5 项 / 详 design/audit/m18-pilot-template-validation.md）
+
+| # | 项 | 状态 |
+|---|---|---|
+| #20 | require_platform_admin 去重 | STILL_PUNT — **真漏洞 #20** |
+| #21 | worker source_text 真接上游 Service.get_for_embedding | STILL_PUNT — **真漏洞 #21** |
+| #22 | noop 转 succeeded 语义 | STILL_PUNT — **真漏洞 #22 / low** |
+| #23 | cron_failure_monitor PCT 维度真实施 | STILL_PUNT — **真漏洞 #23** |
+| #24 | batch_backfill 真 batch INSERT FROM unnest | STILL_PUNT — **真漏洞 #24** |
 
 ### M15 sprint punt 池（3 项）
 
