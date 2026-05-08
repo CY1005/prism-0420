@@ -10,8 +10,8 @@ from api.core.logging import configure_logging, log
 from api.core.redis import get_redis
 from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
-from api.routers import auth as auth_router
 from api.routers import (
+    analyze_router,
     cold_start_router,
     comparison_router,
     competitor_router,
@@ -23,6 +23,7 @@ from api.routers import (
     project_router,
     version_router,
 )
+from api.routers import auth as auth_router
 from api.services.auth_service import get_auth_service
 from api.services.dimension_service import DimensionService
 from api.services.node_service import register_child_service
@@ -111,6 +112,7 @@ app.include_router(module_relation_router.relation_node_router)
 app.include_router(overview_router.overview_router)
 app.include_router(cold_start_router.cold_start_router)
 app.include_router(comparison_router.comparison_router)
+app.include_router(analyze_router.analyze_router)
 
 
 @app.get("/health")
