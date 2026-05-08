@@ -2,6 +2,7 @@
 
 from api.models.base import Base, ImmutableMixin, SoftDeleteMixin, TimestampMixin
 from api.models.cold_start_task import ColdStartStatus, ColdStartTask
+from api.models.comparison_snapshot import ComparisonSnapshot, ComparisonSnapshotItem
 from api.models.competitor import Competitor, CompetitorRef
 from api.models.dimension_record import DimensionRecord
 from api.models.issue import ISSUE_CATEGORIES, ISSUE_STATUSES, Issue
@@ -34,6 +35,8 @@ __all__ = [
     "Base",
     "ColdStartStatus",
     "ColdStartTask",
+    "ComparisonSnapshot",
+    "ComparisonSnapshotItem",
     "Competitor",
     "CompetitorRef",
     "DimensionRecord",
