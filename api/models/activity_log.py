@@ -100,6 +100,10 @@ _ACTION_TYPES = (
     "comparison_snapshot_created",
     "comparison_snapshot_renamed",
     "comparison_snapshot_deleted",
+    # M16 AI 快照（§12B 后台 fire-and-forget 子模板首次实战 / 2026-05-09 sprint）
+    "ai_snapshot_started",
+    "ai_snapshot_completed",
+    "ai_snapshot_failed",
     # M14 行业新闻（2026-05-08 baseline-patch 反向回写 α 路线）
     "news_created",
     "news_updated",
@@ -144,6 +148,7 @@ _TARGET_TYPES = (
     "module_relation",
     "cold_start_task",
     "comparison_snapshot",
+    "ai_snapshot_task",  # M16 AI 快照（2026-05-09 sprint）
     "import_task",
     "team",  # M20 baseline-patch 2026-04-26
     "industry_news",

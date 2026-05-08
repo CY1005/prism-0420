@@ -82,6 +82,10 @@ class ActionType(StrEnum):
     comparison_snapshot_created = "comparison_snapshot_created"
     comparison_snapshot_renamed = "comparison_snapshot_renamed"
     comparison_snapshot_deleted = "comparison_snapshot_deleted"
+    # M16 AI 快照（§12B 后台 fire-and-forget / 2026-05-09 sprint）
+    ai_snapshot_started = "ai_snapshot_started"
+    ai_snapshot_completed = "ai_snapshot_completed"
+    ai_snapshot_failed = "ai_snapshot_failed"
     # M14 行业新闻 (baseline-patch 2026-05-08 / α 路线)
     news_created = "news_created"
     news_updated = "news_updated"
@@ -126,6 +130,7 @@ class TargetType(StrEnum):
     module_relation = "module_relation"
     cold_start_task = "cold_start_task"
     comparison_snapshot = "comparison_snapshot"
+    ai_snapshot_task = "ai_snapshot_task"  # M16 AI 快照（2026-05-09 sprint）
     import_task = "import_task"
     team = "team"  # M20 baseline-patch 2026-04-26
     industry_news = "industry_news"  # M14 baseline-patch 2026-05-08
