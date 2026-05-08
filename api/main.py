@@ -11,7 +11,7 @@ from api.core.redis import get_redis
 from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
 from api.routers import auth as auth_router
-from api.routers import dimension_router, node_router, project_router
+from api.routers import dimension_router, node_router, project_router, version_router
 from api.services.auth_service import get_auth_service
 from api.services.dimension_service import DimensionService
 from api.services.node_service import register_child_service
@@ -78,6 +78,7 @@ app.include_router(project_router.router)
 app.include_router(node_router.router)
 app.include_router(dimension_router.router)
 app.include_router(dimension_router.completion_router)
+app.include_router(version_router.router)
 
 
 @app.get("/health")
