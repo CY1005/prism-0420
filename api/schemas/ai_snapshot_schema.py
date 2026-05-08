@@ -114,6 +114,7 @@ class SnapshotTaskDetailResponse(BaseModel):
 class SnapshotSaveRequest(BaseModel):
     """POST /save 入参（design §7）。"""
 
+    task_id: UUID  # 必须传；service 会校验 task.project_id/node_id 与 URL path 一致（防跨 node 攻击 / audit M5）
     save_summary: bool = True  # 用户是否要保存 summary 到 dimension_records
     selected_dimension_keys: list[str] = Field(
         default_factory=list,
