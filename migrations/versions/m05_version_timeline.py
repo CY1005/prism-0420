@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from migrations.helpers import ck_clause
+from migrations.helpers import ck_clause as _ck_clause
 
 revision: str = "m05versiontl01"
 down_revision: str | Sequence[str] | None = "m04dimrecord01"
@@ -80,14 +80,14 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], name="fk_version_created_by"),
         sa.UniqueConstraint("node_id", "version_label", name="uq_version_node_label"),
         sa.CheckConstraint(
-            ck_clause(
+            _ck_clause(
                 "change_type",
                 ("added", "modified", "deprecated", "split", "merged", "migrated"),
             ),
             name="ck_version_change_type",
         ),
         sa.CheckConstraint(
-            ck_clause("release_mode", ("release", "continuous")),
+            _ck_clause("release_mode", ("release", "continuous")),
             name="ck_version_release_mode",
         ),
     )

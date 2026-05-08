@@ -506,6 +506,27 @@ class CompetitorCrossProjectError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M05 四数据点稳定后默认范式复用）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md) L1 总则要求落本 sprint review 计划。
+> M02-M05 四数据点稳定（详见 `../../audit/m05-pilot-template-validation.md` "L1+L2+L3 节奏第四次实证"段），M06+ 复用默认范式不再重复说明：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（CompetitorService + delete_by_node_id 4 参 R-X2 第二真注入 + activity_log）| 子片 1 + 2 + 3 合并 | spec + quality + reuse + efficiency 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| 四数据点稳定 |
+| **R2** | 子片 4 完成（8 endpoints：4 competitors + 4 competitor_refs + check_project_access）| 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| 四数据点稳定 |
+
+**子片 5 不单跑** + **schema 子片禁单跑**（≥80% SKIP 例外 + 四数据点稳定结论）。
+
+**M06 sprint 特定关注点**（与 M02-M05 范式差异）：
+- R-X2 第二真注入方实证（M04 第一已立 / NodeChildrenServiceProtocol 4 参签名稳定 → 复用）
+- M18 baseline-patch get_for_embedding A 路径（target_type="competitor" / 拼接 name + description / url 不参与）
+- 多表事务（competitors + competitor_refs 同事务）— Q4 决策，service 层 with db.begin() 包
+
+**L3 实证回写承诺**：sprint 结束时回写 `../../audit/m06-pilot-template-validation.md`（L1 第五数据点 + R1/R2 命中比例 + R-X2 第二真注入实证 + 闸门 2.5 三栏 A 8 / B 0 / C 5）。
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 1：职责边界 in/out scope 完整（引 US-B1.4 / US-A3.3）
