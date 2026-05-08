@@ -412,7 +412,7 @@ async def test_link_node_propagates_write_event_failure_e2e(auth_client, make_us
     import api.services.industry_news_service as mod
 
     async def boom(**kwargs):
-        if kwargs.get("action_type") == "link":
+        if kwargs.get("action_type") == "news_linked":
             raise RuntimeError("activity log failed")
 
     monkeypatch.setattr(mod, "write_event", boom)
@@ -446,7 +446,7 @@ async def test_create_news_activity_log_metadata_matches_design(
     assert r.status_code == 201
     assert len(captured) == 1
     ev = captured[0]
-    assert ev["action_type"] == "create"
+    assert ev["action_type"] == "news_created"
     # design §10 字面 metadata = {source_type, tags_count}
     assert set(ev["metadata"].keys()) == {"source_type", "tags_count"}
     assert ev["metadata"]["source_type"] == "manual"
@@ -463,7 +463,7 @@ async def test_link_node_activity_log_metadata_matches_design(auth_client, make_
     captured: list[dict] = []
 
     async def fake(**kwargs):
-        if kwargs.get("action_type") == "link":
+        if kwargs.get("action_type") == "news_linked":
             captured.append(kwargs)
         else:
             await real_write_event(**kwargs)
@@ -482,7 +482,7 @@ async def test_link_node_activity_log_metadata_matches_design(auth_client, make_
     assert r.status_code == 201
     assert len(captured) == 1
     ev = captured[0]
-    assert ev["action_type"] == "link"
+    assert ev["action_type"] == "news_linked"
     assert ev["target_type"] == "news_node_link"
     assert "node_id" in ev["metadata"]
     assert ev["metadata"]["node_id"] == nid

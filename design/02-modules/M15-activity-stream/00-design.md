@@ -100,6 +100,12 @@ references:
     - import_partial_failed
     - embedding_model_upgrade_triggered
     - embedding_backfill_triggered
+    # M14 baseline-patch 反向回写（2026-05-08 M15 sprint 子片 0 prep / α 路线）
+    - news_created
+    - news_updated
+    - news_deleted
+    - news_linked
+    - news_unlinked
     - team_created
     - team_renamed
     - team_description_changed
@@ -290,7 +296,9 @@ class ActivityLog(Base, ImmutableMixin):
             "'team_created','team_renamed','team_description_changed','team_deleted',"
             "'team_member_added','team_member_removed',"
             "'team_member_promoted_admin','team_member_demoted_member',"
-            "'project_joined_team','project_left_team')",
+            "'project_joined_team','project_left_team',"
+            # M14 baseline-patch 反向回写（2026-05-08 M15 sprint 子片 0 prep / α 路线 / 全局豁免业务模块首发）
+            "'news_created','news_updated','news_deleted','news_linked','news_unlinked')",
             name="ck_activity_log_action_type",
         ),
         CheckConstraint(
@@ -298,15 +306,20 @@ class ActivityLog(Base, ImmutableMixin):
             "'issue', 'project', 'project_member', 'project_dimension_config', "
             "'module_relation', 'cold_start_task', 'comparison_snapshot', 'import_task', "
             # M20 baseline-patch（2026-04-26）
-            "'team')",
+            "'team', "
+            # M14 baseline-patch 反向回写（2026-05-08 M15 sprint 子片 0 prep / 全局豁免业务模块首发）
+            "'industry_news', 'news_node_link')",
             name="ck_activity_log_target_type",
         ),
     )
 
     id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    project_id: Mapped[PyUUID] = mapped_column(
+    # M14 baseline-patch 反向回写（2026-05-08 M15 sprint 子片 0 prep）：
+    # M14 是首个全局豁免业务模块（design §9 + 06-design-principles 清单 5），无 project_id 概念。
+    # write_event 签名已升 UUID | None；本字段对应 nullable=True，UI 时间线"全局事件"分组。
+    project_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False, index=True
+        nullable=True, index=True
     )
     user_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"),
@@ -605,6 +618,12 @@ class ActionType(str, Enum):
     import_canceled                       = "import_canceled"
     import_failed                         = "import_failed"
     import_partial_failed                 = "import_partial_failed"
+    # M14 行业新闻（baseline-patch 2026-05-08 M15 sprint 子片 0 prep 反向回写 / α 路线 / 全局豁免业务模块首发）
+    news_created                      = "news_created"
+    news_updated                      = "news_updated"
+    news_deleted                      = "news_deleted"
+    news_linked                       = "news_linked"
+    news_unlinked                     = "news_unlinked"
     # M18 语义搜索（baseline-patch 2026-04-26）
     embedding_model_upgrade_triggered = "embedding_model_upgrade_triggered"
     embedding_backfill_triggered      = "embedding_backfill_triggered"
@@ -639,6 +658,8 @@ class TargetType(str, Enum):
     comparison_snapshot       = "comparison_snapshot"         # M12 对比快照
     import_task               = "import_task"                # M17 导入任务
     team                      = "team"                        # M20 baseline-patch 2026-04-26
+    industry_news             = "industry_news"               # M14 baseline-patch 反向回写 2026-05-08
+    news_node_link            = "news_node_link"              # M14 baseline-patch 反向回写 2026-05-08
     # R10-2：各模块 accepted 后集中回写此枚举 + CheckConstraint
     # 注：原 "relation" 枚举值已移除——无模块使用；M08 使用 "module_relation"
 
@@ -818,6 +839,50 @@ class ActivityStreamInvalidFilterError(ValidationError):
 - **tenant**：跨项目越权读 / DAO project_id 过滤覆盖
 - **权限**：未登录 / viewer 访问（403）/ editor 正常读（200，C-5）/ owner 正常读（200）
 - **错误处理**：project 不存在 / filter 参数非法 / user_id 不存在（filter 无效过滤）
+
+---
+
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L1 总则 / M02-M14 十二数据点稳定 → M15 默认范式作模板）
+
+> **L2 sprint 级声明**（闸门 3.4 强制存在）。M15 sprint 复用 M02-M14 范式，无形态差异化触发例外。
+
+### 拆分范式（默认作模板）
+
+| 子片 | 内容 | Review 触发 |
+|---|---|---|
+| 子片 0 prep | 本段 §14.5 + M14 baseline-patch 反向回写（α 路线） + 元教训防御 actionable 主动复制清单 | N/A（prep 不入业务实施） |
+| 子片 1 model + alembic | ActivityLog model + alembic 迁移（**M15 是 R10-2 owner，含 M14/M18/M20 全部 baseline-patch enum** + project_id NULLABLE + ImmutableMixin import + 3 索引 + 2 CheckConstraint）+ model tests | **schema/migration 子片合并 R1**（≥80% SKIP / Prism 特有 22 条 simplify checklist 几乎不命中） |
+| 子片 2 DAO | ActivityStreamDAO（list_stream + list_for_team + 强 project_id 过滤 + JOIN users 取 name）+ unit tests | 合并 R1 |
+| 子片 3 Service + Schema | ActivityStreamService（_check_activity_audit_access）+ Pydantic schema（ActionType / TargetType / Filter / Item / Response）+ 3 ErrorCode + R13-1 守护 | 合并 R1 |
+| **R1 合并审** | 3 subagent 并行：spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet（M02-M14 默认范式 / 子片 1+2+3 合并审 / schema 子片 ≥80% SKIP） | sprint ≥1 次 review 满足闸门 3.4 |
+| 子片 4 Router | activity_stream_router（GET project_id 路径 + GET team_id 路径 / Depends check_project_access role="editor"）+ e2e tests | **R2 = 1 合并 Opus subagent endpoint 单审**（M02-M14 默认范式） |
+| 子片 5 关闸 | design 回写 / audit/m15-pilot-template-validation.md / handoff next-session 更新 | N/A |
+
+### 元教训防御 actionable 主动复制清单（M02-M14 沉淀 / M15 应用情况）
+
+| # | 元教训 | M15 应用 |
+|---|---|---|
+| 1 | viewer 写所有写端点 403 全覆盖（M07 立 / M08-M13 应用）| **N/A 显式声明**（M15 纯读 GET 无写端点）+ **首发"读权限 403"测试**：viewer 读 list_stream / list_for_team 双端点 403（C-5：仅 owner+editor 可审计；rank-based check_project_access role="editor" 自动过滤） |
+| 2 | write_event 异常传播（M04+ 范式）| **N/A 显式声明**（M15 自身不写 activity_log，§10 字面 N/A） |
+| 3 | cross-tenant 404（M02 范式）| **✅ 主动复制**：DAO `WHERE activity_logs.project_id=?` 强过滤 + e2e 跨 project 越权读 404 / list_for_team team_id 越权 |
+| 4 | cross-project node 404 | **N/A 显式声明**（M15 不消费 node 实体） |
+| 5 | IntegrityError 区分约束名（M05 P1-01）| **N/A 显式声明**（纯读无 INSERT） |
+| 6 | M12 元自审 — L1 锁裁决型 P1 自决不让 CY 拍 | **✅ 已应用**（B1 命名规约冲突子片 0 prep 自决 α，不报 CY） |
+| 7 | R1.5 reconcile checkpoint（M10 NEW）| **✅** R2 dispatch 前 grep R1 立修关键词验证 |
+| 8 | M11 NEW R-X1 失败补偿 commit boundary | **N/A**（无 orchestrator） |
+| 9 | M11 NEW 文件上传 file.size + sanitize | **N/A**（无上传） |
+| 10 | M13 NEW "3 端点全覆盖"形态特殊不免除契约纪律 | **✅ 主动复制**：M15 双端点形态分化（list_stream project_id 路径 / list_for_team team_id 路径），design §7 + §3 已 disambiguation 注释字面 |
+| 11 | M13 NEW design metadata 字段集每条 e2e 字面验 | **N/A**（M15 不写 metadata，仅消费）|
+| 12 | M14 NEW write_event project_id Optional | **✅ 实装**：ActivityLog.project_id NULLABLE column + UI 时间线"全局事件"分组（structlog stub None 序列化为字面 "global"） |
+| 13 | M14 NEW N/A 元教训显式声明范式 | **✅ 应用**（本表逐条 N/A 声明 + 测试文件 docstring 双重） |
+| 14 | M14 NEW endpoint 形态特殊不免除契约纪律 | **✅** list_for_team team_id 路径 vs list_stream project_id 路径双形态在 design §7 endpoint 表 + §3 DAO docstring 字面 disambiguation |
+
+### sprint 范式参数
+
+- R1 = 3 subagent 并行（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）
+- R2 = 1 合并 Opus subagent endpoint 单审
+- 子片 5 不单跑（≥80% SKIP 例外）
+- schema 子片合并到 R1（≥80% SKIP 例外）
 
 ---
 

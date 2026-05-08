@@ -61,7 +61,7 @@ async def test_create_news_writes_activity_log(db_session, make_user, monkeypatc
     assert len(captured) == 1
     ev = captured[0]
     assert ev["project_id"] is None  # M14 全局豁免
-    assert ev["action_type"] == "create"
+    assert ev["action_type"] == "news_created"
     assert ev["target_type"] == "industry_news"
     assert "Quantum" in ev["summary"]
 
@@ -411,9 +411,9 @@ async def test_link_propagates_write_event_failure(
     import api.services.industry_news_service as mod
 
     async def boom(**kwargs):
-        if kwargs.get("action_type") == "link":
+        if kwargs.get("action_type") == "news_linked":
             raise RuntimeError("activity log failed")
-        # create / update / delete 不触发，本测试只验 link 路径
+        # news_created / news_updated / news_deleted 不触发，本测试只验 link 路径
 
     monkeypatch.setattr(mod, "write_event", boom)
     user, proj = await make_project()

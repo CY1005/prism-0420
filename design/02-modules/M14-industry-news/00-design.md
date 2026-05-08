@@ -41,7 +41,12 @@ references:
       tables: [nodes]
       reason: "关联功能项时校验 node 存在（news_node_links 引用 nodes.id）"
   consumes_action_types: []  # M14 不订阅 M15 activity_log
-  produces_action_types: [no_dependency]  # §10 明确：M14 写 industry_news / news_node_link 事件，但当前 M15 ActionType 枚举未含对应值；§10 action_type 为 create/update/delete/link/unlink（通用 CRUD），尚未回写 M15 schema（baseline-patch 待做）
+  produces_action_types:  # §10 明确：M14 写 industry_news / news_node_link 事件；2026-05-08 M15 sprint 子片 0 prep baseline-patch 反向回写：与 M15 design §7 命名规约（{entity}_{past_verb}）拉齐为过去式
+    - news_created
+    - news_updated
+    - news_deleted
+    - news_linked
+    - news_unlinked
 ---
 
 # M14 行业动态 - 详细设计
@@ -435,11 +440,13 @@ class IndustryNewsDAO:
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
-| `create` | `industry_news` | `<news_id>` | 录入行业动态：{title} | `{source_type, tags_count}` |
-| `update` | `industry_news` | `<news_id>` | 更新行业动态：{title} | `{updated_fields: [...]}` |
-| `delete` | `industry_news` | `<news_id>` | 删除行业动态：{title} | `{title}` |
-| `link` | `news_node_link` | `<news_id>` | 关联功能项：{node_name} | `{node_id}` |
-| `unlink` | `news_node_link` | `<news_id>` | 解除关联：{node_name} | `{node_id}` |
+| `news_created` | `industry_news` | `<news_id>` | 录入行业动态：{title} | `{source_type, tags_count}` |
+| `news_updated` | `industry_news` | `<news_id>` | 更新行业动态：{title} | `{updated_fields: [...]}` |
+| `news_deleted` | `industry_news` | `<news_id>` | 删除行业动态：{title} | `{title}` |
+| `news_linked` | `news_node_link` | `<news_id>` | 关联功能项：{node_name} | `{node_id, news_title}` |
+| `news_unlinked` | `news_node_link` | `<news_id>` | 解除关联：{node_name} | `{node_id, news_title}` |
+
+> **2026-05-08 M15 sprint 子片 0 prep baseline-patch 反向回写（α 路线）**：原字面 `create/update/delete/link/unlink`（裸 CRUD）与 M15 design §7 line 545 命名规约（**CY 2026-05-06 ack 立**："删 10 条通用 CRUD → 拆为每实体独立过去式 `{entity}_{past_verb}`"）冲突。M14 sprint 闸门 2.5 reconcile 漏拉齐此 baseline-patch；M15 sprint 启动 reconcile 自决 α，反向修订 5 处 service.py + 6 处 e2e + 本表 + frontmatter，与 M01-M13 11 模块命名规约统一。disambiguation：未来全局豁免业务模块（M16+ 若有）一律遵守过去式命名，无双轨例外。
 
 **实现位置**：Service 层每个 C/U/D 操作后调 `self.activity.log(...)`（非事务——M14 无多表事务，activity_log 写失败不回滚主操作）。
 
