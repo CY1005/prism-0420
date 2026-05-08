@@ -258,10 +258,18 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 1. 推荐 prompt 顺序
 
-### Prompt 0 — M17 sprint 启动（**当前推荐 / M16 已完整收官 / 复制下方代码块到新 session**）
+### Prompt 0 — M17 sprint 续跑（**当前推荐 / 启动期 4 大必做项已完成 commit ad069c0 / 复制下方代码块到新 session**）
 
 ```
-继续 prism-0420 M17 sprint 实施代码（M17 AI 导入 / Queue §12C / 首个 arq Queue 消费者 + R-X1 orchestrator 第二实例 + 闸门 2.6 mini-sprint 必跑；M16 sprint 已收官 7 commit / 1063 PASS / R13-1 116 / R14 守护 / L12+L13 / Phase 2.1 80% / cross-sprint 真漏洞 #1+#2+#5 关闭）。
+继续 prism-0420 M17 sprint 实施代码（M17 AI 导入 / Queue §12C / 首个 arq Queue 消费者 + R-X1 orchestrator 第二实例；启动期 4 大必做项已 commit ad069c0 完成 / 1063 + 16 = 1079 PASS / R13-1 116 / R14 守护 / L12+L13 / Phase 2.1 80%）。
+
+启动期 4 大必做项已 ✅ DONE（commit ad069c0 / 11 文件 / +543 / 不再跳过）：
+A. ✅ 闸门 2.6 Queue Scaffold mini-sprint — TaskPayload 基类 + dummy 子类 + 12 pytest（api/queue/base.py + tests/test_queue_base.py）
+B. 🔜 R1+R2 review 恢复 spawn subagent — 在本 sprint 子片 1+2+3 R1 + 子片 4 R2 时跑（不再 self-审）
+C. ✅ 闸门 3.4 L1 总则修订 — context budget pressure 触发例外段 1→3 类（design/00-phase-gate.md + bypass log #2 标 ✅ review 完成）
+D. ✅ R-X1 失败补偿 helper — api/services/orchestrator_helpers.py:compensation_session + 4 pytest；M11 ColdStart 迁移留本 sprint 子片 0 prep 内做
++ A7 ✅ cross-sprint #11 IntegrityError 立规 — design-principles 清单 6（service 层 INSERT 凡 UNIQUE 必 catch 转业务异常）
++ 新失效信号 sink memory feedback_problem_layered_analysis：reconcile pass 列 B 栏前未穷举 L1 锁规候选 = 0 时仍列 B 栏
 
 冷启动按序读：
 1. /root/workspace/projects/prism-0420/CLAUDE.md（协作规则 + "快速上手"序）
@@ -275,67 +283,54 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 9. memory feedback_problem_layered_analysis（含 M16 NEW 失效信号 — L1 缺规则导致跨模块漂移积累；M17 启动 reconcile 必走 5 步分层不绕 CY 拍工程量）
 10. memory feedback_three_agent_pipeline + feedback_decision_transparency + feedback_code_first + feedback_completion_audit + feedback_subagent_completion_check + feedback_subagent_interface_contract + feedback_self_decide_no_ask + feedback_git_push_kb（标准红线集）
 
-🔴 **M17 sprint 启动当天必跑（不能跳过）**：
+R-X1 第二实例对照点：M11 ColdStart 同步 orchestrator / M17 AI 导入异步 Queue orchestrator；接口共享 batch_create_in_transaction 4 参签名；行为契约分化（同步立 commit vs Queue retry + 死信 + compensation_session helper 共享）。
 
-A. **闸门 2.6 Queue Scaffold mini-sprint**（design/00-phase-gate.md 字面 / M17 启动前必 ✅）：
-   - api/queue/__init__.py + api/queue/base.py:TaskPayload 基类（user_id + project_id 强制字段 + ADR-002 §1.1 形态对齐 / SYSTEM_USER_UUID 已在 M16 子片 3 落 / TaskPayload 基类待补）
-   - 至少 1 dummy 子类 + pytest 验 user_id/project_id 强制
-   - arq Redis Queue 配置 + worker 部署 docker-compose 段
-   - 可独立 commit / 或并入 M17 子片 0 prep（CY 拍）
+任务：M17 sprint TDD 实施（5+ 子片 / 严格按 M02-M16 范式 / 第十四数据点）。
 
-B. **R1 + R2 review 恢复 spawn subagent**（bypass log #2 配套承诺 / M17 是 R-X1 第二实例复杂度高 / 不能再 self-审）：
-   - R1 = 3 subagent 并行（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet / 子片 1+2+3 合并审）
-   - R2 = 1 合并 Opus subagent endpoint 单审
-   - spawn prompt 必含 ls/find 穷举要求（T6 NEW / cross-sprint 元发现 #5 立规）
+启动顺序：
 
-C. **闸门 3.4 L1 总则修订**（bypass log #2 触发线 = 2 次 / M17 子片 0 prep 内必做）：
-   - 在 phase-gate.md 闸门 3.4 L1 总则 "触发例外（可合并到下游子片）" 段加 "context budget pressure"（usage 24h 信号 🔴 long-context + subagent-heavy 同时存在时 main agent self-审 + 子片 4 e2e 主动复制 17 条元教训 actionable 可替代外部 reviewer）作为合法降级触发器；同时强制配套 "下一 sprint 必须恢复" 承诺写入 bypass log
+1. **子片 0 prep**（M17 启动期已 DONE 8 项；本子片 prep 收尾 3 项）：
+   - M11 ColdStartOrchestratorService._mark_failed + cold_start_router 期望套路迁移到 compensation_session helper（cross-sprint punt #7 闭环 + M11 design §10 失败补偿 commit boundary 字面回写 + audit/m11 punt B1 标 DONE）
+   - tests/conftest.py 加 SessionLocal monkeypatch fixture（join_transaction_mode='create_savepoint' 兼容；M11 现有 674 PASS 不破）
+   - cross-sprint Punt 池触发点 A 4 项预查：M04-1 / M04-8 / M04-9 / M04-10 是否 M17 顺手清
 
-D. **R-X1 orchestrator 失败补偿 commit boundary 真修**（cross-sprint 真漏洞 #7 / M11 R2 P1-01 punt 到期）：
-   - design 字面：失败补偿 commit boundary 必独立 connection 或显式 SAVEPOINT
-   - 与测试 fixture join_transaction_mode='create_savepoint' 兼容性方案需 reconcile
-   - 抽独立 helper（M17 用 / 与 M11 ColdStart orchestrator 共享）
+2. **子片 1**：import_tasks + import_task_items model + alembic + ActionType+N + TargetType+N + 4 处 enum 字面同步（M15 NEW 立规 / model tuple + schema StrEnum + CHECK constraint + Alembic）+ model tests
 
-E. **R-X1 第二实例对照点**：M11 ColdStart 是同步 orchestrator / M17 AI 导入是异步 Queue orchestrator；接口共享 batch_create_in_transaction 4 参签名；行为契约分化（同步立 commit vs Queue retry + 死信）
+3. **子片 2**：ImportTaskDAO + ImportTaskItemDAO + tenant filter + idempotency hash 查找 + zombie cron orphan + DAO unit tests
 
-任务：M17 sprint TDD 实施。
+4. **子片 3**：ImportService + AIOrchestrationService + Pydantic schema + ErrorCode + queue/import_tasks.py（arq @task）+ ws/import_progress.py + R-X1 第二实例 + AI Provider 接通 + service unit tests
 
-启动顺序（严格按 M02-M16 范式 / 第十四数据点稳定）：
+   👉 **R1 = 3 subagent 并行**（spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet）覆盖子片 1+2+3 合并审；spawn prompt 必含 ls/find 穷举要求（cross-sprint 元发现 #5 立规）
 
-1. **闸门 2.5 reconcile pass + 闸门 2.6 Queue scaffold + R-X1 失败补偿 helper + L1 总则修订**（M17 sprint 启动当天必跑 / 不能跳过）：
-   - 预查 conftest.py 已有 fixture（M16 R1-B 新增 make_ai_snapshot_task；十二连规则延续）
-   - grep M17 引用的所有 horizontal helper（含 write_event / api/queue/base / TaskPayload 等）
-   - 重点核：M11 R-X1 元教训失败补偿是否 M17 同款（必）/ M16 §12B vs M17 §12C 差异（fire-and-forget vs Queue 持久化）
-   - 三栏分类（A 机械 / B CY 决策 / C 自我消解）
+5. **子片 4**：Router 4 REST endpoints + WS endpoint + multipart file 上传（file.size 预检 + sanitize / M11 范式复用）+ idempotency 命中 200 + e2e 含 17+ 元教训 actionable 主动复制
 
-2. **闸门 3.4 L1 总则触发**：M17 design 必须含 §14.5 sprint review 拆分计划段（业务模块 R1=3 subagent 并行 / R2=1 合并 Opus / 子片 5 不单跑 / schema 子片合并 R1）。若缺先补。
+   👉 **R2 = 1 合并 Opus subagent endpoint 单审**
 
-3. **M17 写代码 5+ 子片**（参 M11 R-X1 + M16 §12B + 新加 §12C Queue 范式）
+6. **子片 5 关闸**：design §3 disambiguation 回写 + audit/m17-pilot-template-validation.md 元教训沉淀（实施期段）+ handoff §0 + roadmap + cross-sprint Punt 池 DONE 标记 + bypass log #2 配套承诺验收（spawn subagent 已恢复 ✅）
 
-4. **R1+R2 review 按 §14.5 计划跑（spawn subagent 不降级）**
+7. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP（§14.5 已锁）
 
-5. **simplify-checklist 自动判断**：≥50 行 OR ≥2 文件触发；schema/migration 子片 ≥80% checklist 条目天然 SKIP
+启动注意：
+1. 不要在同一会话连续跑多个 sprint：M11+M15+M16 单 sprint 都堆到大 context；M17 必新窗口（启动期已合规 — 启动期 ad069c0 单独会话 / M17 实施新会话）
+2. 当前周 usage（Asia/Tokyo Reset May 15 6pm；M17 启动期距 reset >5 天）—— /usage 同步基线（feedback_usage_budget.md 最近更新 2026-05-08 距今 1 天，仍在新鲜期）
+3. ✅ M17 design §14.5 已补完 commit ad069c0（5+ 子片表 + R1+R2 安排 + L3 留空待实证 + 合规性自审）
+4. ✅ 启动期 4 大必做项已收官 commit ad069c0（A 闸门 2.6 + C L1 修订 + D R-X1 helper 抽出；B R1+R2 spawn 在子片 1+2+3 / 4 时跑）
 
-红线（M02-M16 实证后强化 + R14 立规防御）：
+红线（M02-M16 实证后强化 + R14 + 启动期新增）：
 - viewer 写所有写端点 403 全覆盖（M07 立 / M08-M16 全模块应用 / M14 owner-or-admin 替代）
 - write_event 异常传播测试（M04+ 范式）：M17 service / router 必走 e2e 字面验
 - cross-tenant 404（M02 范式）+ cross-project node 404（M13 NEW）
-- IntegrityError 区分约束名（M05 P1-01 立规）
-- M11 NEW R-X1 失败补偿 commit boundary（M17 sprint 必真修 / 抽独立 helper / cross-sprint 真漏洞 #7 到期）
+- IntegrityError 区分约束名（M05 P1-01 立规 / M17 启动期 design-principles 清单 6 升级到 service 层 INSERT 凡 UNIQUE 必 catch）
+- M11 NEW R-X1 失败补偿 commit boundary：M17 用 compensation_session helper（不重复 M11 旧范式）
 - M11 NEW 文件上传 file.size + sanitize（M17 zip 上传必复用范式）
 - M13 NEW SSE 形态特殊不免除契约纪律 + metadata 字段集每条 e2e 字面验
 - M14 NEW endpoint 形态特殊不免除契约纪律 + N/A 元教训显式声明范式
 - M15 NEW 双层权限防御 service unit 不可达 e2e 是合理设计
 - M15 NEW 横切表 owner 模块的 enum 字面同步责任（M17 若新增 ActionType/TargetType 必同步 4 处）
-- **M16 NEW R14**：write_event 调用 action_type 必须 _ACTION_TYPES 枚举字面（ci-lint 守护 / 新增值同步 4 处流程）
-- **M16 NEW**：CAS UPDATE 顶层方法内部 commit / 禁 Service 事务上下文（docstring 字面声明）
-- **M16 NEW**：BackgroundTasks/Queue runner 自起 SessionLocal 与请求级 Depends(get_db) 隔离
-
-启动注意：
-1. 不要在同一会话连续跑多个 sprint：M11+M15+M16 单 sprint 都堆到大 context；M17 必新窗口
-2. 当前周 usage（Asia/Tokyo Reset May 15 6pm；M17 启动期距 reset >5 天）—— 启动 M17 前先 /usage 同步 + 更新 memory feedback_usage_budget.md 基线
-3. M17 design 内是否含完整 §14.5？冷启动第一步 grep "## 14.5\\|sprint review 拆分" design/02-modules/M17-ai-import/00-design.md 确认；缺则子片 0 prep 补齐
-4. 闸门 2.6 + R-X1 失败补偿 helper + L1 总则修订 = 三大启动期必做项（不能跳）；总工作量 ~2-3h 在子片 0 prep 内完成
+- M16 NEW R14：write_event 调用 action_type 必须 _ACTION_TYPES 枚举字面（ci-lint 守护 / 新增值同步 4 处流程）
+- M16 NEW：CAS UPDATE 顶层方法内部 commit / 禁 Service 事务上下文（docstring 字面声明）
+- M16 NEW：BackgroundTasks/Queue runner 自起 SessionLocal 与请求级 Depends(get_db) 隔离
+- M17 启动期 NEW：reconcile pass 列 B 栏前必先穷举 L1 锁规 / B 栏 = 0 时禁列 B 栏
 ```
 
 参考来源（详见）：`_handoff/sprint-prompts-M05-M20.md` § "## M17 — AI 导入" + `design/02-modules/M17-ai-import/00-design.md` + `design/audit/m16-pilot-template-validation.md`。
