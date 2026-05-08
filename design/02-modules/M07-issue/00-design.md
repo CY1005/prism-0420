@@ -258,7 +258,7 @@ stateDiagram-v2
 | 维度 | 答案 | 实现细节 |
 |------|------|---------|
 | **Tenant 隔离** | ✅ project_id | `issues` 直接带 project_id（冗余）；DAO 强制 `WHERE issues.project_id = ?` |
-| **多表事务** | ✅ 必须（统一 M04 pilot 范式）| Service 层 `with db.begin():` 包裹：① UPDATE issues（CRUD 或状态转换）② 写 activity_log；任一失败回滚 |
+| **多表事务** | ✅ 必须 | 按入口形态分两类（M07 sprint 闸门 2.5 A7 预防性顺修 / M06 §5 同款消歧 / 2026-05-08）：<br>**(1) 主流程入口**（Router 触发的 issue CRUD + status transition + SELECT FOR UPDATE 行锁串行化）：Router 层 `await db.commit()` 是唯一 commit 点；service 不调 `async with db.begin():`。SQLAlchemy autobegin 保证多次 service 调用 + activity_log 写入落在同一 implicit transaction，异常自动回滚。<br>**(2) R-X3 跨模块入口**（被 M03 delete_node 调用的 `orphan_by_node_id(db, node_id, project_id, actor_user_id)` + M11/M17 调用的 `batch_create_in_transaction`）：接受外部 db session，**不自开事务**，由 caller orchestrator 控制事务边界。<br>详见 §6 对外契约段。 |
 | **异步处理** | ❌ N/A | 全同步，用户手动录入 |
 | **并发控制** | ❌ N/A | 05-module-catalog 标注无并发；issue 是单一责任人顺序操作；状态转换防护见竞态分析表（无 DB 级唯一约束，仅 Service 层 SELECT FOR UPDATE） |
 
@@ -554,6 +554,29 @@ class IssueNodeCrossProjectError(AppError):
 - **tenant**：跨项目越权读 / 越权写 / DAO tenant 过滤
 - **权限**：viewer 写 / 未登录读 / viewer 触发状态流转
 - **错误处理**：非法状态转换 / issue 不存在 / 跨项目 node
+
+---
+
+## 14.5 Sprint Review 拆分计划（L2 sprint 级声明，2026-05-08 立 / M02-M06 五数据点稳定后默认范式复用）
+
+> 按 [`../../00-phase-gate.md` 闸门 3.4](../../00-phase-gate.md) L1 总则要求落本 sprint review 计划。
+> M02-M06 五数据点稳定（详见 `../../audit/m06-pilot-template-validation.md` "L1+L2+L3 节奏第五次实证"段），M07+ 复用默认范式不再重复说明：
+
+| Review # | 触发时机 | 覆盖子片 | 跑的内容 | 合并/单跑理由 |
+|---|---|---|---|---|
+| **R1** | 子片 3 完成（IssueService + 状态机转换 + R-X2 第三真注入 orphan_by_node_id + activity_log）| 子片 1 + 2 + 3 合并 | spec + quality + reuse + efficiency 三维（**3 subagent**: spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）| 五数据点稳定 |
+| **R2** | 子片 4 完成（7 endpoints：list / nodescoped list / get / create / update / transition / delete + check_project_access）| 子片 4 单跑 | spec + quality + simplify 三维（**1 合并 Opus subagent**）| 五数据点稳定 |
+
+**子片 5 不单跑** + **schema 子片禁单跑**（≥80% SKIP 例外 + 五数据点稳定结论）。
+
+**M07 sprint 特定关注点**（与 M02-M06 范式差异）：
+- **R-X2 第三真注入实证（不同语义）**：orphan_by_node_id SET NULL 而非 delete；与 M04/M06 delete_by_node_id 共享 Protocol 4 参签名但行为契约不同
+- 状态机 4 状态 + SELECT FOR UPDATE 行锁串行化（防 open→in_progress 竞态）
+- assigned_to 字段（in_progress 时必填，IssueAssigneeRequiredError）
+- M13 pilot list_by_project pass-through（无代码改动；仅 service 层加 method）
+- M18 baseline-patch get_for_embedding A 路径（拼接 title + description）
+
+**L3 实证回写承诺**：sprint 结束时回写 `../../audit/m07-pilot-template-validation.md`（L1 第六数据点 + R1/R2 命中比例 + R-X2 第三真注入实证 + 闸门 2.5 三栏 A 8 / B 0 / C 6）。
 
 ---
 
