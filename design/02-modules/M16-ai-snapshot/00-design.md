@@ -1224,6 +1224,63 @@ class SnapshotZombieError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L1 总则 / M02-M15 十三数据点稳定 → M16 业务模块默认范式作模板）
+
+> **L2 sprint 级声明**（闸门 3.4 强制存在）。M16 是业务模块（自有 `ai_snapshot_tasks` 表 + 写 M04 dimension_records + 调 M02/M03/M05 上游 + 新增 ActionType 3 / TargetType 1 同步 4 处），走 M02-M14 业务模块范式（不走 M10/M15 纯读简化）。形态特殊点 = 首个 §12B 后台 fire-and-forget 子模板实战 + CAS UPDATE 防双写 + advisory_xact_lock 幂等 + 自起 SessionLocal + zombie cron 兜底；不免除契约纪律（M14 NEW 元教训复用强化）。
+
+### 拆分范式
+
+| 子片 | 内容 | Review 触发 |
+|---|---|---|
+| 子片 0 prep | 本段 §14.5 + L1 R14 立规（write_event 过去式 enum 契约 / design §13 + ci-lint 守护）+ cross-sprint reconcile A 栏预录回写 + 元教训防御 actionable 17 条主动复制清单 + activity_log_service docstring 修（"module"→"node"）| N/A |
+| 子片 0.5 L1+L3 batch | write_event stub → 真 INSERT + 31 处 service action_type 改过去式（M02 2 / M03 3 / M04 5 / M05 3 / M06 7 / M07 6 / M08 4 / M11 3）+ M07 `issue_unassigned` 加 enum + M11 `cold_start.*` → `cold_start_*` 命名漂移修 + ci-lint R14 守护上线 + M14-B12 write_event 异常传播 e2e（M02-M08 update/delete/unlink 路径）+ M04-10 delete_by_node_id 并发 continue race window 复审 + M02 Project.ai_model alembic add column（M13-B16）+ M04-1 dimension_records (updated_by, updated_at) 联合索引 alembic + M04-8 db.get(DimensionType) 3 处迁 DAO 风格统一 + M04-9 target_type 4 处 const 化 + M10-5 viewer /overview/stats 测试补 | **batch 末尾跑 R1-spec 单 Opus subagent 审"是否漏改 / 命名漂移完全清"**（独立 review，不并入 R1 三 subagent）|
+| 子片 1 model + alembic | `ai_snapshot_tasks` model + alembic + 5 索引 + 1 CHECK constraint（status enum）+ M15 ActionType 3 同步 4 处（model._ACTION_TYPES + schema StrEnum + CHECK constraint + 测试 enum set）+ TargetType `ai_snapshot_task` 同步 4 处 + model tests | **schema/migration 子片合并 R1**（≥80% SKIP / Prism 特有 22 条 simplify checklist 几乎不命中） |
+| 子片 2 DAO | AISnapshotTaskDAO（get_by_id 双签名 / find_idempotent 5min 窗口 / cas_start_running / cas_complete / cas_zombie_transition / project_id tenant 过滤）+ unit tests + conftest `make_ai_snapshot_task` fixture（十二连规则） | 合并 R1 |
+| 子片 3 Service + Schema | AISnapshotService（create_task + advisory_xact_lock + 幂等 / get_task_for_user 双层校验 / save_snapshot path mismatch + selected keys + N 次 M04.create_dimension_record / run_snapshot_task runner CAS + asyncio.timeout(600) / cleanup_zombie_tasks cron entry）+ Pydantic schema 3 Request/Response + AISnapshotContext + 14 ErrorCode + AppError 子类 + R13-1 守护 + 接通 M02/M03/M04/M05/M13 ProviderRegistry | 合并 R1 |
+| **R1 合并审** | 3 subagent 并行：spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet（M02-M14 业务模块默认范式 / 子片 1+2+3 合并审 / schema 子片 ≥80% SKIP）；spawn prompt 必含 `ls/find` 穷举要求（T6 NEW / 2026-05-08 cross-sprint 元发现 #5 立规） | sprint ≥1 次 review 满足闸门 3.4 |
+| 子片 4 Router | 3 endpoints（POST /generate background_tasks.add_task / GET /snapshot-tasks/{id} 独立路径双层校验 / POST /save）+ Depends(require_user + check_project_access editor) + 20+ e2e tests | **R2 = 1 合并 Opus subagent endpoint 单审**（M02-M15 默认范式） |
+| 子片 5 关闸 | design 回写 + audit/m16-pilot-template-validation.md + handoff next-session + roadmap + ci-lint L? 守护（M16 self not-write own 不适用 / M16 自写）| N/A |
+
+### 元教训防御 actionable 主动复制清单（M02-M15 沉淀 / M16 应用情况）
+
+| # | 元教训 | M16 应用 |
+|---|---|---|
+| 1 | viewer 写所有写端点 403 全覆盖（M07 立 / M08-M13 应用 / M14 owner-or-admin 替代 / M15 N/A 但首发读 403）| **✅ 主动复制**：M16 有 2 写端点（generate + save）→ viewer 调两端点全 403；GET endpoint viewer 可读（轮询任务态等同读，design §14 字面）|
+| 2 | write_event 异常传播测试（M04+ 范式）| **✅ 主动复制**：M16 service 写 3 类任务事件（ai_snapshot.start/complete/failed），3 路径 service unit 必走 monkeypatch + e2e 字面验（M14-B12 同款 + 子片 0.5 batch 一并落地立 L1 范式） |
+| 3 | cross-tenant 404（M02 范式）| **✅ 主动复制**：DAO `WHERE project_id=?` 强过滤 + e2e 3 路径覆盖（cross-project generate 404 / GET task_id 越权 404 / save 越权 404；§8 双层校验 design 字面） |
+| 4 | cross-project node 404（M13 SSE 形态特殊不免除）| **✅ 主动复制**：generate endpoint 校验 node 属于 project（NodeService.get_by_id 反查 → SnapshotNodeNotFoundError 404）|
+| 5 | IntegrityError 区分约束名（M05 P1-01 立规）| **N/A 显式声明**（M16 ai_snapshot_tasks 不建 UniqueConstraint / audit B1 修复 / 幂等走 advisory_xact_lock；§3 + §11 字面）|
+| 6 | M12 元自审：L1 锁裁决型 P1 自决不让 CY 拍 | **✅ 已应用**：B1 31 处 action_type 漂移按 feedback_problem_layered_analysis L1 立规自决（不让 CY 拍 1/2/3 工程量；属 L1 缺规则导致 7 模块累积，立 L1 R14 + L3 机械批量改）|
+| 7 | R1.5 reconcile checkpoint（M10 NEW）| **✅** R2 dispatch 前 grep R1 立修关键词验证代码真实存在 |
+| 8 | M11 NEW R-X1 失败补偿 commit boundary | **N/A 显式声明**（M16 BackgroundTasks fire-and-forget 不是 R-X1 orchestrator 形态；用 CAS UPDATE + advisory_xact_lock 而非 commit-then-rollback；§6.5 + §9 字面）|
+| 9 | M11 NEW 文件上传 file.size + sanitize | **N/A 显式声明**（M16 三 endpoint 无 multipart 上传）|
+| 10 | M13 NEW "3 端点全覆盖"形态特殊不免除契约纪律 | **✅ 主动复制**：M16 三 endpoint 形态分化（POST 嵌套 / GET 独立路径 / POST save）design §7 + §12B 字段③字面 disambiguation；R1/R2 必逐端点验 |
+| 11 | M13 NEW design metadata 字段集每条 e2e 字面验 | **✅ 主动复制**：3 类任务事件 metadata（complete: generation_time_ms / dimensions_count / estimated_cost_usd / ai_provider / ai_model；start: version_count / ai_provider；failed: error_code / error_message_short）逐字段 e2e |
+| 12 | M14 NEW write_event project_id UUID→Optional | **✅ 实装**（M15 已落 NULLABLE column；M16 task 必有 project_id 走非 None 路径）|
+| 13 | M14 NEW N/A 元教训显式声明范式 | **✅ 应用**（本表逐条 N/A 声明 + 测试文件 docstring 双重）|
+| 14 | M14 NEW endpoint 形态特殊不免除契约纪律 | **✅ 应用**（同 #10 / 三 endpoint 形态 disambiguation）|
+| 15 | M15 NEW 双层权限防御 service unit 不可达 e2e 是合理设计 | **✅ 主动复制**：M16 GET endpoint 双层校验（第一层 task.user_id == current_user_id 防同 project 同事截屏访问 / 第二层 project accessibility 防被踢出后还能读旧 task）；§8 字面 + service docstring 双重声明非 dead code |
+| 16 | M15 NEW 横切表 owner 模块的 enum 字面同步责任（4 处必同步）| **✅ 实装**：M16 新增 ActionType 3（ai_snapshot.start/complete/failed）+ TargetType 1（ai_snapshot_task）→ 子片 1 同步 4 处：M15 model._ACTION_TYPES + schema StrEnum + CHECK constraint + 测试 enum set 比较 |
+| **17 NEW** | **M16 NEW L1 write_event 过去式 enum 立规 R14**（cross-sprint 元发现 #1 触发点 A 联动 / 7 模块 31 处累积漂移）| **✅ sprint 期立**：design §13 R14 段 + ci-lint.sh R14 grep 守护 + 31 处机械批量改 + M11 cold_start_*命名漂移修 + M07 issue_unassigned enum 增（子片 0.5 batch）|
+
+### sprint 范式参数
+
+- **R1 = 3 subagent 并行**（业务模块默认 / spec+quality Opus + reuse Sonnet + quality+efficiency Sonnet / 子片 1+2+3 合并审 / spawn prompt 必含 ls/find 穷举要求）
+- **R1-extra**（M16 sprint 特化）：子片 0.5 L1+L3 batch 末尾跑 1 个 spec Opus 单 subagent 审"31 处漂移是否漏改 / R14 ci-lint 是否能 grep 出全部漂移"，独立于 R1 主流程
+- **R2 = 1 合并 Opus subagent endpoint 单审**（M02-M15 默认 / M16 复用）
+- 子片 5 不单跑（≥80% SKIP 例外）
+- schema 子片合并到 R1（≥80% SKIP 例外）
+
+### M16 sprint 元贡献候选（sprint 实证后回写 audit）
+
+- **L1 R14 立规 + ci-lint 守护**：write_event 调用 action_type 必须用 _ACTION_TYPES 枚举值字面（防御未来业务模块再漂移；M17-M19 启动期不再触发同款 batch）
+- **§12B 后台 fire-and-forget 子模板首次实战**：design § 12B 7 字段是否足以模板化未来后台模块（M16 是首个也可能是唯一一个 §12B 模块）
+- **CAS UPDATE 防 zombie/runner 双写**：cas_start_running + cas_complete + cas_zombie_transition 范式
+- **advisory_xact_lock 幂等 get-or-create**：替代 DB UniqueConstraint（业务幂等含时间窗口 + status 子集，PG immutable 不支持）
+- **自起 SessionLocal 后台 runner**：与请求级 Depends(get_db) 完全隔离的 BackgroundTasks 形态（区别 M13 SSE 持请求级 session）
+
+---
+
 ## 15. 完成度判定 checklist
 
 - [x] 节 0：frontmatter 12 字段（status=draft 待 accepted）

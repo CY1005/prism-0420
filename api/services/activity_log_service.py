@@ -16,10 +16,12 @@ ActivityLog model + Alembic 迁移落地后，把本函数体替换为真实 INS
         db=session,                       # AsyncSession（M15 实装后才真消费；当前忽略）
         actor_user_id=current_user.id,
         project_id=ctx.project_id,        # 业务模块必传；**全局豁免模块（如 M14）传 None**
-        action_type="create",             # 必须在 M15 ActionType 枚举内
-        target_type="module",             # 必须在 M15 TargetType 枚举内
-        target_id=str(new_module.id),
-        summary=f"创建了节点『{new_module.name}』",
+        action_type="node_created",       # ★ R14（M16 sprint 立）：必须用 _ACTION_TYPES 枚举值字面
+                                          # （过去式 + snake_case），禁用裸 "create"/"update"/"delete"/"snapshot.x"。
+                                          # ci-lint.sh R14 grep 守护。详见 M15 design §10 R14 段。
+        target_type="node",               # 必须在 _TARGET_TYPES 枚举内（snake_case 单数形）
+        target_id=str(new_node.id),
+        summary=f"创建了节点『{new_node.name}』",
         metadata={"k": "v"},              # 可选；JSONB 字段
     )
 

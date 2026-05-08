@@ -782,6 +782,27 @@ class ActivityStreamResponse(BaseModel):
 - "用户点击 M15 查看日志"属于只读浏览行为，不记录 activity_log（当前不记录；若需要"谁查看了操作日志"的审计，可追加 view_activity_stream 事件——作为观察项留存）
 - 约束清单 1 规定"所有变更操作必须写 activity_log"——M15 无变更操作，豁免
 
+### R14 — write_event 调用 action_type 字面契约（M16 sprint 立 / 2026-05-08）
+
+**背景**：M16 sprint 启动 reconcile pass 实证发现 7 业务模块（M02/M03/M04/M05/M06/M07/M08/M11）共 31 处 service 层 `write_event(action_type=...)` 调用使用裸 CRUD 字符串（"create"/"update"/"delete"）或 dot-notation（"cold_start.create"），与 M15 是 R10-2 owner 的 `_ACTION_TYPES` 元组（过去式 + snake_case 字面）不匹配。stub 期靠 structlog 不写库无感；真 INSERT 上线 CHECK constraint 必爆。
+
+按 [`memory feedback_problem_layered_analysis`](memory) 5 步分层分析：根因是 L1 缺规则（write_event 调用契约从未明文要求枚举字面）。立规：
+
+**R14 规则**：所有 `api/services/*.py` 调 `write_event(action_type=X, target_type=Y)` 时，**X 必须是 `api/models/activity_log.py:_ACTION_TYPES` 元组成员字面**，**Y 必须是 `_TARGET_TYPES` 元组成员字面**。
+
+- ❌ 禁止：`action_type="create"` / `"update"` / `"delete"` / `"status_change"` / `"unassigned"` / `"orphan"` / `"cold_start.create"` / `"snapshot.create"` 等裸字符串或 dot-notation
+- ✅ 强制：`action_type="node_created"` / `"issue_unassigned"` / `"cold_start_created"` / `"comparison_snapshot_created"` 等过去式 + snake_case 字面
+
+**ci-lint.sh R14 守护**：grep `api/services/` 出现 `action_type="<不在 _ACTION_TYPES>"` 即 fail（除 docstring 范例 + activity_stream_service 自身豁免）。具体实现：cross-check `api/services/` 里所有 `action_type="..."` 字面 vs `_ACTION_TYPES` tuple 内容。
+
+**新增 action_type 流程（R10-2 owner 维护责任 + R14 同步）**：
+1. 业务模块 design §10 设计新 action_type 字面（例 M16 加 `ai_snapshot.start/complete/failed`）
+2. 模块 sprint 子片 1 同步 4 处：`api/models/activity_log.py:_ACTION_TYPES` + `api/schemas/activity_stream_schema.py:ActionType` StrEnum + Alembic CHECK constraint + 测试 enum set 比较
+3. service 层调用必须用枚举字面（R14）
+4. ci-lint.sh R14 + R13-1 + L13 自动守护
+
+**M16 sprint 子片 0.5 batch 实证**：31 处机械批量改 + M11 cold_start_* 命名漂移修 + M07 issue_unassigned 加 enum + ci-lint R14 上线 — 即"L1 立规 + L3 实证"完整闭环。
+
 ---
 
 ## 11. idempotency_key 适用操作清单（呼应清单 4）
