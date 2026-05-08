@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 from api.auth.jwt_utils import encode_jwt
 from api.models.dimension_record import DimensionRecord
 
@@ -23,7 +21,9 @@ async def _create_project(auth_client, user_id, name: str = "P1") -> str:
     return r.json()["id"]
 
 
-async def _create_node(auth_client, user_id, pid: str, name: str = "n", node_type: str = "file") -> str:
+async def _create_node(
+    auth_client, user_id, pid: str, name: str = "n", node_type: str = "file"
+) -> str:
     r = await auth_client.post(
         f"/api/projects/{pid}/nodes",
         json={"name": name, "type": node_type},
@@ -36,9 +36,7 @@ async def _create_node(auth_client, user_id, pid: str, name: str = "n", node_typ
 # ─────────────── G1: golden read ───────────────
 
 
-async def test_overview_returns_tree_and_stats(
-    auth_client, make_user, db_session, make_dim_type
-):
+async def test_overview_returns_tree_and_stats(auth_client, make_user, db_session, make_dim_type):
     user = await make_user(email="m10-cc@example.com")
     pid = await _create_project(auth_client, user.id)
     nid = await _create_node(auth_client, user.id, pid)
@@ -119,9 +117,7 @@ async def test_overview_viewer_read_succeeds(auth_client, make_user, db_session,
     await _create_node(auth_client, userA.id, pidA)
     await make_dim_type(key="t1", project_id=pidA, enabled=True)
 
-    db_session.add(
-        ProjectMember(project_id=pidA, user_id=userB.id, role=MemberRole.VIEWER.value)
-    )
+    db_session.add(ProjectMember(project_id=pidA, user_id=userB.id, role=MemberRole.VIEWER.value))
     await db_session.commit()
 
     r = await auth_client.get(f"/api/projects/{pidA}/overview", headers=_bearer(userB.id))
