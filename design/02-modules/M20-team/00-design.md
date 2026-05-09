@@ -875,6 +875,60 @@ class CrossTeamMoveForbiddenError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L1 总则强制段 / 2026-05-09 启动期立）
+
+> 闸门 3.4 L1 总则要求每业务模块 design 必有「Sprint Review 拆分计划」段，
+> 声明本 sprint 拆 N 次 review、每次覆盖哪些子片、合并子片的 SKIP 比例理由。
+
+### 拆分总览（5+ 子片 / R1=3 subagent 并行 + R2=1 合并 Opus / complexity=medium / Phase 2.1 最后一个 own sprint）
+
+| 子片 | 范围 | 行数 / 文件数预估 | Review 形态 |
+|------|------|---------------|-----------|
+| 0 prep | §14.5 + scaffold 简化决策 4 字段注释 + bypass log #2 配套继续验收 + cross-sprint punt 池本 sprint 命中检查 + baseline-patch 验证（M02 model team_id 列已预录 / M15 ActionType+10 + TargetType+1 已预录 / exceptions.py 8 TEAM_* AppError 已注册 / codes.py 8 ErrorCode 已注册）+ M19 元教训 #19 应用（tests.md ↔ design §13 ↔ exceptions.py 三方 status code 字面对账） | ~80 / ~3 | self-审（启动期范畴） |
+| 1 | api/models/teams.py（Team + TeamMember 双表 + TeamRole Enum + 三重防护 R3-2 + UniqueConstraint + CheckConstraint + 索引）+ Alembic m20_team.py（CREATE TABLE teams + team_members + ALTER projects ADD CONSTRAINT fk_projects_team FK RESTRICT + CHECK constraint baseline 已含 team_* 枚举）+ model tests + ci-lint R14 验证（10 个 team_* 全过去式 + project_joined_team / project_left_team 已字面） | ~400 / ~5 | **R1 = 3 subagent 并行**（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）合并审 子片 1+2+3 |
+| 2 | api/dao/teams.py（TeamDAO + TeamMemberDAO + tenant 过滤）+ api/auth/tenant_filter.py 升级（user_accessible_project_ids_subquery concrete impl 注入 = ProjectMember UNION teams via team_members）+ ADR-005 L3 SQL 注入横切验证（M03-M19 既有 DAO 自动受益 / M18 embedding backfill 豁免 / lifespan 注入 set_tenant_context 实化）+ DAO unit tests + 横切 helper unit tests | ~400 / ~5 | 同上（合并 R1） |
+| 3 | api/services/teams.py（TeamService 含 create_team / update_team / delete_team 5-step / transfer_ownership / add_member / update_member_role / remove_member 软切断 / move_project_team 含 archived 双路径 + R-X3 跨事务 db: Session 共享）+ api/services/permission.py（resolve_project_role 嵌套 max）+ ExportSchema 复用 + 8 ErrorCode raise 接通 + 状态机 4 条禁止转换字面 + service unit tests + correlation_id 同流程共享验证 | ~700 / ~6 | 同上（合并 R1） |
+| 4 | Router 9 endpoints（POST/GET/PATCH/DELETE /api/teams/{tid} + POST/PATCH/DELETE /api/teams/{tid}/members[/{uid}] + POST /api/teams/{tid}/transfer-ownership + POST /api/projects/{pid}/move-team）+ e2e（元教训 19 类 actionable 主动复制 + N/A 显式声明）+ R10-1 批量独立事件 N+1 e2e 字面验（删 team N member 写 1+N 条）+ R-X3 N+1 防护 e2e + cross-tenant 404 + cross-team move 422（CROSS_TEAM_MOVE_FORBIDDEN）+ archived project 拒加入 + 删 team archived 自动迁出（B13/B14） | ~700 / ~3 | **R2 = 1 合并 Opus subagent**（endpoint 单审） |
+| 5 | 关闸（design 回写 + audit/m20-pilot-template-validation.md 元贡献沉淀 + handoff §0 + roadmap **Phase 2.1 100% 收官** + cross-sprint punt 池接通（评估 #17 第二输出端是否触发 / #20 require_platform_admin M20 viewer-style endpoints 评估 / #25 _md_cell horizontal / #26 filename sanitize 分类 / #27 Cache-Control / #28 RFC 5987 filename*）+ Phase 2.2 前端继承启动评估 + 闸门 4 启动条件确认（M01-M05+M20 后端 merge / OpenAPI 契约稳定 / `npm run codegen` 准备）） | ~250 / ~6 | 主对话总结 |
+
+### SKIP 例外段（L1 总则触发例外条款 a/b/c）
+
+- **a 子片 1（model + alembic + projects FK enable）**：simplify 22 条 SKIP ≥ 80%（无 frontend / 无 Server Action / 无契约漂移 / 无 LLM hot path / 同步 CRUD），合并到子片 4 e2e 一次跑（提前声明，非临时合并）。
+- **b context budget pressure**：M16 bypass + M17 恢复 + M18 继续 + M19 继续 = 累计 2 次 bypass 不复位 / 第 3 次触发闸门 3.4 L1 review。M20 必继续 R1=3 subagent 并行 + R2=1 合并 Opus 真跑，不再降级。
+- **c 临时合并**：禁。如 sprint 中临时合并 → bypass log 第 3 次累计触发对闸门规则本身的 review。
+
+### 范式复用清单（M02-M19 沉淀 / M20 主动复制不等抓）
+
+- **viewer 写所有写端点 403**（M07 立 / M08+ 应用）：M20 写端点 = POST/PATCH/DELETE /teams + members + transfer-ownership + move-team；权限走 L2 assert_team_role(min) 而非 ProjectRole；team member 不能改 team name → P11 测试覆盖（403 TEAM_PERMISSION_DENIED）；非 team 成员尝试任何写端点 → 404 TEAM_NOT_FOUND（不 leak 存在性）
+- **write_event 异常传播测试 e2e 字面验**（M16 立 / M20 10 个 team_* 写路径必字面验 monkeypatch raise + e2e 显式断言事务整体回滚 / E14 测试覆盖）
+- **cross-tenant 404 + cross-project node 422**（M02-M19 范式 / M20 cross-team 直跳 → 422 CROSS_TEAM_MOVE_FORBIDDEN / cross-tenant team 访问 → 404 TEAM_NOT_FOUND）
+- **IntegrityError 区分约束名**（M05 立 / 清单 6 / M20 team_name UNIQUE (creator_id, name) → TeamNameDuplicateError 409 / team_member (team_id, user_id) UNIQUE → TeamMemberDuplicateError 409 / Service 必 catch 区分约束名）
+- **R-X1 失败补偿 commit boundary**（M11 立 / M17 helper / M20 同步无补偿形态 / N/A 显式声明）
+- **文件上传 file.size + sanitize**（M11 立 / M17 第二实例 / M19 输出端首发 / M20 无 multipart 路径 / N/A 显式声明）
+- **SSE 形态特殊不免除契约纪律**（M13 立 / M20 同步 CRUD / N/A 显式声明）
+- **metadata 字段集每条 e2e 字面验**（M14 立 / M20 10 个 team_* 事件 metadata 必逐字段验：team_created/renamed/desc_changed/deleted + member_added/removed/promoted/demoted + project_joined/left_team / 含 correlation_id F2.9 / residual_project_count F2.4）
+- **endpoint 形态特殊不免除契约纪律**（M14 立 / M20 9 endpoints 形态混杂 / 主动复制 = 每 endpoint cross-tenant 404 + viewer/non-team-member 403/404 + 写端点 viewer 403 / transfer-ownership 单事务原子）
+- **N/A 元教训显式声明范式**（M14 立 / M20 §14.5 范式复用清单 + tests.md docstring 双重显式 + test_meta_lesson_na_explicit_declarations）
+- **横切表 owner enum 4 处同步**（M15 立 / M20 ActionType+10 + TargetType+1 已预录 4 处 model tuple + schema StrEnum + CHECK constraint + Alembic / 子片 1 验证 grep）
+- **R14 ci-lint 守护过去式**（M16 立 / M20 service write_event(action_type=...) 10 个 team_* 全过去式字面 / R1-B 漏识别 #2 范式：design §10 字面 vs R14 立规精神对齐 / sprint 启动期 R1 reviewer 必跑 grep 检查）
+- **§12B 后台 fire-and-forget 子模板**（M16 立 / M20 同步 CRUD / N/A 显式声明）
+- **R-X1 第二实例 compensation_session helper**（M17 立 / M20 同步无补偿形态 / N/A 显式声明）
+- **idempotency 含 project_id**（M17 立 / M20 §11 显式 N/A / 走 UniqueConstraint UX 等价幂等）
+- **WS endpoint 5-test 矩阵**（M17 立 / M20 无 WS endpoint / N/A 显式声明）
+- **EmbeddingProvider 抽象 / pgvector ARRAY 占位三层降级**（M18 立 / M20 不触 embedding 路径 / N/A 显式声明 / M18 backfill DAO 走 ADR-003 规则 4 豁免本 sprint helper）
+- **占位 metadata _stub:True**（M18 立 / M20 全真实数据 / N/A 显式声明）
+- **测试反模式 assert True / 永真 in 元组**（M18 立 / M20 全测试有意义断言）
+- **元教训 #19 三方 status code 字面同步**（M19 立 / M20 应用：tests.md status code 矩阵 ↔ design §13 ErrorCode 表 ↔ exceptions.py http_status 字面 / 启动期已对账 ✅ / R2 reconcile checkbox）
+
+### L3 子选项留空待实证（R-X5 风格）
+
+- "M20 横切 owner 模块（user_accessible_project_ids_subquery 升级 = ADR-005 L3 SQL 注入）+ 跨事务 R-X3 双方法（delete_team / transfer_ownership）+ R10-1 批量独立 N+1 + 嵌套 max 权限解析 = Phase 2.1 复杂度最高单 sprint 形态" — R1+R2 命中分布预期偏 R1-A spec+quality（嵌套 max + 跨事务 R-X3 + 状态机 4 条禁止转换）/ R1-C quality+efficiency（N+1 + 性能子查询）/ R2 endpoint 9 个混杂 endpoint 单审命中范围预期略超普通模块；sprint 实证后回写 audit/m20-pilot-template-validation.md
+- "L3 SQL 注入升级横切 M03-M19 范围（不动 DAO 内部 query / 仅升级 helper concrete impl + lifespan 注入）是否触发回归" — sprint 实证；M03-M19 既有 DAO 在 set_tenant_context 切换前后 baseline 测试是否仍 1512 PASS 不破
+- "Phase 2.1 100% 收官触发的 sink — M20 是 own 最后一个 / sink 立规候选预期总数（M02-M19 累计 N 项）+ M20 自身贡献" — sprint 实证 / 闸门 4 启动条件评估
+- "R-X3 跨事务 Service 签名（外部 db: Session）双方法（delete_team + transfer_ownership）首发 + correlation_id F2.9 同流程共享 + R10-1 批量独立 N+1 三者交叉" — R1-A spec+quality 命中预期最高 / sprint 实证后回写
+
+---
+
 ## 15. 完成度判定 checklist
 
 ### 设计文档完整性
