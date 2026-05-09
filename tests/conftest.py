@@ -958,3 +958,59 @@ async def make_embedding_task(db_session):
         return emb_task
 
     yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_team(db_session, make_user):
+    """工厂 fixture：建 (creator, team) 对（M20 sprint 抽出）。
+
+    跨模块 helper 规则十二连（M02-M19）：sprint 启动闸门 §1 conftest fixture 复用预查
+    强制要求测试文件不内联同名 helper / make_team 一开始就放 conftest。
+
+    返回 async callable: `creator, team = await make_team(name_suffix="-A")`。
+    """
+    from uuid import uuid4
+
+    from api.models.teams import Team
+
+    async def _make(
+        *,
+        name_suffix: str = "",
+        creator=None,
+        description: str | None = None,
+    ):
+        creator_obj = creator if creator is not None else await make_user()
+        team = Team(
+            creator_id=creator_obj.id,
+            name=f"T-{uuid4().hex[:6]}{name_suffix}",
+            description=description,
+        )
+        db_session.add(team)
+        await db_session.flush()
+        return creator_obj, team
+
+    yield _make
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def make_team_with_owner(db_session, make_team):
+    """工厂 fixture：make_team + 自动加 creator 为 owner team_member 行（M20 sprint 抽出）。
+
+    G1 测试覆盖：创建 team 后 creator 自动 INSERT team_members(role=owner) 单事务。
+    本 fixture 抽出供 M20 子片 1+2+3 测试复用（与 make_project_with_member 范式一致）。
+
+    用法：creator, team = await make_team_with_owner(name_suffix="-A")
+    """
+    from api.models.teams import TeamMember, TeamRole
+
+    async def _make(*, name_suffix: str = "", creator=None, description: str | None = None):
+        creator_obj, team = await make_team(
+            name_suffix=name_suffix, creator=creator, description=description
+        )
+        db_session.add(
+            TeamMember(team_id=team.id, user_id=creator_obj.id, role=TeamRole.OWNER.value)
+        )
+        await db_session.flush()
+        return creator_obj, team
+
+    yield _make

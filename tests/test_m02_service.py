@@ -302,22 +302,28 @@ async def test_remove_member(db_session, alice, bob):
 # ─────────────── C 路径 sprint 实证 (team_id 写入策略) ───────────────
 
 
-async def test_c_path_team_id_service_does_not_reject_arbitrary_uuid(db_session, alice):
-    """C 路径子选项实证 (5 步法决): service 不校验 team_id 合法性 (DAO 完全允许).
+async def test_c_path_team_id_service_writes_existing_team_uuid(db_session, alice):
+    """C 路径子选项实证（M20 sprint 升级 2026-05-09）：service 不校验 team_id 合法性
+    （DAO 完全允许）/ 但写入存在的 team UUID 即可成功（FK RESTRICT 守 dangling）。
 
-    原因: schema 已允许任意 UUID, service 拒会引入双源真相;
-    M20 ALTER ADD CONSTRAINT 前 data migration reset (design §3.X A1 C 路径 M20 回写 checklist ①).
+    M02 期 A1=C 中间态：service 不校验 / DAO 直写 / 任意 UUID OK（FK 未启用）。
+    M20 sprint 启用 FK RESTRICT 后：service 仍不校验（不引入双源真相）/ DAO 直写 /
+    但 team UUID 必须真存在（FK 守 dangling）—— 业务路径在 move-team router/service
+    入口校验 team 存在性（设计契约 / 不在 ProjectDAO 层重复）。
     """
     from sqlalchemy import select
 
     from api.dao.project_dao import ProjectDAO
     from api.models.project import Project
+    from api.models.teams import Team
+
+    # 先建一个真 team（FK RESTRICT 守 dangling 后必须存在）
+    team = Team(creator_id=alice.id, name="TeamForCPath")
+    db_session.add(team)
+    await db_session.flush()
 
     dao = ProjectDAO()
-    arbitrary_team = uuid4()
-    proj = await dao.create(
-        db_session, name="TeamWriteP", owner_id=alice.id, team_id=arbitrary_team
-    )
+    proj = await dao.create(db_session, name="TeamWriteP", owner_id=alice.id, team_id=team.id)
     await db_session.flush()
     r = await db_session.execute(select(Project).where(Project.id == proj.id))
-    assert r.scalar_one().team_id == arbitrary_team
+    assert r.scalar_one().team_id == team.id

@@ -96,9 +96,15 @@ class Project(Base, TimestampMixin):
     owner_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
-    # A1=C 中间态：仅 UUID nullable 列，**不挂 ForeignKey**（teams 表 M20 期才存在）
-    # M20 sprint 启动时：ALTER ADD CONSTRAINT FK ondelete=RESTRICT + 此处加 ForeignKey("teams.id")
-    team_id: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    # M20 sprint（2026-05-09）：启用 FK ondelete=RESTRICT（Q8=B 强制前置迁出 / 删 team
+    # 前 SELECT FOR UPDATE projects WHERE team_id=tid 必须为空 / 否则 422 TEAM_HAS_PROJECTS）。
+    # 原 A1=C 中间态（仅 UUID nullable 列不挂 ForeignKey）已升级。
+    team_id: Mapped[PyUUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("teams.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     # M18 baseline-patch（A2=A 现在建）
     rrf_k: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     similarity_threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.3)

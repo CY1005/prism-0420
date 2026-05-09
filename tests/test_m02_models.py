@@ -173,11 +173,12 @@ async def test_m02_t7_similarity_threshold_out_of_range_rejected(db_session, thr
 # ─────────────── M02-T8 M20 baseline-patch A1=C 中间态：team_id 无 FK ───────────────
 
 
-async def test_m02_t8_team_id_is_nullable_uuid_no_fk(db_session):
-    """A1=C 中间态验证：team_id 列存在 + 类型 UUID + nullable=YES + 无 FK constraint。
+async def test_m02_t8_team_id_is_nullable_uuid_with_fk(db_session):
+    """M02 baseline-patch（M20 sprint 升级）：team_id 列 + 类型 UUID + nullable=YES + FK
+    fk_projects_team RESTRICT。
 
-    M20 sprint 才 ALTER ADD CONSTRAINT FK ondelete=RESTRICT。
-    本测试保证 M02-M19 期可写任意 UUID 不被拒（teams 表此期间不存在）。
+    M20 sprint 子片 1（2026-05-09）：原 A1=C 中间态升级 / ALTER ADD CONSTRAINT FK
+    ondelete=RESTRICT（Q8=B 强制前置迁出 / 删 team 前 projects 必须空）。
     """
     r = await db_session.execute(
         text(
@@ -189,7 +190,7 @@ async def test_m02_t8_team_id_is_nullable_uuid_no_fk(db_session):
     assert data_type.lower() == "uuid"
     assert is_nullable == "YES"
 
-    # 检查 projects.team_id 上无 FK constraint
+    # 检查 projects.team_id 上有 fk_projects_team FK constraint（M20 baseline-patch）
     fks = await db_session.execute(
         text(
             "SELECT tc.constraint_name "
@@ -201,19 +202,28 @@ async def test_m02_t8_team_id_is_nullable_uuid_no_fk(db_session):
         )
     )
     fk_names = list(fks.scalars())
-    assert not fk_names, f"M02 期 projects.team_id 不应有 FK（A1=C 中间态）；found: {fk_names}"
+    assert "fk_projects_team" in fk_names, (
+        f"M20 sprint 后 projects.team_id 应有 FK fk_projects_team（RESTRICT）；found: {fk_names}"
+    )
 
 
-async def test_m02_t9_team_id_accepts_arbitrary_uuid(db_session):
-    """M02-M19 期写任意 UUID 到 team_id（teams 表不存在，无 FK 拒绝）。"""
+async def test_m02_t9_team_id_rejects_dangling_uuid(db_session):
+    """M20 sprint 升级后：写不存在的 team_id 被 FK RESTRICT 拒（与 M02 期中间态相反）。
+
+    M02 期（A1=C 中间态）允许任意 UUID 写入 / M20 sprint 启用 FK 后 dangling UUID 被拒。
+    业务路径：Service 层在 move-team endpoint 必先校验 team 存在再写 team_id（Q7+Q8）。
+    """
+    from sqlalchemy.exc import IntegrityError
+
     from api.models.project import Project
 
     user = await _make_user(db_session)
-    arbitrary = uuid4()
+    arbitrary = uuid4()  # 不在 teams 表中
     proj = Project(name="TeamProj", owner_id=user.id, team_id=arbitrary)
     db_session.add(proj)
-    await db_session.flush()  # 不应抛
-    assert proj.team_id == arbitrary
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+    await db_session.rollback()
 
 
 # ─────────────── M02-T10 R3-6-B placeholder seed ───────────────
@@ -351,12 +361,13 @@ def test_m02_t14_project_model_fields_introspect():
     owner_fks = list(cols["owner_id"].foreign_keys)
     assert any(fk.column.table.name == "users" for fk in owner_fks), "owner_id 应 FK to users"
 
-    # team_id UUID nullable 无 FK（A1=C 中间态；ORM 层也不挂 ForeignKey）
+    # team_id UUID nullable + FK to teams（M20 sprint 启用 / RESTRICT）
     assert isinstance(cols["team_id"].type, UUID)
     assert cols["team_id"].nullable is True
     team_fks = list(cols["team_id"].foreign_keys)
-    assert not team_fks, (
-        "M02 期 ORM 层 projects.team_id 不应挂 ForeignKey（A1=C 中间态；M20 sprint 启用）"
+    assert team_fks, "M20 sprint 后 ORM 层 projects.team_id 应挂 ForeignKey to teams"
+    assert any(fk.column.table.name == "teams" for fk in team_fks), (
+        "team_id FK 应指向 teams 表（M20 baseline-patch）"
     )
 
 
