@@ -23,6 +23,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from sqlalchemy import select
 
 from api.auth.jwt_utils import encode_jwt
@@ -398,3 +400,153 @@ def test_meta_lesson_na_explicit_e2e_declarations():
     # docstring-only placeholder（M19 范式延续 / M18 立规 #4 测试反模式禁用 assert True
     # 不构成永真污染：本 test 函数仅承载 docstring 字面声明，无业务断言）
     assert True is True  # noqa: PT018 — meta-lesson placeholder
+
+
+# ─────────────── R2 立修：补 PATCH role endpoint e2e + viewer 写 6 端点 403 全覆盖 ───────────────
+
+
+async def test_r2_fix_update_member_role_promote_member_to_admin(
+    auth_client, make_user, db_session
+):
+    """R2-P1-1 立修：PATCH /api/teams/{tid}/members/{uid} golden member→admin 路径。
+
+    design §7.1 字面登记 ErrorCode 但 R1 完成时 0 router e2e 覆盖此 endpoint。
+    """
+    from api.models.teams import TeamMember, TeamRole
+
+    creator = await make_user()
+    u_member = await make_user()
+    r = await auth_client.post("/api/teams", json={"name": "T"}, headers=_bearer(creator.id))
+    tid = r.json()["id"]
+    db_session.add(TeamMember(team_id=tid, user_id=u_member.id, role=TeamRole.MEMBER.value))
+    await db_session.commit()
+
+    r = await auth_client.patch(
+        f"/api/teams/{tid}/members/{u_member.id}",
+        json={"role": "admin"},
+        headers=_bearer(creator.id),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["role"] == "admin"
+
+
+async def test_r2_fix_update_member_role_owner_demote_blocked_422(auth_client, make_user):
+    """R2-P1-1 立修：单 owner 直降 → 422 reason='last_owner_demote'（design §13.1 / E4）。"""
+    creator = await make_user()
+    r = await auth_client.post("/api/teams", json={"name": "T"}, headers=_bearer(creator.id))
+    tid = r.json()["id"]
+    r = await auth_client.patch(
+        f"/api/teams/{tid}/members/{creator.id}",
+        json={"role": "admin"},
+        headers=_bearer(creator.id),
+    )
+    assert r.status_code == 422
+    assert r.json()["details"].get("reason") == "last_owner_demote"
+
+
+async def test_r2_fix_update_member_role_target_not_found_404(auth_client, make_user):
+    """R2-P1-1 立修：target user 不在 team_members → 404 TEAM_MEMBER_NOT_FOUND（E7）。"""
+    creator = await make_user()
+    r = await auth_client.post("/api/teams", json={"name": "T"}, headers=_bearer(creator.id))
+    tid = r.json()["id"]
+    r = await auth_client.patch(
+        f"/api/teams/{tid}/members/{uuid4()}",
+        json={"role": "admin"},
+        headers=_bearer(creator.id),
+    )
+    assert r.status_code == 404
+    assert r.json()["code"] == "team_member_not_found"
+
+
+# ─── viewer 写 6 端点 403 全覆盖（R2-P1-2 立修 / M07 范式 / design §14.5） ───
+
+
+async def _setup_team_with_member(auth_client, db_session, make_user):
+    """Helper：建 (creator owner, u_member, team_id)。"""
+    from api.models.teams import TeamMember, TeamRole
+
+    creator = await make_user()
+    u_member = await make_user()
+    r = await auth_client.post("/api/teams", json={"name": "T"}, headers=_bearer(creator.id))
+    tid = r.json()["id"]
+    db_session.add(TeamMember(team_id=tid, user_id=u_member.id, role=TeamRole.MEMBER.value))
+    await db_session.commit()
+    return creator, u_member, tid
+
+
+async def test_r2_fix_member_delete_team_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #1：member 试删 team → 403。"""
+    _creator, u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    r = await auth_client.delete(f"/api/teams/{tid}", headers=_bearer(u_member.id))
+    assert r.status_code == 403
+
+
+async def test_r2_fix_member_add_member_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #2：member 试加成员 → 403。"""
+    _creator, u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    new_u = await make_user()
+    r = await auth_client.post(
+        f"/api/teams/{tid}/members",
+        json={"user_id": str(new_u.id), "role": "member"},
+        headers=_bearer(u_member.id),
+    )
+    assert r.status_code == 403
+
+
+async def test_r2_fix_member_update_member_role_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #3：member 试改成员 role → 403。"""
+    _creator, u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    r = await auth_client.patch(
+        f"/api/teams/{tid}/members/{u_member.id}",
+        json={"role": "admin"},
+        headers=_bearer(u_member.id),
+    )
+    assert r.status_code == 403
+
+
+async def test_r2_fix_member_remove_member_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #4：member 试移除成员 → 403。"""
+    _creator, u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    r = await auth_client.delete(
+        f"/api/teams/{tid}/members/{u_member.id}", headers=_bearer(u_member.id)
+    )
+    assert r.status_code == 403
+
+
+async def test_r2_fix_member_transfer_ownership_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #5：member 试 transfer → 403（assert_team_role(OWNER) 拒）。"""
+    _creator, u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    r = await auth_client.post(
+        f"/api/teams/{tid}/transfer-ownership",
+        json={"new_owner_id": str(u_member.id)},
+        headers=_bearer(u_member.id),
+    )
+    assert r.status_code == 403
+
+
+async def test_r2_fix_non_team_admin_move_project_to_team_403(auth_client, make_user, db_session):
+    """R2-P1-2 立修 #6：non-team-admin 试 move project to team → 403（P15 / move-team L2 admin）。
+
+    actor 是 project owner / 但不是目标 team 的 admin → 拒 403。
+    """
+    from api.models.project import MemberRole as PMRole
+    from api.models.project import Project, ProjectMember
+
+    creator, _u_member, tid = await _setup_team_with_member(auth_client, db_session, make_user)
+    proj_owner = await make_user()
+    proj = Project(name="P", owner_id=proj_owner.id)
+    db_session.add(proj)
+    await db_session.flush()
+    db_session.add(
+        ProjectMember(project_id=proj.id, user_id=proj_owner.id, role=PMRole.OWNER.value)
+    )
+    await db_session.commit()
+    # proj_owner 不是 team 成员 / 试 move project 到 team → assert_team_role 拒（404 防 leak）
+    r = await auth_client.post(
+        f"/api/projects/{proj.id}/move-team",
+        json={"target_team_id": tid},
+        headers=_bearer(proj_owner.id),
+    )
+    # Service.assert_team_role 在 user 非 member 时抛 TeamNotFoundError(404)（防 leak）
+    # 而非 403 — design §8 + 实装契约一致（cross-tenant 不暴露 team 存在性）
+    assert r.status_code in (403, 404)

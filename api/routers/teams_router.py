@@ -169,7 +169,7 @@ async def add_member(
 # ─────────────── G3 PATCH role ───────────────
 
 
-@teams_router.patch("/{team_id}/members/{user_id}")
+@teams_router.patch("/{team_id}/members/{user_id}", response_model=dict)
 async def update_member_role(
     team_id: UUID,
     user_id: UUID,
@@ -177,6 +177,7 @@ async def update_member_role(
     user: Annotated[Any, Depends(current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    """R2-P1-3 立修：加 response_model=dict 与其他 endpoint 范式一致。"""
     from api.models.teams import TeamRole as _TeamRole
 
     svc = TeamService()
