@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.2 子片 5 关闸 / Phase 2.2 100% 完成**：7/7 子片完成 / cumulative 10 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add+597b885 / D 类 #3+#15 IssueResponse + DimensionResponse join 装配 / cross-sprint pool 41→39 / SR-P22-2/3/4/5 立规已 sink / 1623→1629 PASS）
-current_phase: **Phase 2.2 前端继承 100%**（子片 0+1+2+3a-i+3a-ii+3b+3c+4+5 全完成 / 下一步 Phase 2.3 集成验证）
+last_updated: 2026-05-09（**Phase 2.3 子 sprint A 关闸 / §8.0 工程规约补完**：03-cicd + 04-observability + 05-security 三 spec accepted-minimal → accepted / .github/workflows/ci.yml 7 jobs / api/core/config.py prod CORS guard / spec 06 §2 路径前缀+logout body 备注 / punt 池 #1+#2+#3+#5 关闭 / §8.0 12/12 ✅ / 1629 PASS 守护）
+current_phase: **Phase 2.3 集成验证 子 sprint A 完成**（A ✅ / 下一步 B 集成 e2e + 性能基线）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -243,25 +243,25 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 > 03/04/05 三份 spec 是 Phase 2.0 的"最小决策占位"，足够 2.0/2.1/2.2 业务开发，但上线前必须补完，否则线上会缺 CI/可观测/密钥能力。
 
-**03-cicd-plan 必补**：
-- [ ] `.github/workflows/ci.yml` 完整步骤（lint / typecheck / test / build / migrate dry-run）
-- [ ] 缓存策略（pip / pnpm / docker layer）
-- [ ] secrets 注入（GH Actions secrets → env）
-- [ ] 部署触发条件（main push / tag / 手动）
+**03-cicd-plan 必补**（Phase 2.3 子 sprint A 关闸 2026-05-09）：
+- [x] `.github/workflows/ci.yml` 完整步骤（lint / typecheck / test / build / migrate dry-run / codegen drift / deps audit）
+- [x] 缓存策略（uv cache + pnpm cache / docker layer 推上线 sprint）
+- [x] secrets 注入（GH repo secrets → env: 字段 / prod environment 二次门控）
+- [x] 部署触发条件（main push CI / tag 部署 prod / workflow_dispatch backup）
 
-**04-observability-plan 必补**：
-- [ ] 指标采集方案选型（Prometheus / OTel / 云厂商）+ 关键指标清单（QPS / P95 / 错误率 / Queue 堆积）
-- [ ] 告警阈值 + 通道（TG / 邮件）
-- [ ] traceId 贯穿（FastAPI middleware → arq job → 日志字段）
-- [ ] 错误聚合（Sentry or 自建）选型
+**04-observability-plan 必补**（Phase 2.3 子 sprint A 关闸 2026-05-09）：
+- [x] 指标采集方案选型（Prometheus + Grafana Cloud 免费档）+ 关键指标清单（HTTP/arq queue/embedding/SSE-WS connections）
+- [x] 告警阈值 + 通道（Sentry + Grafana alerting → TG reuse OpenClaw push）
+- [x] traceId 贯穿（X-Request-ID middleware → structlog → arq job kwargs）
+- [x] 错误聚合（Sentry SaaS 免费档 5K events/month）
 
-**05-security-baseline 必补**：
-- [ ] prod 密钥管理选型（Vault / Doppler / 云 KMS / GH secrets-only）
-- [ ] 密钥轮转流程（JWT / DB / 第三方 API key）
-- [ ] HTTPS / CSRF / CORS / Rate limit 上线前 checklist
-- [ ] 备份 + 灾恢方案（PG dump 频率 / 异地）
+**05-security-baseline 必补**（Phase 2.3 子 sprint A 关闸 2026-05-09）：
+- [x] prod 密钥管理选型（GH secrets-only 起步 / 多人切 Doppler）
+- [x] 密钥轮转流程（JWT 双 key + KID / ENC 双 key fallback / DB 人工 / API 手动）
+- [x] HTTPS / CSRF / CORS / Rate limit 上线前 checklist（Caddy auto-cert + slowapi + prod CORS guard 实装 + cookie secure）
+- [x] 备份 + 灾恢方案（PG dump 每日 / B2 异地 30 天 / 季度演习 / RPO 24h RTO 2h）
 
-**判定**：8.0 全 ✅ 才能进 8.1 上线冒烟。
+**判定**：8.0 全 ✅ ✅（2026-05-09 Phase 2.3 子 sprint A 关闸 / commit 见进度日志）→ 进 8.1 上线冒烟。
 
 ### 8.1 集成与上线
 

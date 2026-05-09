@@ -90,6 +90,12 @@ sanction_path: AI 自决（feedback_decision_layering 5 步流程跑后判定为
 - Phase 2.2 子片 0 prep：前端拷过来时 fetch wrapper 加 credentials:'include'
 - Phase 2.2 子片 2：auth flow 改造按本 spec 实施清单跑
 
+### 实施备注（2026-05-09 / Phase 2.3 子 sprint A 顺修 punt #3+#5）
+
+- **路径前缀**：本 spec 字面写 `/api/auth/*`；当前实装 router prefix=`/auth`（即 `/auth/login` / `/auth/refresh` / `/auth/logout`）。Next.js 前端通过 `NEXT_PUBLIC_API_URL` 拼接 → 实际请求 URL 仍是 `<api-host>/auth/*`。前缀差异不破 spec 语义。
+- **REFRESH_COOKIE_PATH**：实装 `Path=/auth`（与 router prefix 对齐 / 见 `api/routers/auth.py:42`），refresh 与 logout endpoint 都能携带 cookie。
+- **logout body**：当前实装 204 + 清 cookie 即可；refresh_token 不需要 body 携带（cookie 已带）。前端调用形式：`fetch('/auth/logout', { method: 'POST', credentials: 'include' })`，body 不必填。
+
 ---
 
 ## §3 SSR auth 通道（Server Component / Server Action 鉴权）

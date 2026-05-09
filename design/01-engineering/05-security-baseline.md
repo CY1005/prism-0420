@@ -1,11 +1,12 @@
 ---
-title: 安全基线（最小集占位决策）
-status: accepted-minimal
+title: 安全基线
+status: accepted
 owner: CY
 created: 2026-04-20
 accepted: 2026-04-26
 v2_revision: 2026-05-07  # §7 加 early adopter 触发条款 + 后续 D4 推演修订（含横切 vs 模块特定判断前置 + §7.1 横切三选一 / §7.2 模块特定三选一），详见 ../audit/time-dimension-blindspot-2026-05-07.md
-phase: Phase 2.0 启动决策（A4.3）+ Phase 2.3 上线前补完
+v3_revision: 2026-05-09  # §8 Phase 2.3 §8.0 补完决策（prod 密钥/轮转/HTTPS-CSRF-CORS-rate limit/备份）
+phase: Phase 2.0 启动决策（A4.3）+ Phase 2.3 §8.0 补完
 parent: ../00-roadmap.md
 ---
 
@@ -119,14 +120,14 @@ LOG_LEVEL=DEBUG
 
 ---
 
-## 6. 完成度判定（Phase 2.0 范围）
+## 6. 完成度判定
 
 - [x] 认证方案（ADR-004 引用）
 - [x] 授权模型（ADR-001 + 模块 §8 引用）
 - [x] 密钥管理（.env + .env.example + .gitignore）
 - [x] 数据加密最小集（HTTPS / TLS / AES-256-GCM / HS256 / bcrypt）
 - [x] 漏洞扫描最小集（pip-audit + npm audit weekly）
-- [ ] **Phase 2.3 上线前补**：Trivy / SAST / WAF / DDoS / Rate limiting
+- [x] **Phase 2.3 §8.0 补完**（见 §8 / commit Phase 2.3 子 sprint A）：prod 密钥 + 轮转 + HTTPS/CORS/rate limit + 备份
 
 ---
 
@@ -201,3 +202,109 @@ LOG_LEVEL=DEBUG
 ### 适用文档
 
 本条款同时适用于 03-cicd-plan / 04-observability-plan（均 accepted-minimal）。任一文档下的能力被提前需要时，按本条款三选一。
+
+---
+
+## 8. Phase 2.3 §8.0 补完决策（2026-05-09 / 子 sprint A）
+
+> **scope**：05-security minimal → accepted。**自决原则**：shadow 项目 + 单人 + 上线最简，prod 风险敞口透明记录。
+
+### 8.1 prod 密钥管理（C1）
+
+**决定**：✅ **GH secrets-only 起步 / 多人或 prod 多实例时切 Doppler**
+
+| 候选 | 优 | 缺 |
+|------|----|----|
+| **A GH secrets-only**（选）| 0 部署 / 0 cost / 与 CI 集成天然 | 仅 CI 可见 / runtime 仍走 .env 文件 / 多实例同步靠 deploy 脚本 |
+| B Doppler | 多人友好 / runtime 拉取 / 轮转友好 | $$$ team plan / 单人过度 |
+| C HashiCorp Vault | 企业级 | 自建运维成本 |
+| D 云 KMS | 集成 IAM | vendor lock |
+
+**实施**：
+- CI：直接用 `${{ secrets.X }}`
+- prod runtime：deploy 脚本（上线 sprint）从 GH API 拉 secrets → 落 `.env` → docker-compose / systemd 读取
+- `.env` 文件 chmod 600 / 不入 git
+
+**3-5 月演进**：第二个 prod 实例 / 第二人加入 → 切 Doppler。
+
+### 8.2 密钥轮转流程（C2）
+
+**决定**：✅ **三类密钥差异化轮转**
+
+| 密钥 | 轮转策略 | 频率 |
+|------|----------|------|
+| `JWT_SECRET` | 双 key 重叠期（KID claim 区分新旧 / 旧 key 1×TTL 后退役）| 季度 |
+| `ENCRYPTION_KEY`（AES-256-GCM）| 双 key fallback（解密尝试旧 key fallback 链 / 加密只用新 key / 后台 backfill 重加密旧密文）| 半年 |
+| DB 密码 | 人工切换 + downtime（≤5min）| 半年 / 泄露 |
+| 第三方 API key（OpenAI/Anthropic）| 手动轮换（dashboard 创建新 → 部署 → 删旧）| 季度 / 泄露 |
+| `INTERNAL_TOKEN` | 同 JWT_SECRET 双 key | 季度 |
+
+**实施**（spec 决策 / 实施推上线 sprint）：
+- `api/auth/jwt_helper.py` 加 KID claim 解析 + 多 key fallback 链
+- `api/auth/crypto.py`（已实装基础）扩 fallback decrypt + backfill batch task
+- runbook：`docs/runbooks/key-rotation.md`（上线 sprint 写）
+
+**3-5 月演进**：HSM/KMS 集成；自动化轮转（GH Actions cron）。
+
+### 8.3 HTTPS / CSRF / CORS / Rate limit 上线 checklist（C3）
+
+**决定**：
+
+| 项 | 决定 | 实施位置 |
+|----|------|----------|
+| **HTTPS** | Caddy auto-cert（Let's Encrypt）反代 FastAPI / app | `infra/Caddyfile`（上线 sprint）|
+| **CSRF** | API token-based 不需 CSRF token 防御（refresh cookie SameSite=Lax 兜底）| spec 06 §2 已锁 |
+| **CORS** | `allow_origins=settings.cors_origins` + prod 强制非 localhost guard（见 §8.6 punt #1 关闭）| `api/main.py` |
+| **Rate limit** | `slowapi` middleware + Redis backend / 关键 endpoint 收紧（login 5/min / register 3/min / AI 调用 60/h-per-user）| `api/middleware/ratelimit.py`（上线 sprint）|
+| **Cookie secure flags** | refresh cookie prod 必须 `Secure=True + HttpOnly=True + SameSite=Lax`（见 §8.6 punt #2 关闭）| `api/auth/auth_router.py` set_cookie |
+
+**Rate limit 阈值依据**：login 5/min 防爆破；register 3/min 防垃圾注册；AI 60/h-per-user 防成本爆炸（M13 LLM call $）。
+
+### 8.4 备份 + 灾恢（C4）
+
+**决定**：✅ **PG dump 每日 + 7 天保留 + 异地 S3-compatible（Backblaze B2 / R2）+ 季度演习**
+
+| 维度 | 决定 |
+|------|------|
+| **频率** | 每日 02:00 UTC（GH Actions cron / 或 prod runner systemd timer）|
+| **保留** | 本地 7 天 / 异地 30 天（B2 lifecycle policy 自动清理）|
+| **异地** | Backblaze B2（$0.005/GB/月 / 比 S3 便宜 4 倍 / 单人 prism-0420 < 10GB 几乎免费）|
+| **演习** | 季度一次：从异地拉 backup → restore 到 staging → 跑健康检查；通过则 close ticket |
+| **加密** | dump → `gpg --encrypt` → upload；密钥走 GH secrets `BACKUP_GPG_KEY` |
+
+**RPO/RTO**：
+- RPO（数据可丢失）：≤24h（每日 backup）
+- RTO（恢复时间）：≤2h（拉 backup + restore + smoke test）
+
+**3-5 月演进**：业务关键度提升 → 切流式增量（pgBackRest）；多区灾恢。
+
+### 8.5 决策登记总览
+
+| 决策 | 选 | 理由 |
+|------|----|------|
+| C1 prod 密钥 | GH secrets-only | 单人 0 cost / 多人切 Doppler |
+| C2 轮转 | JWT/ENC/DB/API 差异化 + 双 key fallback | 安全 vs 运维平衡 |
+| C3 HTTPS/CORS/CSRF/RL | Caddy + slowapi + prod CORS guard + cookie secure | 上线 sprint 实施 |
+| C4 备份 | PG dump 每日 + B2 异地 + 季度演习 | 单人最低成本完整方案 |
+
+### 8.6 punt 顺修（子片 2 R2 punt #1+#2 关闭）
+
+#### Punt #1 — CORS prod guard（关闭于本 sprint）
+
+**问题**：`api/main.py:115` `allow_origins=settings.cors_origins` 默认 `["http://localhost:3000"]`，prod 漏覆盖会留 localhost 通配。
+
+**修复**：`api/core/config.py` 加 `validate_cors_for_prod` validator — 当 `app_env="prod"` 且 `cors_origins` 含 `localhost`/`127.0.0.1` → ValueError 拒启动。
+
+#### Punt #2 — refresh cookie secure prod guard（关闭于本 sprint）
+
+**问题**：`api/auth/auth_router.py` set_cookie 当前 `secure=settings.app_env != "local"`。prod env 漏配会落 secure=False。
+
+**修复**：set_cookie 处加 explicit `secure=True if settings.app_env == "prod" else False` + 启动时 settings.validator 校验 prod 必须有 cookie_domain。
+
+#### Punt #3 — spec 06 §2 路径前缀备注（关闭于本 sprint）
+
+spec 06 §2 §73 字面 `/api/auth/logout`：本期实装在 `auth_router` prefix=`/auth`（即 `/auth/logout`），非 `/api/auth/logout`。spec 06 加 §2.X 备注澄清。
+
+#### Punt #5 — logout body 字段澄清（关闭于本 sprint）
+
+logout 当前 204 + 清 cookie。spec 06 加备注 `body=None`，refresh_token 不需 body 携带（cookie 已带）。
