@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (post-M18-sprint-complete)
+last_updated: 2026-05-09 (post-M19-sprint-complete)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,39 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-M18-sprint-complete）
+## 0. 状态快照（更新于 2026-05-09 post-M19-sprint-complete）
+
+- **Phase 2.0 工程基线**：✅ 100%
+- **Phase 2.1 业务模块**：⏳ 95%（M01-M08+M10-M19 完成；M09 superseded by M18 不实装；下一站 **M20 团队（最后一个 own）**）
+- **2026-05-09 M19 sprint 完成**（8 commit / 1512 PASS / R13-1 136→139 / L12+L13+R14 全过 / ruff 净 / **纯只读导出 / pilot=false / complexity=low / R1+R2 第十七数据点 / bypass log #2 配套继续 ✅**）：
+  - commits:
+    - `3ad8efa` 启动期（reconcile pass A 6 / B 0 第十四次实证 / C 8 / §14.5 + bypass 验收 + punt 检查）
+    - `facce18` 子片 1（ActionType+1 "exported" 4 处同步 / Alembic ALTER CHECK + 4 model tests / 子片 0 prep 合并到启动期 / 子片 2 DAO 复用接通合并到子片 3 service 构造函数）
+    - `83cf44a` 子片 3（ExportService.generate_markdown + Schema 2 Request + 3 ErrorCode + 13 service tests / DAO 复用 ADR-003 规则 1 / 横切表批量预取 dim_type_index + competitor_index 防 N+1）
+    - `c98e563` R1 立修 7 P1（3 subagent 并行 / Opus + 2 Sonnet 合并去重 / R14 过去式 + EXPORT_EMPTY_CONTENT 422 + EXPORT_NODE_LIMIT_EXCEEDED 业务码 + ValidationError 422 范式对齐 + include 全 False schema 阻断 + dict.fromkeys 保序去重 + select 移顶部 import）
+    - `947f0e2` 子片 4（Router 2 endpoints / POST /exports + POST /nodes/{nid}/export / 12 e2e 元教训 18 类 actionable 主动复制 + N/A 显式声明 / Content-Disposition + filename sanitize 输出端首发）
+    - `257ab92` R2 立修 3 P1（1 合并 Opus / tests.md ↔ design ↔ exceptions 三方 status code 字面同步漂移 + tests.md G2 3 node 顺序 e2e + tests.md E5 去重 e2e + summary 字面）
+    - 子片 5 关闸（本 commit / design 回写 + audit/m19-pilot-template-validation.md + roadmap M19 + Phase 2.1 90→95% + cross-sprint punt 池 + handoff §0）
+  - **1480 → 1512 PASS (+32) / 5 skipped / R13-1 136→139 / L12+L13+R14 全过 / ruff 净**
+  - **闸门 2.5 第十四次 B 栏 0 项实证**：M05-M19 十四连稳定
+  - **bypass log #2 配套继续 ✅**：M19 R1=3 subagent + R2=1 合并 Opus 真跑 / 累计 bypass 不复位（M16 bypass + M17 恢复 + M18 继续 + M19 继续 = 累计 2 次 bypass / 第 3 次触发闸门 3.4 L1 review）
+  - **R1+R2 命中数据**（M02-M19 第十七数据点 / 详 audit/m19-pilot-template-validation.md）：
+    - R1=3 subagent：5 P1（spec+quality Opus）+ 3 P1（reuse Sonnet）+ 3 P1（quality+efficiency Sonnet）= 11 P1 / 合并去重 7 立修 + 4 punt
+    - R2=1 合并 Opus：3 P1 + 3 P2 = 6 项 / 立修 3 + 顺修 1 + punt 2
+    - **R2 真漏抓贡献**：tests.md ↔ design ↔ exceptions 三方 status code 字面同步漂移（**元教训 #19 独家**）+ tests.md G2 3 node 顺序 e2e 缺失 + tests.md E5 去重 e2e 缺失
+  - **元贡献 4 项**（详 audit/m19-pilot-template-validation.md "元贡献清单"段）：
+    1. **元教训 #19：R1 局部立修触发 tests.md 第三方文件漂移** — R1 改 design §13 + exceptions.py 把 "404 → 422" 同步了，但 tests.md 成了滞后文件 / R1 三 subagent 把 tests.md 当"参照真相"而非"待同步对象" / 立规候选 SR-M19-1：tests.md ↔ design.md ↔ exceptions.py 三方 status code 字面同步 checkbox（M17 立的 R2 reconcile 仅覆盖 design ↔ 实装 / M19 第二实证扩第三方 tests.md）
+    2. **R14 过去式立规精神 vs design accepted 字面对齐范式** — design §10 字面 "export" / accepted 2026-04-21；M16 R14 立规 2026-05-09 立 / 5 步分层判断：横切纪律优先于单模块字面 / 立修 4 处同步 "export" → "exported" / 立规候选 SR-M19-2：design accepted 时间早于横切立规时（如 R14） / sprint 启动期 R1 reviewer 必跑立规精神 vs design 字面对齐 grep 检查
+    3. **filename sanitize 输入端 vs 输出端分门别类** — M11/M17 = 输入端（用户上传 filename / strip + 长度截断 + 特殊字符防御）/ M19 = 输出端（服务端拼装 timestamp / 控制字符 strip 纵深防御）/ 根源不同 / 立规候选 SR-M19-3：cross-sprint punt #17 第三实例 / 输出端首发不立即 horizontal / 第四实例（第二输出端）触发提取 api/utils/markdown_helpers.py
+    4. **N/A 元教训显式声明范式扩展（19 项主动复制清单）** — §14.5 范式复用清单 19 项是 M02-M18 沉淀最大主动复制清单 / test_meta_lesson_na_explicit_declarations docstring 字面声明 9 项 N/A（防 R2 把"未覆盖"当 P1 抓 / docstring-only placeholder + 不构成 M18 立 #4 测试反模式 assert True 永真污染）
+  - **R-X5 子选项实证**（design §14.5 L3 留空 3 项）：
+    1. **纯只读模块 R1+R2 命中分布偏 R2 文档同步面 / R1 偏代码契约面**（M19 R1=7 持平平均 / R2=3 略超普通模块 0-2 P1 区间 / 元教训 #19 文档同步盲区驱动）
+    2. **design §7 字面 Markdown 结构对账漏在 R1 / R2 子片 4 e2e golden test 字面验补足**
+    3. **filename sanitize 输出端首发不立即触发 horizontal 化** / 第四实例（第二输出端）触发
+  - **cross-sprint punt 池接通**：本 sprint 关闭 0 / 新增 4 punt（#25 _md_cell horizontal / #26 filename sanitize 输入 vs 输出分类 / #27 Cache-Control: no-store / #28 filename 含 project_name RFC 5987）/ 真漏洞 #20 require_platform_admin M19 evaluated 不触发（M19 viewer endpoint）/ M20 sprint 重新评估
+  - **下一站 M20 团队**：Phase 2.1 最后一个 own sprint。M20 形态特殊：teams + team_members 双表 + space_id → team_id RENAME baseline-patch + ActionType+10 + TargetType+1 + Alembic 单 revision 合并 + 8.5 P1+P2 + 8.7 R-X3 + 10.3 R10-1 N+1。**M20 启动期 reconcile pass A 栏首条预录**：M19 元教训 #19 应用——`grep -n "404\|422\|500" tests.md` 与 `exceptions.py:http_status` + `design.md:§13` 字面比对（SR-M19-1 立规实证）。
+
+## 0a. 上一版本快照（M18 sprint 完成）
 
 - **Phase 2.0 工程基线**：✅ 100%
 - **Phase 2.1 业务模块**：⏳ 90%（M01-M08+M10-M18 完成；下一站 M19 导入/导出；M09 superseded by M18 不实装）

@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-09 (M18 sprint 完成关闸)
+last_updated: 2026-05-09 (M19 sprint 完成关闸)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -305,6 +305,21 @@ UNVERIFIABLE 8 项
 | #22 | noop 转 succeeded 语义 | STILL_PUNT — **真漏洞 #22 / low** |
 | #23 | cron_failure_monitor PCT 维度真实施 | STILL_PUNT — **真漏洞 #23** |
 | #24 | batch_backfill 真 batch INSERT FROM unnest | STILL_PUNT — **真漏洞 #24** |
+
+### M19 sprint punt 池（4 项 / 详 design/audit/m19-pilot-template-validation.md）
+
+| # | 项 | 状态 |
+|---|---|---|
+| #25 | _md_cell + _render_dimension_content + _render_pros_cons horizontal 化到 api/utils/markdown_helpers.py | STILL_PUNT — 第二渲染场景触发（M20+ 团队报告）/ 输出端 horizontal |
+| #26 | filename sanitize 输入端（M11/M17）vs 输出端（M19）分门别类立规（SR-M19-3 sink 候选） | STILL_PUNT — 第二输出端实例触发 |
+| #27 | Cache-Control: no-store header 缺失（含 user 上下文敏感数据） | STILL_PUNT — M20 性能 sprint 横切添加 |
+| #28 | filename 含 project_name 风险（RFC 5987 filename* 编码） | STILL_PUNT — 该改动发生时 |
+
+### 触发点 D — M19 元教训 #19：R1 局部立修触发 tests.md 第三方文件漂移
+
+**M17 立的 R2 reconcile** 仅覆盖 design ↔ 实装 / **M19 第二实证扩**第三方 tests.md 必须纳入 R2 reconcile B 栏。
+
+**SR-M19-1 立规建议**：每 sprint R2 reconcile 必跑 `grep -n "404\|422\|500" tests.md` 与 `exceptions.py:http_status` + `design.md:§13` 字面比对。M20 sprint 启动期 reconcile pass A 栏首条预录。
 
 ### M15 sprint punt 池（3 项）
 
