@@ -30,7 +30,7 @@ related:
 | 3a-i | `e521656`+`ee3a2ad` | spec 06 §3 SSR auth 通道 + server-auth/server-http-client + 7 unit tests | $1-2 | — (sink only) | — (sink only) |
 | 3a-ii | `1a5e3d6` | actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new 真接 backend | ~$5 | 5 立修候选 / 复审 3 立修 + 2 punt | 4 P1 立修 / 8 P2 punt |
 | 3b | `490ad23` | actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze getAffectedNodes 实装 / 6 stub punt + errors.ts isRedirectError 豁免 | ~$5 | 2 P1 候选 / 复审 1 立修 + 1 降 P2 punt | 1 P1 立修 / 2 P2 punt |
-| 3c | `<commit-hash>` | actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错** | ~$6 | 4 P1 候选 / 复审 1 立修 + 3 降 P2 punt | 2 P1 立修（mutation 401 root-cause + admin NOT_IMPLEMENTED 类型） / 3 P2 punt |
+| 3c | `bccb225` | actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错** | ~$6 | 4 P1 候选 / 复审 1 立修 + 3 降 P2 punt | 2 P1 立修（mutation 401 root-cause + admin NOT_IMPLEMENTED 类型） / 3 P2 punt |
 
 **R1+R2 第 2 数据点结论**：
 - R1 reuse 5 P1 候选 / 复审：3 立修（projectsData mock dead / createVersion releaseMode workspace.tsx 在 ignore 范围 punt / handleCreateVersion 错误吞 workspace.tsx 在 ignore 范围 punt / eslint glob `[projectId]` 字面 char class 已 workaround / `getProjects` 401 处理与 R2 同根因合并立修）

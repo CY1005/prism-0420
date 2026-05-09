@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-3b-完成 / 子片 3c 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-3c-完成 / 子片 4 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3b-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3c-完成）
+
+- **Phase 2.2 子片 3c 完成**（actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错 root-cause**）：
+  - **scope 自决收缩**（feedback_decision_transparency A 模式 / SR-P22-3 第 4 实证）：cold-start prompt「10 actions + 7 页面」→ 实际可达 6 actions 完整 + 2 端点重写 + 2 全 punt（templates/feed/openclaw/admin 用户管理/项目级 ZIP 导出 5 个域 OpenAPI 无对应路径）/ 7 页面解锁全留子片 5 集中处理
+  - 16 文件改：actions/{competitors,competitor-references,issues,search,admin,activity-log,export,project-stats-proxy,templates,feed}.ts + validators/issue.ts 加 title + projectId + lib/errors.ts 立修 + eslint.config.mjs 移 10 ignore（actions 9 + validators/issue.ts）+ audit/p22-pilot-template-validation.md §3c + cross-sprint-punt-pool.md + p22-subslice-prompts.md
+  - 累计 vitest 20 PASS / eslint 0 errors 0 warnings / pytest 不动（仅前端改）
+  - **R1+R2 第 4 数据点**（mutation 路径契约真验证）：R1 Sonnet reuse + R2 Opus spec / R1 标 4 P1+5 P2 / R2 标 2 P1+3 P2 / 复审立修 2 项（**errors.ts.actionError 加 isUnauthenticatedError → redirect("/login") root-cause 一改通修 N+ caller** + admin.ts NOT_IMPLEMENTED 类型 string→Error）+ punt 8 项进 cross-sprint pool（P22-3c-1 ~ P22-3c-8）
+  - **R 范式第 4 数据点 ROI 新维度**：R2 spec 抓到「mutation 路径 401 静默吞错」是 3a-ii 第 2 数据点 read 路径硬伤的同型 mutation 路径再发 / 3a/3b R2 漏抓 / 3c R2 闭环 — 验证 R2 spec subagent 不只是「本子片字面合规」检查器，更是「跨子片同根因漂移检测」机制（SR-P22-4 立规候选）/ R1+R2 配比 1+1 ROI 持续高于 R1=3 + R2=1
+  - **scope 修订归档**：cold-start 10 actions+7 页面 → 实际 6 actions 完整 + 2 端点重写 + 2 全 punt + 0 页面真接（消费方签名漂移留子片 5 cleanup）/ SR-P22-3 第 4 实证（M01 register + 3a-ii 26 broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 = 四实证 / 子片 5 关闸前 sink 已成熟）
+
+- **下一步推荐**：**子片 4 — M20 团队页新写（Prism 无 / 全新写）**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 4」段
+  - 估 cost $3-5 / 估时 1-1.5 天 / **建议开新 session**（context 累积 R1+R2 + 大量 schema 读取 / 新 session ROI 高）
+  - 含：6 路由（/teams 列表 + /teams/[id] 详情 + /teams/new + /members + /transfer + /danger）+ R-X3 RBAC 前端守卫 + 轻量 design 草案 + R1+R2 第 5 数据点（全新写形态 / 验证 R 范式在「无范本拷贝」场景的 ROI）
+  - **可与子片 3c 并行**（CY prompt 字面 / 但单会话不并行 / 开新会话起手）
+
+- **Phase 2.2 全集进度**：5/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b + 3c）/ 还需 2 子片（4 + 5）/ 总估 $4-7 + 1.5-2 天
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3b-完成）
 
 - **Phase 2.2 子片 3b 完成**（actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze 部分 + errors.ts NEXT_REDIRECT 立修）：
   - **scope 自决收缩**（feedback_decision_transparency A 模式 / SR-P22-3 第 3 实证）：cold-start prompt「6 actions 完整改 + 7 页面解锁」→ 实际可达 4 actions 完整 + 1 部分 + 2 全 punt（M11/M13/M14/M17 SSE+WS+session 流程不在 prism-0420 OpenAPI 直接路径），7 页面解锁全留子片 5 集中处理
