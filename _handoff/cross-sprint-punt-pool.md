@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-09 (**M20 sprint 完成关闸 / Phase 2.1 100% 收官**)
+last_updated: 2026-05-09 (**M-CLEANUP sprint 完成 / Phase 2.1 100% 收官 + 8 punt 关闭**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -33,12 +33,33 @@ policy:
 
 | 状态 | 项数 | 占比 | 说明 |
 |---|---|---|---|
-| **STILL_PUNT** | **49** | 38% | 代码完全没动，问题还在（一审 30 + 二审 19）|
-| **DONE** | **22** | 17% | 代码已落实（部分被主线"默默吸收"无人关闸 / 一审 15 + 二审 7）|
+| **STILL_PUNT** | **41** | 32% | 代码完全没动，问题还在（M-CLEANUP 关闭 8 项 49→41）|
+| **DONE** | **30** | 23% | 代码已落实（M-CLEANUP +8：#8/#9/#10/#11/#12/#13/#14/#3+#15 推迟 D 类）|
 | **PARTIAL** | 2 | 2% | 部分子项做了 |
-| **UNVERIFIABLE** | **59** | 46% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（一审 46 + 二审 13）|
+| **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-09 M-CLEANUP sprint 关闸（4 commits / 1613→1619 PASS / 8 punt 关闭）
+
+**commits**：33b5759 子片 1（mechanical 4 项）+ aabde04 子片 2（M04 IntegrityError）+ 5c7783d 子片 3（M14 write_event e2e + M05-M08 race 复审）+ 本 commit 子片 5 关闸
+
+**关闭项 8**：
+- #8 ✅ M14-B12 update/delete/unlink write_event 异常传播 e2e（子片 3 / 3 e2e 立修）
+- #9 ✅ M05/M06/M07/M08 race window 复审（子片 3 / DONE_BY_INSPECTION / M15-B1 升级后行为等价）
+- #10 ✅ M10-5 viewer /overview/stats 测试缺（子片 1 / 2 e2e 立修）
+- #11 ✅ M04 IntegrityError → 500（子片 2 / create + create_dimension_record 双入口立修）
+- #12 ✅ M04-9 target_type 5 处 hard-code（子片 1 / TARGET_DIMENSION_RECORD 常量化）
+- #13 ✅ M04-1 (updated_by, updated_at) 联合索引（子片 1 / alembic m_cleanup_01_dim_compound_index）
+- #14 ✅ M04-8 db.get(DimensionType) 3 处走 DAO（子片 1 / DimensionDAO.get_type_by_id）
+- #3 + #15 ⏸️ IssueResponse + DimensionResponse join 字段 → 推迟到 D 类条件触发型（前端 Phase 2.2 真用时一并补 / 不补 join 不影响后端独立测试）
+
+**剩余 41 项 STILL_PUNT 重新归类**：
+- **A 类 占位期残留 5 项**（#21-#24 + 部分 M11-B1 已关）：M18 embedding worker source_text + noop 转 succeeded + cron PCT 维度 + batch_backfill INSERT FROM unnest — 待 pgvector 真接通 + 真业务 path 启用时解锁
+- **B 类 真漏洞 0 项**（M-CLEANUP 已清完）
+- **C 类 性能黑洞 ~12 项**（元发现 #2 / M02 batch_update UPSERT / M04 batch_get_by_nodes / M05 query 优化 / M11 size 检查 / M12 _tenant_filter 等）— 推荐 Phase 2.3 上线前立专门 perf sprint 或显式接受
+- **D 类 条件触发型 ~10 项**（#3+#15 join / #16 WS golden / #17 _sanitize_filename / #25-#28 M19 punts / #18-#19 M17 重构等）— 触发条件未到 / 不动
+- **E 类 文档/UNVERIFIABLE ~14 项** — 子片 5 grep 验证 / 多数已被默默吸收 / 显式不立项
 
 ---
 
