@@ -52,16 +52,40 @@ class TeamDAO:
         return result.scalar_one_or_none()
 
     async def list_for_user(self, db: AsyncSession, user_id: UUID) -> Sequence[Team]:
-        """U 所在所有 team（含 member_count 聚合 / design §7.1 GET /api/teams）。
+        """U 所在所有 team（不含 member_count 聚合 / 仅返回 team 行 / design §7.1）。
 
-        SELECT teams.*, COUNT(team_members.id) AS member_count
-        FROM teams JOIN team_members ON ...
-        WHERE teams.id IN (SELECT team_id FROM team_members WHERE user_id=:uid)
+        准 N+1 防护：service 入口若需 member_count 应改调 list_for_user_with_count（一次
+        SQL JOIN+GROUP BY）。
         """
         accessible = select(TeamMember.team_id).where(TeamMember.user_id == user_id)
         stmt = select(Team).where(Team.id.in_(accessible)).order_by(Team.created_at.desc())
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_for_user_with_count(
+        self, db: AsyncSession, user_id: UUID
+    ) -> list[tuple[Team, int]]:
+        """U 所在所有 team + member_count 单次 SQL（R1-A P1-7 + R1-C P1-1 立修 N+1）。
+
+        SELECT teams.*, COUNT(tm.id) AS member_count
+          FROM teams
+          LEFT JOIN team_members tm ON tm.team_id = teams.id
+         WHERE teams.id IN (SELECT team_id FROM team_members WHERE user_id = :uid)
+         GROUP BY teams.id
+         ORDER BY teams.created_at DESC
+
+        替代原 service 层 list_for_user → loop get_member_count N+1 范式。
+        """
+        accessible = select(TeamMember.team_id).where(TeamMember.user_id == user_id)
+        stmt = (
+            select(Team, func.count(TeamMember.id).label("member_count"))
+            .outerjoin(TeamMember, TeamMember.team_id == Team.id)
+            .where(Team.id.in_(accessible))
+            .group_by(Team.id)
+            .order_by(Team.created_at.desc())
+        )
+        result = await db.execute(stmt)
+        return [(row[0], int(row[1])) for row in result.all()]
 
     async def get_member_count(self, db: AsyncSession, team_id: UUID) -> int:
         """COUNT(team_members WHERE team_id=:tid) 用于 TeamRead 聚合字段。"""
@@ -152,12 +176,28 @@ class TeamMemberDAO:
         )
         return list(result.scalars().all())
 
-    async def count_owners(self, db: AsyncSession, team_id: UUID) -> int:
+    async def count_owners(
+        self, db: AsyncSession, team_id: UUID, *, for_update: bool = False
+    ) -> int:
         """C2 防 demote 最后 owner / E5 remove 最后 owner 守护：COUNT(role='owner')。
 
-        Service 层 transfer/demote/remove 路径必先调用本方法 + Service.assert_team_has_owner()
-        在事务内 SELECT FOR UPDATE 持锁守护（design §5.3）。
+        R1-A P1-4 + R1-C P2-3 立修：transfer/demote/remove owner 守护路径必传
+        ``for_update=True``（SELECT ... FOR UPDATE 持锁守 C1/C2 并发）/ design §5.3 字面。
+        非守护路径（如纯 read）可不传。
         """
+        if for_update:
+            # 用 select TeamMember + with_for_update 持行锁，再 count 应用层（COUNT(*) 直接
+            # FOR UPDATE 在 PG 不锁行；必须先锁行再聚合）
+            stmt = (
+                select(TeamMember)
+                .where(
+                    TeamMember.team_id == team_id,
+                    TeamMember.role == TeamRole.OWNER.value,
+                )
+                .with_for_update()
+            )
+            result = await db.execute(stmt)
+            return len(result.scalars().all())
         result = await db.execute(
             select(func.count(TeamMember.id)).where(
                 TeamMember.team_id == team_id,

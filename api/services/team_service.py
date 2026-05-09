@@ -204,13 +204,12 @@ class TeamService:
         return await self._get_team_or_raise(db, team_id, user_id)
 
     async def list_for_user(self, db: AsyncSession, user_id: UUID) -> list[tuple[Team, int]]:
-        """返回 (team, member_count) 列表 / TeamRead 聚合字段。"""
-        teams = await self.team_dao.list_for_user(db, user_id)
-        result: list[tuple[Team, int]] = []
-        for team in teams:
-            count = await self.team_dao.get_member_count(db, team.id)
-            result.append((team, count))
-        return result
+        """返回 (team, member_count) 列表 / TeamRead 聚合字段。
+
+        R1-A P1-7 + R1-C P1-1 立修：改调 list_for_user_with_count 单次 SQL JOIN+GROUP BY，
+        消掉原 N+1（每 team 1 次 COUNT）范式。
+        """
+        return await self.team_dao.list_for_user_with_count(db, user_id)
 
     # ─────────────── G5 update name / description ───────────────
 
@@ -260,7 +259,9 @@ class TeamService:
         try:
             await db.flush()
         except IntegrityError as e:
-            await db.rollback()
+            # R1-A P1-3 + R1-C P2-2 立修：删除 await db.rollback() / 违反 R-X3 共享外部
+            # session 契约（design §8.7 / 事务由 Router 层持 commit/rollback 权 / 不在 Service
+            # 内 rollback；let exception propagate to FastAPI middleware → implicit rollback）
             if "uq_teams_creator_name" in str(e.orig) and name is not None:
                 raise TeamNameDuplicateError(name=name, creator_id=str(team.creator_id)) from e
             raise
@@ -310,7 +311,27 @@ class TeamService:
 
         correlation_id = str(uuid4())
 
-        # B14 archived 自动迁出
+        # R1-A P1-1 + R1-C P1-2 立修：residual ProjectMember 必须在 archived 自动迁出前
+        # 捕获（迁出后 projects.team_id=None / WHERE Project.team_id=:tid 召不回）。
+        # 列 N 个 members 用于 batch query 组合。
+        members = await self.member_dao.list_for_team(db, team_id)
+        team_name = team.name
+        member_count = len(members)
+
+        from collections import defaultdict
+
+        residual_by_user: dict = defaultdict(list)
+        if members:
+            residual_rows = await db.execute(
+                select(ProjectMember.user_id, ProjectMember.project_id)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(ProjectMember.user_id.in_([m.user_id for m in members]))
+                .where(Project.team_id == team_id)
+            )
+            for uid, pid in residual_rows.all():
+                residual_by_user[uid].append(pid)
+
+        # B14 archived 自动迁出（必须在 residual 捕获 + 列 members 之后）
         archived_ids = await self.team_dao.list_archived_project_ids_in_team(db, team_id)
         for pid in archived_ids:
             proj = await db.get(Project, pid)
@@ -331,11 +352,7 @@ class TeamService:
                     },
                 )
 
-        # 3: 列 N 个 members + 写 1 + N 条 activity_log（按 joined_at ASC / R10-1 独立）
-        members = await self.member_dao.list_for_team(db, team_id)
-        team_name = team.name
-        member_count = len(members)
-
+        # 3: 写 1 + N 条 activity_log（按 joined_at ASC / R10-1 独立）
         await write_event(
             db=db,
             actor_user_id=actor_id,
@@ -351,15 +368,9 @@ class TeamService:
             },
         )
         for m in members:
-            # F2.4 软切断 audit：member_removed 必填 residual_project_count + residual_project_ids[:10]
-            residual_pms = await db.execute(
-                select(ProjectMember.project_id)
-                .join(Project, Project.id == ProjectMember.project_id)
-                .where(ProjectMember.user_id == m.user_id)
-                .where(Project.team_id == team_id)
-                .limit(10)
-            )
-            residual_ids = [str(r) for r in residual_pms.scalars().all()]
+            # F2.4 软切断 audit：member_removed 必填 residual_project_count（真实 count）+
+            # residual_project_ids[:10]（仅前 10）。
+            user_residual = residual_by_user.get(m.user_id, [])
             await write_event(
                 db=db,
                 actor_user_id=actor_id,
@@ -371,8 +382,8 @@ class TeamService:
                 metadata={
                     "user_id": str(m.user_id),
                     "reason": "team_deleted",
-                    "residual_project_count": len(residual_ids),
-                    "residual_project_ids": residual_ids,
+                    "residual_project_count": len(user_residual),  # 真实 count（无 limit）
+                    "residual_project_ids": [str(p) for p in user_residual[:10]],
                     "correlation_id": correlation_id,
                 },
             )
@@ -459,13 +470,14 @@ class TeamService:
             raise TeamPermissionDeniedError(required_role="admin", current_role=current_role.value)
 
         # 状态机禁止转换 #3+#4：owner → admin/member（非 transfer 场景）
+        # R1-A P1-2 + R1-C P2-4 立修：reason 区分 last_owner_demote（仅 1 owner）vs
+        # owner_demote_requires_transfer（多 owner 时 owner→admin 直降禁止 / 必须走 transfer 流程）
         if current_role == TeamRole.OWNER:
-            owner_count = await self.member_dao.count_owners(db, team_id)
+            owner_count = await self.member_dao.count_owners(db, team_id, for_update=True)
             if owner_count <= 1:
-                # 最后一个 owner / 必须走 transfer 流程
                 raise TeamOwnerRequiredError(reason="last_owner_demote")
-            # 即使有多个 owner，也禁止"直降"（设计契约：owner 角色变更必须走 transfer 流程）
-            raise TeamOwnerRequiredError(reason="last_owner_demote")
+            # 多 owner 直降禁止（设计契约：owner 角色变更必须走 transfer 流程）
+            raise TeamOwnerRequiredError(reason="owner_demote_requires_transfer")
 
         # 合规：member ↔ admin
         old_role = current_role
@@ -511,9 +523,10 @@ class TeamService:
         if member is None:
             raise TeamMemberNotFoundError(team_id=str(team_id), user_id=str(target_user_id))
 
-        # E5：移除最后 owner 拒
+        # E5：移除最后 owner 拒（R1-A P1-4 + R1-C P2-3 立修：count_owners 走 SELECT FOR
+        # UPDATE 守 C2 并发 / design §5.3 字面）
         if member.role == TeamRole.OWNER.value:
-            owner_count = await self.member_dao.count_owners(db, team_id)
+            owner_count = await self.member_dao.count_owners(db, team_id, for_update=True)
             if owner_count <= 1:
                 raise TeamOwnerRequiredError(reason="last_owner_remove")
 
@@ -583,6 +596,10 @@ class TeamService:
         # actor_member 不可能为 None（assert_team_role 已通过 owner 校验）
         assert actor_member is not None
 
+        # R1-A P1-5 + R1-C P3-1 立修：缓存 new_owner 改 role 前的真实原 role 字面（promote
+        # 事件 metadata.from_role 使用），防 update 后 from_role 永真 ADMIN 死分支。
+        new_member_original_role = new_member.role
+
         # 同事务原子：先 demote actor 后 promote new_owner（B4 已挡 self / role 升序避免临时双 owner）
         actor_member.role = TeamRole.ADMIN.value
         new_member.role = TeamRole.OWNER.value
@@ -620,9 +637,7 @@ class TeamService:
             summary="新 owner 升级（transfer ownership 流程）",
             metadata={
                 "user_id": str(new_owner_id),
-                "from_role": new_member.role
-                if new_member.role != TeamRole.OWNER.value
-                else TeamRole.ADMIN.value,
+                "from_role": new_member_original_role,  # R1-A P1-5 立修：用缓存的真实原 role
                 "to_role": TeamRole.OWNER.value,
                 "correlation_id": correlation_id,
             },

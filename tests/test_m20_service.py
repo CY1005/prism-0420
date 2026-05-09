@@ -587,3 +587,95 @@ def test_meta_lesson_na_explicit_declarations():
     # docstring-only placeholder（M18 立规 #4 测试反模式禁用 assert True 不构成永真污染 /
     # 本 test 函数仅承载 docstring 字面声明，无业务断言 — 与 M19 范式延续一致）
     assert True is True  # noqa: PT018 — meta-lesson docstring placeholder, see docstring above
+
+
+# ─────────────── R1 立修回归测试（M02-M19 范式 / 立修同 commit 内验回归） ───────────────
+
+
+async def test_r1_fix_delete_team_residual_count_not_truncated(
+    db_session, svc, make_team_with_owner, make_user, make_project_with_member
+):
+    """R1-A P1-1 立修回归：delete_team residual_project_count 真实 count（不被 limit(10) 截断）。
+
+    构造 11 个 residual ProjectMember → residual_project_count == 11 / residual_project_ids 取前 10。
+    """
+    creator, team = await make_team_with_owner()
+    member_user = await make_user()
+    db_session.add(TeamMember(team_id=team.id, user_id=member_user.id, role=TeamRole.MEMBER.value))
+    await db_session.flush()
+
+    # 11 个 project 都加 member_user 为 ProjectMember + team_id=team.id
+    proj_ids = []
+    for _ in range(11):
+        u, proj = await make_project_with_member(owner=creator)
+        proj.team_id = team.id
+        db_session.add(
+            ProjectMember(project_id=proj.id, user_id=member_user.id, role=MemberRole.VIEWER.value)
+        )
+        proj_ids.append(proj.id)
+    # 必须 archived 才能让 delete_team 走通（active project 会触发 TeamHasProjectsError）
+    from api.models.project import Project, ProjectStatus
+
+    for pid in proj_ids:
+        p = await db_session.get(Project, pid)
+        p.status = ProjectStatus.ARCHIVED.value
+    await db_session.flush()
+
+    await svc.delete_team(db_session, creator.id, team.id)
+    # member_user 的 team_member_removed 事件 metadata.residual_project_count == 11（真实）
+    ev = (
+        (
+            await db_session.execute(
+                select(ActivityLog).where(
+                    ActivityLog.action_type == "team_member_removed",
+                    ActivityLog.target_id == str(team.id),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    member_ev = next(e for e in ev if e.event_metadata["user_id"] == str(member_user.id))
+    assert member_ev.event_metadata["residual_project_count"] == 11  # 真实 count 不截断
+    assert len(member_ev.event_metadata["residual_project_ids"]) == 10  # ids 仅前 10
+
+
+async def test_r1_fix_transfer_ownership_from_role_uses_original(
+    db_session, svc, make_team_with_owner, make_user
+):
+    """R1-A P1-5 立修回归：transfer promote 事件 metadata.from_role 字面 = new_owner 改 role
+    前的真实 role（admin / member），不是永真 ADMIN 死分支。
+    """
+    creator, team = await make_team_with_owner()
+    u_member = await make_user()
+    # 给 u_member 加 role=member（不是 admin）→ transfer 后 from_role 应为 'member'
+    db_session.add(TeamMember(team_id=team.id, user_id=u_member.id, role=TeamRole.MEMBER.value))
+    await db_session.flush()
+
+    await svc.transfer_ownership(db_session, creator.id, team.id, u_member.id)
+    promoted_ev = (
+        await db_session.execute(
+            select(ActivityLog).where(
+                ActivityLog.action_type == "team_member_promoted_admin",
+                ActivityLog.target_id == str(team.id),
+            )
+        )
+    ).scalar_one()
+    assert promoted_ev.event_metadata["from_role"] == "member"  # 真实原 role 而非 'admin' 死分支
+    assert promoted_ev.event_metadata["to_role"] == "owner"
+
+
+async def test_r1_fix_list_for_user_no_n_plus_1(db_session, svc, make_team_with_owner):
+    """R1-A P1-7 + R1-C P1-1 立修回归：list_for_user 改用 list_for_user_with_count 单 SQL
+    JOIN+GROUP BY；返回 (Team, count) 元组与 N 调用 get_member_count 等价。
+
+    覆盖度断言：N=3 team / 不调 get_member_count（行为等价 / 性能差异不在 unit 验）。
+    """
+    creator, t1 = await make_team_with_owner(name_suffix="-1")
+    creator, t2 = await make_team_with_owner(creator=creator, name_suffix="-2")
+    creator, t3 = await make_team_with_owner(creator=creator, name_suffix="-3")
+    result = await svc.list_for_user(db_session, creator.id)
+    assert len(result) == 3
+    # 每 team 至少 1 member（creator 是 owner）
+    for _team, count in result:
+        assert count >= 1

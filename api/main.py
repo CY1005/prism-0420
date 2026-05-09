@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     log.info(
         "app.startup",
         version="0.1.0",
-        tenant_context="M02 (project_members)",
+        tenant_context="M20 (UNION: project_members ∪ team_members)",
         child_services=["dimension", "competitor", "issue", "module_relation"],
     )
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:
