@@ -101,14 +101,23 @@ class ParsedCsv:
         self.errors = errors
 
 
+def _check_csv_size_or_raise(content_bytes: bytes) -> None:
+    """M-CLEANUP（cross-sprint #8 / M11 punt 立修）：CSV 大小校验单一 helper。
+
+    parse_csv（独立调用 helper / 自防御）+ process_csv（orchestrator 预检 / 防 task 行无意义
+    创建）双调用都走本 helper。两次检查保留 — DRY 字面 / 行为不变。
+    """
+    if len(content_bytes) > MAX_FILE_BYTES:
+        raise ColdStartFileTooLargeError(max_bytes=MAX_FILE_BYTES, actual_bytes=len(content_bytes))
+
+
 def parse_csv(content_bytes: bytes) -> ParsedCsv:
     """解析 CSV bytes → 4 类 batch_create 的 raw payload + 行级错误列表。
 
     抛 ColdStartCsvInvalidError：文件无法解析 / 缺必填列。
     返回 ParsedCsv：errors 非空表示有行级校验失败（不抛，由 caller 决策）。
     """
-    if len(content_bytes) > MAX_FILE_BYTES:
-        raise ColdStartFileTooLargeError(max_bytes=MAX_FILE_BYTES, actual_bytes=len(content_bytes))
+    _check_csv_size_or_raise(content_bytes)
 
     try:
         text = content_bytes.decode("utf-8-sig")
@@ -295,11 +304,8 @@ class ColdStartOrchestratorService:
         - ColdStartRowValidationFailedError：行级校验失败（task.error_report 写入）
         - ColdStartBatchInsertFailedError：4 service.batch_create 任一抛异常（savepoint 回滚）
         """
-        # ---- 大小检查（解析前） ----
-        if len(content_bytes) > MAX_FILE_BYTES:
-            raise ColdStartFileTooLargeError(
-                max_bytes=MAX_FILE_BYTES, actual_bytes=len(content_bytes)
-            )
+        # ---- 大小检查（解析前 / 走 helper / cross-sprint #8 立修） ----
+        _check_csv_size_or_raise(content_bytes)
 
         source_hash = hashlib.sha256(content_bytes).hexdigest()
 

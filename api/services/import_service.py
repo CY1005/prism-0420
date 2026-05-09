@@ -317,6 +317,23 @@ class ImportService:
                 "review_data": confirmed.model_dump(mode="json"),
             },
         )
+        # M-CLEANUP（cross-sprint #18 立修 / M17 R1-A P2-3）：状态扭转 awaiting_review → ai_step3
+        # 必写 import_status_changed event（design §10 期望每次状态扭转都有 status_changed event）
+        # 当前 confirm_review 绕过 _transition helper / 单独写两条事件保证状态机完备
+        await write_event(
+            db=db,
+            actor_user_id=user_id,
+            project_id=project_id,
+            action_type="import_status_changed",
+            target_type="import_task",
+            target_id=str(task.id),
+            summary="状态扭转：awaiting_review → ai_step3",
+            metadata={
+                "from_status": ImportTaskStatus.awaiting_review.value,
+                "to_status": ImportTaskStatus.ai_step3.value,
+                "trigger": "confirm_review",
+            },
+        )
         await write_event(
             db=db,
             actor_user_id=user_id,

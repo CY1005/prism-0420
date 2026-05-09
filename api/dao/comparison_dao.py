@@ -54,6 +54,33 @@ class ComparisonDAO:
         )
         return int(result.scalar_one() or 0)
 
+    async def list_snapshots_with_total(
+        self,
+        db: AsyncSession,
+        project_id: UUID,
+        *,
+        limit: int = 50,
+    ) -> tuple[list[ComparisonSnapshot], int]:
+        """M-CLEANUP（cross-sprint #7 立修）：list + count 双查询合一（COUNT OVER 单 SQL）。
+
+        SELECT *, COUNT(*) OVER() AS total ... LIMIT :limit
+        空集合 total=0（COUNT OVER 不返回行）。
+        """
+        total_col = func.count().over().label("__total")
+        stmt = (
+            select(ComparisonSnapshot, total_col)
+            .where(ComparisonSnapshot.project_id == project_id)
+            .order_by(ComparisonSnapshot.created_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        rows = result.all()
+        if not rows:
+            return [], 0
+        items = [row[0] for row in rows]
+        total = int(rows[0][1])
+        return items, total
+
     async def get_snapshot(
         self,
         db: AsyncSession,

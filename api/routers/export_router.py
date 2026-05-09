@@ -56,10 +56,15 @@ def _build_export_filename() -> str:
 
 
 def _markdown_response(body: bytes) -> Response:
+    # M-CLEANUP（cross-sprint #27 立修）：含 user 上下文敏感数据的导出响应必带 Cache-Control:
+    # no-store（防代理/CDN/浏览器缓存把一个 user 的导出 leak 给另一 user）
     return Response(
         content=body,
         media_type="text/markdown; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{_build_export_filename()}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{_build_export_filename()}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

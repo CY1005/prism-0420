@@ -134,10 +134,11 @@ class ComparisonService:
     async def list_snapshots(
         self, db: AsyncSession, *, project_id: UUID, limit: int = 50
     ) -> tuple[list[ComparisonSnapshot], int]:
-        """SnapshotListResponse 数据：(items, total)。"""
-        rows = await self.dao.list_snapshots(db, project_id, limit=limit)
-        total = await self.dao.count_snapshots(db, project_id)
-        return list(rows), total
+        """SnapshotListResponse 数据：(items, total)。
+
+        M-CLEANUP（cross-sprint #7 立修）：双查询合一（COUNT OVER 单 SQL）/ 消除 round-trip。
+        """
+        return await self.dao.list_snapshots_with_total(db, project_id, limit=limit)
 
     async def get_snapshot_detail(
         self, db: AsyncSession, *, project_id: UUID, snapshot_id: UUID

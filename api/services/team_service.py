@@ -300,13 +300,20 @@ class TeamService:
         team = await self._get_team_or_raise(db, team_id, actor_id)
 
         # 1+2: 校验 projects 空（active 路径）+ archived 自动迁出
-        active_count = await self.team_dao.count_projects_in_team(db, team_id)
-        if active_count > 0:
-            project_ids = await self.team_dao.list_active_project_ids_in_team(db, team_id)
+        # M-CLEANUP（R1-C P2-1 立修）：count + list 双 SELECT 合并 — 直接 list_active 拉前
+        # 10 个判空（>0 触发 raise / 用 list 长度近似 count；当 ≥10 时再补真 count 查询）。
+        active_ids = await self.team_dao.list_active_project_ids_in_team(db, team_id)
+        if active_ids:
+            # 仅当 active_ids 非空时才查真 count（用于 detail / 节省一次 count 当 active 为空时）
+            active_count = (
+                len(active_ids)
+                if len(active_ids) < 10
+                else await self.team_dao.count_projects_in_team(db, team_id)
+            )
             raise TeamHasProjectsError(
                 team_id=str(team_id),
                 project_count=active_count,
-                project_ids=[str(pid) for pid in project_ids],
+                project_ids=[str(pid) for pid in active_ids],
             )
 
         correlation_id = str(uuid4())
