@@ -65,6 +65,62 @@ async def test_export_multi_nodes_golden(
 # ─────────────── 入口 B：单 node 导出 golden ───────────────
 
 
+# ─────────────── 入口 A：多 node（3 个）+ 顺序保留（tests.md G2 + R1-A P1-3 dict.fromkeys 验证）───────────────
+
+
+async def test_export_multi_nodes_3_with_order(
+    auth_client, db_session, make_project_with_member, make_node, make_dim_type, make_dim_record
+):
+    """tests.md G2 字面：3 node + 顺序按入参；R2 P1-2 立修：补足 G2 字面覆盖。"""
+    user, proj = await make_project_with_member()
+    n1 = await make_node(proj.id, name="A 模块")
+    n2 = await make_node(proj.id, name="B 模块")
+    n3 = await make_node(proj.id, name="C 模块")
+    type_id = await make_dim_type(key="x", name="X", project_id=proj.id)
+    for n in (n1, n2, n3):
+        await make_dim_record(
+            user=user, project=proj, node=n, dim_type_id=type_id, content={"k": f"v-{n.name}"}
+        )
+    r = await auth_client.post(
+        f"/api/projects/{proj.id}/exports",
+        json={"node_ids": [str(n3.id), str(n1.id), str(n2.id)]},  # 故意非自然顺序
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 200
+    body = r.content.decode("utf-8")
+    assert "## A 模块" in body and "## B 模块" in body and "## C 模块" in body
+    idx_c = body.index("## C 模块")
+    idx_a = body.index("## A 模块")
+    idx_b = body.index("## B 模块")
+    assert idx_c < idx_a < idx_b
+
+
+# ─────────────── E5 重复 node_id 去重保序（R1-A P1-3 + R1-C P1-1 立修验证）───────────────
+
+
+async def test_export_dedup_repeated_node_ids(
+    auth_client, db_session, make_project_with_member, make_node, make_dim_type, make_dim_record
+):
+    """tests.md E5 字面：node_ids=[a,a,b] → 去重 + 200 + 2 章节；R2 P1-3 立修补 e2e。"""
+    user, proj = await make_project_with_member()
+    na = await make_node(proj.id, name="A")
+    nb = await make_node(proj.id, name="B")
+    type_id = await make_dim_type(key="t", name="T", project_id=proj.id)
+    for n in (na, nb):
+        await make_dim_record(
+            user=user, project=proj, node=n, dim_type_id=type_id, content={"k": "v"}
+        )
+    r = await auth_client.post(
+        f"/api/projects/{proj.id}/exports",
+        json={"node_ids": [str(na.id), str(na.id), str(nb.id)]},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 200
+    body = r.content.decode("utf-8")
+    assert body.count("## A") == 1
+    assert body.count("## B") == 1
+
+
 async def test_export_single_node_golden(
     auth_client, db_session, make_project_with_member, make_node, make_dim_type, make_dim_record
 ):
@@ -260,6 +316,8 @@ async def test_export_writes_activity_log_with_full_metadata(
         "issues": False,
     }
     assert md["file_size_bytes"] == len(r.content)
+    # R2 P2-1 顺修：summary 字面（design §10 line 410）
+    assert ev.summary == "导出 Markdown 报告（1 个模块）"
 
 
 # ─────────────── Content-Disposition + filename sanitize 字面 ───────────────

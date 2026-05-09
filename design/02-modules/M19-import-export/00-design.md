@@ -543,7 +543,7 @@ class ExportEmptyContentError(AppError):
 
 - **viewer 写所有写端点 403** N/A 显式声明：M19 design §8 字面 viewer 即可导出（POST 但语义只读 + activity_log 副作用不算"业务写"）→ 对应"读权限 403"范式（M15 立 / 但 M19 viewer 通过非 403）/ 主动复制 = 不在项目内 user 403 + 跨 project 404
 - **write_event 异常传播测试 e2e 字面验**（M16 立 / M19 export 写 activity_log 路径必测 monkeypatch raise + e2e 字面验）
-- **cross-tenant 404 + cross-project node 404**（M02 立 / M19 入口 A node_ids 含跨 project 节点 → EXPORT_NODE_NOT_IN_PROJECT；入口 B project_id/node_id mismatch → 404）
+- **cross-tenant 404 + cross-project node 422**（R1-B P1-1 立修：M06/M08/M12 ValidationError 范式 / cross-project node → 422 EXPORT_NODE_NOT_IN_PROJECT；URL-level cross-tenant → Router check_project_access 404）
 - **IntegrityError 区分约束名**（M05 立 / M19 全只读 / N/A 显式声明）
 - **R-X1 失败补偿 commit boundary**（M11 立 / M17 helper / M19 同步只读 / N/A 显式声明）
 - **文件上传 file.size + sanitize**（M11 立 / M17 第二实例 / M19 输入无 multipart / 输出 Content-Disposition filename sanitize 必字面验：UTF-8 兼容 + 控制字符 strip + 长度截断）

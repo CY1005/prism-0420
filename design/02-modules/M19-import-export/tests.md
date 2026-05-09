@@ -42,7 +42,7 @@ complexity: low
 | E3 | node 无维度内容 | 导出一个未填任何维度的 node（include.dimensions=true）| 200 + Markdown 含该章节但维度区块显示"（暂无内容）"（不报错） |
 | E4 | 全部 node 无任何内容 | 所有 node 均无维度/版本/竞品/问题 | **422 `EXPORT_EMPTY_CONTENT`**（R1-A P1-1 立修 2026-05-09：design §13 字面 EXPORT_EMPTY_CONTENT 422 优先 / 与 frontmatter codes_added 一致 / 空报告无价值不应静默成功） |
 | E5 | node_ids 含重复 UUID（入口 A） | `node_ids=[a, a, b]` | 去重后导出（200 + 2 章节，不报错） |
-| E6 | 所选 node 含已删除 node | node_a 已软删除 | 404 `EXPORT_NODE_NOT_IN_PROJECT`（或 NOT_FOUND，Service 层 _check_nodes_belong_to_project 拦） |
+| E6 | 所选 node 含已删除 node | node_a 已软删除 | **422 `EXPORT_NODE_NOT_IN_PROJECT`**（R1-B P1-1 + R1-C P1-3 立修 2026-05-09：M06/M08/M12 ValidationError 范式延续 422 / Service 层 _validate_and_load_nodes 拦） |
 
 ---
 
@@ -62,9 +62,9 @@ complexity: low
 | ID | 场景 | 模拟 | 期望 |
 |----|------|------|------|
 | T1 | 跨项目越权导出（入口 A） | userA 有 projectA 权限，POST 含 projectB 的 node_ids 到 `/projects/projectB/exports` | 403 `PERMISSION_DENIED`（Router check_project_access 拦） |
-| T2 | URL project_id 与 node 实际 project 不符 | URL 是 projectA，node_id 实际属于 projectB | 404 `EXPORT_NODE_NOT_IN_PROJECT`（Service 层校验拦） |
+| T2 | URL project_id 与 node 实际 project 不符 | URL 是 projectA，node_id 实际属于 projectB | **422 `EXPORT_NODE_NOT_IN_PROJECT`**（R1-B P1-1 立修 2026-05-09：M06/M08/M12 ValidationError 422 范式 / Service 层 _validate_and_load_nodes 拦） |
 | T3 | DAO tenant 过滤覆盖测试（复用各模块 DAO）| 单元测试：调 `DimensionDAO.list_by_node(node_id=projectB_node, project_id=projectA_id)` | 返回空 list（DimensionDAO 自带 `WHERE project_id=projectA_id` 过滤，不返回 projectB 数据） |
-| T4 | 混合 node 列表（部分越权）| `node_ids=[projectA_node, projectB_node]`（无 projectB 权限）| 404 `EXPORT_NODE_NOT_IN_PROJECT`（任一不符即报错） |
+| T4 | 混合 node 列表（部分越权）| `node_ids=[projectA_node, projectB_node]`（无 projectB 权限）| **422 `EXPORT_NODE_NOT_IN_PROJECT`**（R1-B P1-1 立修 2026-05-09 / 任一不符即 422） |
 | T5 | viewer 角色导出 | 查看者用 GET 查看了内容后 POST 导出 | 200（viewer 有导出权限，节 8 决策） |
 
 ---
