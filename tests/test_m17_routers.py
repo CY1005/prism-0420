@@ -207,6 +207,30 @@ class TestStateActions:
         assert r.status_code == 200, r.text
         assert r.json()["status"] == "ai_step3"
 
+        # M-CLEANUP（cross-sprint #18 立修回归）：confirm_review 状态扭转必写
+        # import_status_changed event（design §10 期望每次状态扭转都有）
+        from sqlalchemy import select
+
+        from api.models.activity_log import ActivityLog
+
+        events = (
+            (
+                await db_session.execute(
+                    select(ActivityLog).where(ActivityLog.target_id == str(task.id))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        action_types = {ev.action_type for ev in events}
+        assert "import_status_changed" in action_types
+        assert "import_review_confirmed" in action_types
+        # 状态扭转 event metadata 字面
+        sc_ev = next(ev for ev in events if ev.action_type == "import_status_changed")
+        assert sc_ev.event_metadata["from_status"] == "awaiting_review"
+        assert sc_ev.event_metadata["to_status"] == "ai_step3"
+        assert sc_ev.event_metadata["trigger"] == "confirm_review"
+
     async def test_confirm_finalized_returns_409(
         self, auth_client, make_user, make_import_task, db_session
     ):

@@ -56,6 +56,9 @@ async def test_export_multi_nodes_golden(
     cd = r.headers["content-disposition"]
     assert cd.startswith("attachment; filename=")
     assert ".md" in cd
+    # M-CLEANUP（cross-sprint #27 立修回归）：Cache-Control: no-store header 字面
+    # 防代理/CDN/浏览器缓存 leak user 上下文敏感数据
+    assert r.headers["cache-control"] == "no-store"
     body = r.content.decode("utf-8")
     assert "# 分析报告 — " in body
     assert "## 账号系统" in body
