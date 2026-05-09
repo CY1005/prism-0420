@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 
 from api.errors.exceptions import (
     ExportEmptyContentError,
@@ -193,8 +194,6 @@ async def test_activity_log_metadata_full_field_set(
         user_id=user.id,
     )
 
-    from sqlalchemy import select
-
     rows = (
         (
             await db_session.execute(
@@ -208,7 +207,7 @@ async def test_activity_log_metadata_full_field_set(
     )
     assert len(rows) == 1
     ev = rows[0]
-    assert ev.action_type == "export"
+    assert ev.action_type == "exported"
     assert ev.target_type == TARGET_NODE
     assert ev.target_id == str(node.id)
     md = ev.event_metadata
@@ -298,13 +297,22 @@ class TestExportSchemaSync:
     """schema-only tests grouped to avoid module-level pytestmark warning。"""
 
     def test_schema_multi_node_request_enforces_max_20(self):
-        from pydantic import ValidationError as PydanticVE
-
+        """R1-A P1-2 立修：业务码 ExportNodeLimitExceededError 替裸 Pydantic validation_error
+        （M15 ActivityStreamFilter 范式延续 / 422 + code=export_node_limit_exceeded）。"""
+        from api.errors.exceptions import ExportNodeLimitExceededError
         from api.schemas.export_schema import MultiNodeExportRequest
 
         too_many = [uuid4() for _ in range(21)]
-        with pytest.raises(PydanticVE):
+        with pytest.raises(ExportNodeLimitExceededError):
             MultiNodeExportRequest(node_ids=too_many)
+
+    def test_schema_include_options_at_least_one_section(self):
+        """R1-C P1-2 立修：include 全 False 提前 422（防 Service 走完 4 DAO 才发现空内容）。"""
+        from api.errors.exceptions import ValidationError as AppVE
+        from api.schemas.export_schema import ExportIncludeOptions
+
+        with pytest.raises(AppVE):
+            ExportIncludeOptions(dimensions=False, versions=False, competitors=False, issues=False)
 
     def test_schema_multi_node_request_min_1(self):
         from pydantic import ValidationError as PydanticVE

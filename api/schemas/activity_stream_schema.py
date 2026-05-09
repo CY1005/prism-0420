@@ -115,8 +115,8 @@ class ActionType(StrEnum):
     team_member_demoted_member = "team_member_demoted_member"
     project_joined_team = "project_joined_team"
     project_left_team = "project_left_team"
-    # M19 导入/导出（2026-05-09 sprint / design §10）
-    export = "export"
+    # M19 导入/导出（2026-05-09 sprint / R1 立修：M16 R14 过去式立规精神对齐 / design §10 回写 "exported"）
+    exported = "exported"
 
 
 class TargetType(StrEnum):

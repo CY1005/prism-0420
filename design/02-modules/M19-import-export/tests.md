@@ -40,7 +40,7 @@ complexity: low
 | E1 | node_ids 超上限（入口 A） | `node_ids` 含 21 个 UUID | 422 `EXPORT_NODE_LIMIT_EXCEEDED` |
 | E2 | node_ids 为空（入口 A） | `node_ids=[]` | 422 `VALIDATION_ERROR`（Pydantic min_length=1） |
 | E3 | node 无维度内容 | 导出一个未填任何维度的 node（include.dimensions=true）| 200 + Markdown 含该章节但维度区块显示"（暂无内容）"（不报错） |
-| E4 | 全部 node 无任何内容 | 所有 node 均无维度/版本/竞品/问题 | 200 + Markdown 含章节标题但各区块均显示"（暂无内容）"（不报 422，导出空报告仍成功） |
+| E4 | 全部 node 无任何内容 | 所有 node 均无维度/版本/竞品/问题 | **422 `EXPORT_EMPTY_CONTENT`**（R1-A P1-1 立修 2026-05-09：design §13 字面 EXPORT_EMPTY_CONTENT 422 优先 / 与 frontmatter codes_added 一致 / 空报告无价值不应静默成功） |
 | E5 | node_ids 含重复 UUID（入口 A） | `node_ids=[a, a, b]` | 去重后导出（200 + 2 章节，不报错） |
 | E6 | 所选 node 含已删除 node | node_a 已软删除 | 404 `EXPORT_NODE_NOT_IN_PROJECT`（或 NOT_FOUND，Service 层 _check_nodes_belong_to_project 拦） |
 

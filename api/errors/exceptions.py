@@ -915,10 +915,17 @@ class ExportNodeLimitExceededError(AppError):
     message = "Too many nodes selected for export (max 20)"
 
 
-class ExportNodeNotInProjectError(NotFoundError):
-    """node_id 不属于该 project 或不存在（cross-tenant 防御 + design §8 service 层校验）。"""
+class ExportNodeNotInProjectError(ValidationError):
+    """node_id 不属于该 project 或不存在（cross-tenant 防御 + design §8 service 层校验）。
+
+    R1-B P1-1 + R1-C P1-3 立修（2026-05-09）：M06 CompetitorCrossProjectError /
+    M08 RelationNodeNotInProjectError / M12 ComparisonNodeNotFoundError 范式延续 422
+    （cross-project node 引用是输入值非法 → ValidationError；不暴露 forbidden 语义靠
+    Router 层 check_project_access 已防 / Service 此层属于二次防御非主路径）。
+    """
 
     code = ErrorCode.EXPORT_NODE_NOT_IN_PROJECT
+    http_status = 422
     message = "One or more nodes do not belong to this project"
 
 

@@ -50,7 +50,7 @@ references:
       reason: "只读聚合：问题沉淀，via IssueDAO"
   consumes_action_types: []
   produces_action_types:
-    - [no_dependency]  # M19 写 export 事件到 activity_log，但 export action_type 不在当前 M15 ActionType 枚举中；待 Phase 2 Alembic 迁移添加
+    - [no_dependency]  # M19 写 exported 事件到 activity_log，但 exported action_type 不在当前 M15 ActionType 枚举中；待 Phase 2 Alembic 迁移添加（R1 立修：M16 R14 过去式立规对齐 / "export" → "exported"）
 ---
 
 # M19 导入/导出 - 详细设计
@@ -407,7 +407,8 @@ class ExportService:
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
-| `export` | `node` | `<node_ids[0]>`（多 node 时记录第一个） | 导出 Markdown 报告（{node_count} 个模块） | `{node_ids: [...], node_count, sections: {...}, file_size_bytes}` |
+| `exported` | `node` | `<node_ids[0]>`（多 node 时记录第一个） | 导出 Markdown 报告（{node_count} 个模块） | `{node_ids: [...], node_count, sections: {...}, file_size_bytes}` |
+（R1 立修 disambiguation：M16 R14 立规精神过去式 + snake_case；design accepted 2026-04-21 时 R14 未立 / sprint 子片 1 R1 立修对齐 "export" → "exported"）
 
 **实现位置**：Service 层导出完成后调 `self.activity.log(...)`（非事务——导出无写操作，activity_log 写失败不影响导出）。
 
@@ -526,7 +527,7 @@ class ExportEmptyContentError(AppError):
 | 子片 | 范围 | 行数 / 文件数预估 | Review 形态 |
 |------|------|---------------|-----------|
 | 0 prep | §14.5 + scaffold 简化 4 字段注释 + bypass log #2 配套验收 + cross-sprint punt 池本 sprint 命中检查 | ~80 / ~3 | self-审（启动期范畴） |
-| 1 | Alembic ALTER CHECK + ActionType+1（"export"）4 处同步（model tuple + schema StrEnum + CHECK constraint + Alembic）+ ci-lint R14 验证 + tests | ~150 / ~4 | **R1 = 3 subagent 并行**（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）合并审 子片 1+2+3 |
+| 1 | Alembic ALTER CHECK + ActionType+1（"exported" / R1 过去式立规对齐）4 处同步（model tuple + schema StrEnum + CHECK constraint + Alembic）+ ci-lint R14 验证 + tests | ~150 / ~4 | **R1 = 3 subagent 并行**（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）合并审 子片 1+2+3 |
 | 2 | DAO 复用接通验证（DimensionDAO/VersionDAO/CompetitorDAO/IssueDAO/NodeDAO ADR-003 规则 1 / 全部上游已存在 / 本子片可能无新代码 / 仅 import + DI 接通） | ~50 / ~1 | 同上（合并 R1） |
 | 3 | ExportService（generate_markdown 两入口共享）+ ExportSchema + 3 ErrorCode + 3 AppError 子类 + Markdown 渲染 + activity_log target_type=node 写入 + service unit + schema unit | ~500 / ~5 | 同上（合并 R1） |
 | 4 | Router 2 endpoints（POST /api/projects/{pid}/exports + POST /api/projects/{pid}/nodes/{nid}/export）+ e2e（元教训 18 类 actionable 主动复制 + N/A 显式声明）+ Content-Disposition + filename sanitize（M11+M17 范式复用 / 第三 multipart-style 实例不触发 — 非文件上传输入 / 输出 Content-Disposition filename sanitize 必字面验） | ~400 / ~3 | **R2 = 1 合并 Opus subagent**（endpoint 单审） |
@@ -551,7 +552,7 @@ class ExportEmptyContentError(AppError):
 - **endpoint 形态特殊不免除契约纪律**（M14 立 / M19 Markdown 二进制响应特殊 / 主动复制 = Content-Type=text/markdown 字面验 + Content-Disposition filename 字面验）
 - **N/A 元教训显式声明范式**（M14 立 / M19 §14.5 + tests.md docstring 双重显式）
 - **横切表 owner enum 4 处同步**（M15 立 / M19 ActionType+1 必同步 4 处：model tuple + schema StrEnum + CHECK constraint + Alembic）
-- **R14 ci-lint 守护**（M16 立 / M19 service write_event(action_type="export") 字面 _ACTION_TYPES 枚举 / 不漂移）
+- **R14 ci-lint 守护**（M16 立 / M19 service write_event(action_type="exported") 字面 _ACTION_TYPES 枚举 / 不漂移 / R1 过去式立规对齐）
 - **§12B 后台 fire-and-forget 子模板**（M16 立 / M19 同步导出无 BackgroundTasks / N/A 显式声明）
 - **R-X1 第二实例 compensation_session helper**（M17 立 / M19 不触发补偿形态 / N/A 显式声明）
 - **idempotency 含 project_id**（M17 立 / M19 无幂等需求 / N/A 显式声明）

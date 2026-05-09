@@ -1,13 +1,13 @@
-"""m19 导入/导出 — ActionType+1 ALTER CHECK constraint（"export"）
+"""m19 导入/导出 — ActionType+1 ALTER CHECK constraint（"exported"）
 
 Revision ID: m19export01
 Revises: m18semsearch01
 Create Date: 2026-05-09
 
 M19 是只读聚合导出模块（design §3 字面：无主表）。本 migration 仅扩展
-activity_logs.action_type CHECK constraint 以容纳新值 "export"——M19 service
-导出完成后调 write_event(action_type="export", target_type="node") 写一条
-activity_log（design §10 字面）。
+activity_logs.action_type CHECK constraint 以容纳新值 "exported"——M19 service
+导出完成后调 write_event(action_type="exported", target_type="node") 写一条
+activity_log（design §10 字面 / R1 立修过去式立规对齐）。
 
 TargetType "node" 已存在于 _TARGET_TYPES tuple line 139（M03 baseline-patch
 已落 / 不需 ALTER ck_activity_log_target_type）。
@@ -44,10 +44,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 回退到 m18 baseline 的 _ACTION_TYPES（不含 "export"）。注意：若已存在
-    # action_type='export' 的行会导致 downgrade 失败——这是设计契约：
-    # 回退前需手工清洗 activity_logs 行（DELETE WHERE action_type = 'export'）。
-    _OLD_ACTION_TYPES = tuple(v for v in _ACTION_TYPES if v != "export")
+    # 回退到 m18 baseline 的 _ACTION_TYPES（不含 "exported"）。注意：若已存在
+    # action_type='exported' 的行会导致 downgrade 失败——这是设计契约：
+    # 回退前需手工清洗 activity_logs 行（DELETE WHERE action_type = 'exported'）。
+    # R1-A P1-1 + R1-B 漏识别 #2 立修 2026-05-09：M16 R14 立规精神过去式对齐 / "export" → "exported"。
+    _OLD_ACTION_TYPES = tuple(v for v in _ACTION_TYPES if v != "exported")
     op.drop_constraint("ck_activity_log_action_type", "activity_logs", type_="check")
     op.create_check_constraint(
         "ck_activity_log_action_type",

@@ -48,8 +48,10 @@ from api.models.project import DimensionType, Project
 from api.schemas.export_schema import ExportIncludeOptions
 from api.services.activity_log_service import write_event
 
-# action_type / target_type 字面（design §10 / R14 ci-lint 守护）
-ACTION_EXPORT = "export"
+# action_type / target_type 字面（design §10 / R14 ci-lint 守护 + R1 过去式立规对齐）
+# R1-B 漏识别 #2 立修：M16 R14 立规精神过去式 + snake_case；design §10 字面 "export" sprint
+# 子片 1 R1 立修对齐范式 / design §10 + frontmatter line 51-53 同步回写 "exported"
+ACTION_EXPORT = "exported"
 TARGET_NODE = "node"
 
 
@@ -84,7 +86,7 @@ class ExportService:
         校验顺序（M07/M12 范式延续）：
         1. NodeDAO.list_by_ids 跨 project 校验（任一不属于本 project → 404 NotFound）
         2. 渲染前若所有 node 在 include 选项下均无内容 → 422 EXPORT_EMPTY_CONTENT
-        3. write_event(action_type="export", target_type="node", target_id=node_ids[0])
+        3. write_event(action_type="exported", target_type="node", target_id=node_ids[0])
         """
         nodes = await self._validate_and_load_nodes(db, project_id, node_ids)
         project = await self._load_project(db, project_id)
@@ -138,7 +140,9 @@ class ExportService:
         M12 ComparisonService._validate_nodes_in_project 范式延续；保留入参顺序排序
         让 Markdown 输出顺序与用户传入一致（list_by_ids 顺序不保证）。
         """
-        unique_ids = list({nid for nid in node_ids})
+        # R1-A P1-3 + R1-C P1-1 立修：dict.fromkeys 保序去重 / 消除原 set 推导 + 二段 seen
+        # 双重去重逻辑（结果原本正确但鲁棒性低）
+        unique_ids = list(dict.fromkeys(node_ids))
         rows = await self.node_dao.list_by_ids(db, unique_ids, project_id)
         if len(rows) != len(unique_ids):
             found = {n.id for n in rows}
@@ -148,14 +152,7 @@ class ExportService:
                 missing_node_ids=[str(nid) for nid in missing],
             )
         by_id = {n.id: n for n in rows}
-        ordered: list[Node] = []
-        seen: set[UUID] = set()
-        for nid in node_ids:
-            if nid in seen:
-                continue
-            seen.add(nid)
-            ordered.append(by_id[nid])
-        return ordered
+        return [by_id[nid] for nid in unique_ids]
 
     async def _load_project(self, db: AsyncSession, project_id: UUID) -> Project:
         result = await db.execute(select(Project).where(Project.id == project_id))

@@ -133,8 +133,10 @@ _ACTION_TYPES = (
     "team_member_demoted_member",
     "project_joined_team",
     "project_left_team",
-    # M19 导入/导出（2026-05-09 sprint / design §10 + frontmatter line 51-53 字面）
-    "export",
+    # M19 导入/导出（2026-05-09 sprint / R1-A P1-1+R1-B 漏识别 #2 立修：M16 R14 立规精神
+    # 过去式 + snake_case；design §10 字面 "export" 是 accepted 2026-04-21 时 R14 未立 / sprint
+    # 子片 1 R1 立修对齐范式 / design §10 + frontmatter line 51-53 同步回写 "exported"）
+    "exported",
 )
 
 _TARGET_TYPES = (
