@@ -35,6 +35,21 @@ from api.queue.base import TaskPayload
 log = logging.getLogger(__name__)
 
 
+# M-CLEANUP（cross-sprint #19 立修 / M17 R1-A P3-3）：6 处 lazy import 抽 helper
+# 风格统一性 / 防 6 处重复 from api.core.db import SessionLocal + from api.services.import_service
+# import ImportService。lazy import 仍保留（避免 worker module load 期触发 service 链路 import）
+def _get_session_and_service():
+    """Lazy import helper：返回 (SessionLocal, ImportService) tuple。
+
+    保留 lazy import 形态（worker module load 时不引入 service 链路），仅消除 6 处重复字面。
+    每 task 第一行调用 + async with sessionlocal() as db 解构使用。
+    """
+    from api.core.db import SessionLocal
+    from api.services.import_service import ImportService
+
+    return SessionLocal, ImportService()
+
+
 # ─────────────── Payload 子类（design §12 字面 / 强类型 audit B5 修复）───────────────
 
 
@@ -117,10 +132,7 @@ async def import_extract(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
     - 任何其他异常 → arq 重试链；用尽 → failed + dead_letter=True
     """
     payload = ImportExtractPayload.model_validate(raw)
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         await service.run_extract(
             db,
@@ -135,10 +147,7 @@ async def import_ai_step1(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
     payload = ImportAIStepPayload.model_validate(raw)
     if payload.step != 1:
         raise ValueError(f"import_ai_step1 expects step=1, got step={payload.step}")
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         await service.run_ai_step(
             db,
@@ -154,10 +163,7 @@ async def import_ai_step2(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
     payload = ImportAIStepPayload.model_validate(raw)
     if payload.step != 2:
         raise ValueError(f"import_ai_step2 expects step=2, got step={payload.step}")
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         await service.run_ai_step(
             db,
@@ -173,10 +179,7 @@ async def import_ai_step3(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
     payload = ImportAIStepPayload.model_validate(raw)
     if payload.step != 3:
         raise ValueError(f"import_ai_step3 expects step=3, got step={payload.step}")
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         await service.run_ai_step(
             db,
@@ -190,10 +193,7 @@ async def import_ai_step3(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
 async def import_batch_insert(ctx: dict[str, Any], raw: dict[str, Any]) -> None:
     """步骤 4：批量入库（R-X1 调 M03/M04/M06/M07 batch_create_in_transaction）。"""
     payload = ImportBatchInsertPayload.model_validate(raw)
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         await service.run_batch_insert(
             db,
@@ -211,10 +211,7 @@ async def import_cleanup_dead_letter(ctx: dict[str, Any], raw: dict[str, Any]) -
     （housekeeping 而非业务事件 / design §12 字面）。
     """
     payload = TaskPayload.model_validate(raw)
-    from api.core.db import SessionLocal
-    from api.services.import_service import ImportService
-
-    service = ImportService()
+    SessionLocal, service = _get_session_and_service()
     async with SessionLocal() as db:
         count = await service.cleanup_dead_letter(db, system_user_id=payload.user_id)
         await db.commit()
