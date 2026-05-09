@@ -8,7 +8,6 @@ from api.core.config import settings
 from api.core.db import SessionLocal, engine
 from api.core.logging import configure_logging, log
 from api.core.redis import get_redis
-from api.dao.project_dao import M02TenantContext
 from api.errors import register_exception_handlers
 from api.routers import (
     activity_stream_router,
@@ -63,8 +62,12 @@ def _validate_startup_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_startup_config()
-    # M02 子片 2: 注入 TenantContext concrete impl (覆盖 B2.4 scaffold Protocol)
-    tenant_filter.set_tenant_context(M02TenantContext())
+    # M02 子片 2 (2026-04-26): 注入 M02 TenantContext concrete impl (仅 project_members)
+    # M20 子片 2 (2026-05-09): 升级到 M20 TenantContext (UNION project_members ∪ team_members)
+    # design §9.2 + ADR-005 §3.1：M20 lifespan 替换 M02TenantContext，M03-M19 既有 DAO 自动获益
+    from api.dao.teams_dao import M20TenantContext
+
+    tenant_filter.set_tenant_context(M20TenantContext())
     # M04 子片 3: R-X2 第一真注入（M03 delete_node 调下游 → DimensionService 清下游）
     register_child_service("dimension", DimensionService().delete_by_node_id)
     # M06 子片 3: R-X2 第二真注入（CompetitorService 清 competitor_refs）
