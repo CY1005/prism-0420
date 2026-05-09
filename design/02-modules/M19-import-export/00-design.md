@@ -516,6 +516,58 @@ class ExportEmptyContentError(AppError):
 
 ---
 
+## 14.5 Sprint Review 拆分计划（闸门 3.4 L1 总则强制段 / 2026-05-09 启动期立）
+
+> 闸门 3.4 L1 总则要求每业务模块 design 必有「Sprint Review 拆分计划」段，
+> 声明本 sprint 拆 N 次 review、每次覆盖哪些子片、合并子片的 SKIP 比例理由。
+
+### 拆分总览（5+ 子片 / R1=3 subagent 并行 + R2=1 合并 Opus / complexity=low）
+
+| 子片 | 范围 | 行数 / 文件数预估 | Review 形态 |
+|------|------|---------------|-----------|
+| 0 prep | §14.5 + scaffold 简化 4 字段注释 + bypass log #2 配套验收 + cross-sprint punt 池本 sprint 命中检查 | ~80 / ~3 | self-审（启动期范畴） |
+| 1 | Alembic ALTER CHECK + ActionType+1（"export"）4 处同步（model tuple + schema StrEnum + CHECK constraint + Alembic）+ ci-lint R14 验证 + tests | ~150 / ~4 | **R1 = 3 subagent 并行**（spec+quality Opus / reuse Sonnet / quality+efficiency Sonnet）合并审 子片 1+2+3 |
+| 2 | DAO 复用接通验证（DimensionDAO/VersionDAO/CompetitorDAO/IssueDAO/NodeDAO ADR-003 规则 1 / 全部上游已存在 / 本子片可能无新代码 / 仅 import + DI 接通） | ~50 / ~1 | 同上（合并 R1） |
+| 3 | ExportService（generate_markdown 两入口共享）+ ExportSchema + 3 ErrorCode + 3 AppError 子类 + Markdown 渲染 + activity_log target_type=node 写入 + service unit + schema unit | ~500 / ~5 | 同上（合并 R1） |
+| 4 | Router 2 endpoints（POST /api/projects/{pid}/exports + POST /api/projects/{pid}/nodes/{nid}/export）+ e2e（元教训 18 类 actionable 主动复制 + N/A 显式声明）+ Content-Disposition + filename sanitize（M11+M17 范式复用 / 第三 multipart-style 实例不触发 — 非文件上传输入 / 输出 Content-Disposition filename sanitize 必字面验） | ~400 / ~3 | **R2 = 1 合并 Opus subagent**（endpoint 单审） |
+| 5 | 关闸（design 回写 + audit/m19-pilot-template-validation.md 元贡献沉淀 + handoff §0 + roadmap M19 + Phase 2.1 90→95% + cross-sprint punt 池接通 + 评估 #20 require_platform_admin 是否触发） | ~150 / ~5 | 主对话总结 |
+
+### SKIP 例外段（L1 总则触发例外条款 a/b/c）
+
+- **a 子片 1（alembic ALTER CHECK + 枚举字面同步）**：simplify 22 条 SKIP ≥ 80%（无 frontend / 无 Server Action / 无契约漂移 / 无 LLM hot path / 仅枚举字面 + 1 行 ALTER），合并到子片 4 e2e 一次跑（提前声明，非临时合并）。
+- **b context budget pressure**：M18 sprint bypass log #2 配套验收已最终 ✅（M16 bypass + M17 恢复 + M18 继续 = 2 次累计不复位 / 第 3 次触发闸门 3.4 L1 review）。M19 必继续 R1=3 subagent 并行 + R2=1 合并 Opus 真跑，不再降级。
+- **c 临时合并**：禁。如 sprint 中临时合并 → bypass log 第 3 次累计触发对闸门规则本身的 review。
+
+### 范式复用清单（M02-M18 沉淀 / M19 主动复制不等抓）
+
+- **viewer 写所有写端点 403** N/A 显式声明：M19 design §8 字面 viewer 即可导出（POST 但语义只读 + activity_log 副作用不算"业务写"）→ 对应"读权限 403"范式（M15 立 / 但 M19 viewer 通过非 403）/ 主动复制 = 不在项目内 user 403 + 跨 project 404
+- **write_event 异常传播测试 e2e 字面验**（M16 立 / M19 export 写 activity_log 路径必测 monkeypatch raise + e2e 字面验）
+- **cross-tenant 404 + cross-project node 404**（M02 立 / M19 入口 A node_ids 含跨 project 节点 → EXPORT_NODE_NOT_IN_PROJECT；入口 B project_id/node_id mismatch → 404）
+- **IntegrityError 区分约束名**（M05 立 / M19 全只读 / N/A 显式声明）
+- **R-X1 失败补偿 commit boundary**（M11 立 / M17 helper / M19 同步只读 / N/A 显式声明）
+- **文件上传 file.size + sanitize**（M11 立 / M17 第二实例 / M19 输入无 multipart / 输出 Content-Disposition filename sanitize 必字面验：UTF-8 兼容 + 控制字符 strip + 长度截断）
+- **SSE 形态特殊不免除契约纪律**（M13 立 / M19 同步路由 / N/A 显式声明）
+- **metadata 字段集每条 e2e 字面验**（M14 立 / M19 export 事件 metadata = `{node_ids, node_count, sections, file_size_bytes}` 必逐字段验）
+- **endpoint 形态特殊不免除契约纪律**（M14 立 / M19 Markdown 二进制响应特殊 / 主动复制 = Content-Type=text/markdown 字面验 + Content-Disposition filename 字面验）
+- **N/A 元教训显式声明范式**（M14 立 / M19 §14.5 + tests.md docstring 双重显式）
+- **横切表 owner enum 4 处同步**（M15 立 / M19 ActionType+1 必同步 4 处：model tuple + schema StrEnum + CHECK constraint + Alembic）
+- **R14 ci-lint 守护**（M16 立 / M19 service write_event(action_type="export") 字面 _ACTION_TYPES 枚举 / 不漂移）
+- **§12B 后台 fire-and-forget 子模板**（M16 立 / M19 同步导出无 BackgroundTasks / N/A 显式声明）
+- **R-X1 第二实例 compensation_session helper**（M17 立 / M19 不触发补偿形态 / N/A 显式声明）
+- **idempotency 含 project_id**（M17 立 / M19 无幂等需求 / N/A 显式声明）
+- **WS endpoint 5-test 矩阵**（M17 立 / M19 无 WS endpoint / N/A 显式声明）
+- **EmbeddingProvider 抽象 / pgvector ARRAY 占位三层降级**（M18 立 / M19 不触发 embedding 路径 / N/A 显式声明）
+- **占位 metadata _stub:True**（M18 立 / M19 export metadata 全真实数据 / N/A 显式声明）
+- **测试反模式 assert True / 永真 in 元组**（M18 立 / M19 全测试有意义断言）
+
+### L3 子选项留空待实证（R-X5 风格）
+
+- "M19 纯只读导出（无 model / 无 DAO 新增）模块的 R1=3 subagent 命中分布" — sprint 实证后回写 audit/m19-pilot-template-validation.md
+- "Markdown 渲染逻辑（service 层纯 Python 字符串拼接 + 模板）的 R1-A spec+quality 命中区域是否聚焦在 design §7 Markdown 结构契约一致性" — sprint 实证
+- "Content-Disposition filename sanitize 输出端首发是否触发 horizontal 化（M17 立的 filename sanitize 第三实例触发条件）" — sprint 实证；M19 是输出端 sanitize 首发，与 M11+M17 输入端不同根源 → 评估是否合并到 api/utils/upload_helpers.py 还是新建 api/utils/download_helpers.py
+
+---
+
 ## CY 决策记录（2026-04-21 批量统一）
 
 | # | 节 | 决策点 | 决定 |
