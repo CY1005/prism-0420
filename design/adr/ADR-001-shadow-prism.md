@@ -4,6 +4,7 @@
 - **日期**：2026-04-20
 - **决策者**：CY
 - **v2 修订**：2026-05-07（§预设 4 AI Provider 抽象段加横切归属标，对齐原则 6 + R-X6 + 04-layer Q7；详见 [`../audit/time-dimension-blindspot-2026-05-07.md`](../audit/time-dimension-blindspot-2026-05-07.md)）
+- **v3 修订**：2026-05-09（新增 §6 前端继承策略段 / 修订 80b5637 commit 引入但未走 ADR 流程的字面策略 / 消除 CLAUDE.md L92 "不直接抄" 与 roadmap §7.2 "拷贝 app/ 子集" 字面冲突 / shadow 对照仅后端显式声明）
 - **partial_superseded_by**：[ADR-005-team-extension.md] —— §预设 3 整段（命名 + 类型 + FK 三件）
 
 ---
@@ -240,6 +241,54 @@ TASK_TIMEOUTS = {
 ```
 
 **原因**：统一超时要么浪费（短任务等太久才能重试）要么不够（长任务被截断）。
+
+---
+
+## §6 前端继承策略（2026-05-09 显式记录 / 修订 80b5637 commit 引入但未走 ADR 流程的字面策略）
+
+> **背景**：80b5637 commit（2026-04-29）引入"前端继承 Prism"字面到 CLAUDE.md /
+> README / roadmap §7 / phase-gate 闸门 4 / quality-spec ESLint 选型理由 5 处工程文档，
+> 但未走 ADR 流程显式记录 / 与 §预设 3 "shadow 项目独立性"字面冲突。本段补记录消除歧义。
+
+### 6.1 决策
+
+prism-0420 的"shadow 对照实验"严格仅在**后端**生效，前端 UI **明确接受继承妥协**：
+
+- **后端**（M01-M20）：完全设计前置 → AI 实现独立写 / 不抄 Prism 后端 / shadow 对照数据点完整 ✅
+- **前端**：拷贝 `/root/prism/web/` 改 API client 接 prism-0420 后端 + M20 团队页新写
+  - **可继承**：components/ + app/ (UI 路由) + lib/ + contexts/ + UI 组件库
+  - **必改**：services/ (HTTP client → fetch prism-0420 FastAPI) + actions/ (Server Actions
+    → call prism-0420 API) + db/ (drizzle 删 / 后端走 prism-0420 SQLAlchemy 不需前端 ORM)
+  - **新写**：M20 团队管理页面（Prism 无 / shadcn pattern）
+
+### 6.2 理由（CY 决策 / 已签字 80b5637 commit）
+
+1. **Prism 现有前端 UI 设计 CY 喜欢**：交互逻辑 / shadcn 组件 / 信息架构通过 Prism 实战验证
+2. **工作量妥协**：前端从 0 设计前置 + 实施约 8-10 周 / 拷改约 1-1.5 周 / 节省 6-8 周
+3. **shadow 对照不需全栈**：方法论价值（设计前置 vs 边做边想）在后端层面已能数据化对照
+   （M01-M20 17 sprint R1+R2 数据点 / Phase 3 报告以后端 bug 数 / 速度 / 可追溯性为基线）
+
+### 6.3 影响（已发生 / Phase 3 报告范围必须显式声明）
+
+- **Phase 3 数据对照报告范围已缩**：仅后端对照 / 前端无独立数据点 / **报告必须显式声明**
+  "前端继承妥协 / 对照仅后端"，避免外部评审者误以为全栈对照
+- **设计前置文档覆盖范围**：design/02-modules/ 20 模块详设全后端 / 前端无对应详设是合规
+  （非缺失）/ M20 团队页前端实现期可补轻量 design 草案
+- **闸门 4 / 5 字面"前端继承"**合规 / 不需修订
+- **quality-spec ESLint v9 选型理由"Prism 同款（前端继承零摩擦）"**合规 / 不需修订
+
+### 6.4 与 §预设 3 关系
+
+§预设 3 (space_id 预留列) 是后端字段命名决策 / 与 §6 前端继承策略无关 / 各自独立 supersede
+路径（§预设 3 → ADR-005 / §6 是新增段不 supersede 任何先前决策）。
+
+### 6.5 修订动作（本段 commit 内一并完成）
+
+1. **CLAUDE.md L135** 修订：「Prism 代码参考」段拆分后端 / 前端两条 + 修正路径 `/root/prism/`
+   （原 `/root/workspace/projects/prism/` 错误）
+2. **未来 Phase 2.2 启动时引用本段**：roadmap §7.2 字面"拷贝 Prism `app/` 选定子集"合规
+   / 闸门 4 启动条件评估时复读本段确认范围
+3. **未来 Phase 3 数据对照报告**：报告引言段必字面引用 §6.3 "对照仅后端" / 避免歧义
 
 ---
 

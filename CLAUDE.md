@@ -132,4 +132,7 @@ GitHub：https://github.com/CY1005/prism-0420
 - 方法论：`/root/workspace/projects/ai-quality-engineering/02-技术/架构设计/`（三篇）
 - Pain-log：`/root/workspace/projects/ai-quality-engineering/00-GTD/日志/pain-log.md`
 - TODO：`/root/workspace/projects/ai-quality-engineering/00-GTD/待办/TODO-index.md`
-- Prism 代码参考：`/root/workspace/projects/prism/`（做对照用，不直接抄）
+- Prism 代码参考：`/root/prism/`（注意路径：不在 workspace/projects/ 下）
+  - **后端**：做对照用，**不直接抄**（M01-M20 全设计前置独立写 / shadow 对照实验完整度仅后端）
+  - **前端**：UI 可拷改（CY 喜欢现有 UI 设计 / 工作量妥协 / Phase 2.2 拷 `/root/prism/web/` 改 API 接 prism-0420 后端 + M20 团队页新写）
+  - 详见 ADR-001 §6 前端继承策略
