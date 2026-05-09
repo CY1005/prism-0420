@@ -1,84 +1,74 @@
 "use server";
 
-import { db } from "@/db";
-import { nodes, nodeRelations, dimensionRecords, projectDimensionConfigs } from "@/db/schema";
-import { eq, and, or, asc, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
+import { redirect } from "next/navigation";
+import {
+  serverApiGet,
+  serverApiPost,
+  serverApiDelete,
+  UnauthenticatedError,
+} from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import type { components } from "@/types/api";
 
+type RelationResponse = components["schemas"]["RelationResponse"];
+type RelationListResponse = components["schemas"]["RelationListResponse"];
+type OverviewResponse = components["schemas"]["OverviewResponse"];
+type NodeOverview = components["schemas"]["NodeOverview"];
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
+
+interface RelationCreatePayload {
+  source_node_id: string;
+  target_node_id: string;
+  relation_type: string;
+  notes?: string | null;
+}
+
+/**
+ * 创建节点关系（M08）— 后端字段：source/target/relation_type/notes（前端兼容旧 description → 映射到 notes）。
+ */
 export async function createRelation(data: {
   sourceNodeId: string;
   targetNodeId: string;
   relationType: string;
   description?: string;
-}): Promise<ActionResult<{ id: number }>> {
+  projectId: string;
+}): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireAuth();
-
-    // Prevent self-referencing
     if (data.sourceNodeId === data.targetNodeId) {
       return actionError(new AppError("不能创建自引用关联", "blocking", "VALIDATION_ERROR", 400));
     }
-
-    // Validate both nodes exist
-    const [sourceNode] = await db.select().from(nodes).where(eq(nodes.id, data.sourceNodeId));
-    if (!sourceNode) {
-      return actionError(new AppError("源节点不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    const [targetNode] = await db.select().from(nodes).where(eq(nodes.id, data.targetNodeId));
-    if (!targetNode) {
-      return actionError(new AppError("目标节点不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    // Check access on source node's project
-    await checkProjectAccess(user.id, sourceNode.projectId, "editor");
-
-    const [relation] = await db
-      .insert(nodeRelations)
-      .values({
-        sourceNodeId: data.sourceNodeId,
-        targetNodeId: data.targetNodeId,
-        relationType: data.relationType,
-        description: data.description,
-        createdBy: user.id,
-      })
-      .returning();
-
-    revalidatePath(`/projects/${sourceNode.projectId}`);
-
+    const body: RelationCreatePayload = {
+      source_node_id: data.sourceNodeId,
+      target_node_id: data.targetNodeId,
+      relation_type: data.relationType,
+      notes: data.description ?? null,
+    };
+    const relation = await serverApiPost<RelationResponse>(
+      `/api/projects/${data.projectId}/relations`,
+      body,
+    );
+    revalidatePath(`/projects/${data.projectId}`);
     return actionSuccess({ id: relation.id });
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function deleteRelation(relationId: number): Promise<ActionResult> {
+export async function deleteRelation(relationId: string, projectId: string): Promise<ActionResult> {
   try {
-    const user = await requireAuth();
-
-    const [relation] = await db
-      .select()
-      .from(nodeRelations)
-      .where(eq(nodeRelations.id, relationId));
-    if (!relation) {
-      return actionError(new AppError("关联不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    // Check access via source node
-    const [sourceNode] = await db.select().from(nodes).where(eq(nodes.id, relation.sourceNodeId));
-    if (sourceNode) {
-      await checkProjectAccess(user.id, sourceNode.projectId, "editor");
-    }
-
-    await db.delete(nodeRelations).where(eq(nodeRelations.id, relationId));
-
-    if (sourceNode) {
-      revalidatePath(`/projects/${sourceNode.projectId}`);
-    }
-
+    await serverApiDelete(`/api/projects/${projectId}/relations/${relationId}`);
+    revalidatePath(`/projects/${projectId}`);
     return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
@@ -87,23 +77,15 @@ export async function deleteRelation(relationId: number): Promise<ActionResult> 
 
 export async function getRelationsByNode(
   nodeId: string,
-): Promise<ActionResult<(typeof nodeRelations.$inferSelect)[]>> {
+  projectId: string,
+): Promise<ActionResult<RelationResponse[]>> {
   try {
-    const user = await requireAuth();
-
-    const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
-    if (!node) {
-      return actionError(new AppError("节点不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await checkProjectAccess(user.id, node.projectId, "viewer");
-
-    const relations = await db
-      .select()
-      .from(nodeRelations)
-      .where(or(eq(nodeRelations.sourceNodeId, nodeId), eq(nodeRelations.targetNodeId, nodeId)));
-
-    return actionSuccess(relations);
+    return await withAuthRedirect(async () => {
+      const data = await serverApiGet<RelationListResponse>(
+        `/api/projects/${projectId}/nodes/${nodeId}/relations`,
+      );
+      return actionSuccess(data.items);
+    });
   } catch (error) {
     return actionError(error);
   }
@@ -123,145 +105,88 @@ interface ModuleEdge {
   count: number;
 }
 
+/**
+ * 模块级关系图（拷贝层 relation-graph 消费）。
+ * 后端 /relations 仅返原子关系 / 此处前端聚合：
+ *  1. 取 /overview → modules = depth=1 folder + 完善度
+ *  2. 取 /relations → 全量原子 / file → owning module 映射后聚合 (source, target, relation_type) 计数
+ */
 export async function getRelationGraph(
   projectId: string,
 ): Promise<ActionResult<{ nodes: ModuleNode[]; edges: ModuleEdge[] }>> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "viewer");
-
-    // Get depth=1 folders (modules)
-    const modules = await db
-      .select()
-      .from(nodes)
-      .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "folder"), eq(nodes.depth, 1)))
-      .orderBy(asc(nodes.sortOrder));
-
-    if (modules.length === 0) {
-      return actionSuccess({ nodes: [], edges: [] });
-    }
-
-    // Get all file nodes for feature counting and completion
-    const allFiles = await db
-      .select({
-        id: nodes.id,
-        path: nodes.path,
-        parentId: nodes.parentId,
-      })
-      .from(nodes)
-      .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "file")));
-
-    // Get enabled dimensions count
-    const dimConfigs = await db
-      .select()
-      .from(projectDimensionConfigs)
-      .where(
-        and(
-          eq(projectDimensionConfigs.projectId, projectId),
-          eq(projectDimensionConfigs.enabled, true),
-        ),
+    return await withAuthRedirect(async () => {
+      const overview = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
+      const relations = await serverApiGet<RelationListResponse>(
+        `/api/projects/${projectId}/relations`,
       );
-    const totalDims = dimConfigs.length;
 
-    // Get dimension fill counts per file
-    const dimFillCounts = await db
-      .select({
-        nodeId: dimensionRecords.nodeId,
-        filledCount: sql<number>`count(distinct ${dimensionRecords.dimensionTypeId})::int`,
-      })
-      .from(dimensionRecords)
-      .innerJoin(nodes, eq(dimensionRecords.nodeId, nodes.id))
-      .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "file")))
-      .groupBy(dimensionRecords.nodeId);
-
-    const fillMap = new Map<string, number>();
-    for (const r of dimFillCounts) {
-      fillMap.set(r.nodeId, r.filledCount);
-    }
-
-    // Build file -> module mapping (which module does each file belong to)
-    const fileToModule = new Map<string, string>();
-    for (const file of allFiles) {
-      for (const mod of modules) {
-        if (file.path.includes(mod.id)) {
-          fileToModule.set(file.id, mod.id);
-          break;
+      // depth=1 folders
+      const modules: NodeOverview[] = [];
+      for (const root of overview.tree) {
+        for (const child of root.children) {
+          if (child.type === "folder") modules.push(child);
         }
       }
-    }
-
-    // Build module nodes with featureCount and completion
-    const moduleNodes: ModuleNode[] = modules.slice(0, 200).map((mod) => {
-      const modFiles = allFiles.filter((f) => f.path.includes(mod.id));
-      const featureCount = modFiles.length;
-
-      let completionPercent = 0;
-      if (featureCount > 0 && totalDims > 0) {
-        const totalCompletion = modFiles.reduce((sum, f) => {
-          const filled = fillMap.get(f.id) ?? 0;
-          return sum + (filled / totalDims) * 100;
-        }, 0);
-        completionPercent = Math.round(totalCompletion / featureCount);
+      // 兼容旧实装：若 root level 自身就是 depth=1 folder，也认作 module
+      for (const root of overview.tree) {
+        if (root.type === "folder" && root.depth === 1) modules.push(root);
       }
 
-      return {
-        id: mod.id,
-        name: mod.name,
-        featureCount,
-        completionPercent,
+      const moduleNodes: ModuleNode[] = modules.slice(0, 200).map((mod) => {
+        const featureFiles: NodeOverview[] = [];
+        const walk = (n: NodeOverview) => {
+          if (n.type === "file") featureFiles.push(n);
+          n.children.forEach(walk);
+        };
+        mod.children.forEach(walk);
+        const featureCount = featureFiles.length;
+        const completionPercent =
+          featureCount > 0
+            ? Math.round(
+                (featureFiles.reduce((s, f) => s + f.completion_rate, 0) / featureCount) * 100,
+              )
+            : 0;
+        return { id: mod.id, name: mod.name, featureCount, completionPercent };
+      });
+
+      // file → owning module 映射（path 前缀 / fallback 用 path includes mod.id）
+      const fileToModule = new Map<string, string>();
+      const allFiles: { id: string }[] = [];
+      const collectFiles = (n: NodeOverview) => {
+        if (n.type === "file") allFiles.push({ id: n.id });
+        n.children.forEach(collectFiles);
       };
-    });
+      overview.tree.forEach(collectFiles);
 
-    // Get all relations in the project
-    const allNodeIds = allFiles.map((f) => f.id);
-    const moduleIds = modules.map((m) => m.id);
-    const allProjectNodeIds = [...allNodeIds, ...moduleIds];
-
-    let relations: { sourceNodeId: string; targetNodeId: string; relationType: string }[] = [];
-    if (allProjectNodeIds.length > 0) {
-      relations = await db
-        .select({
-          sourceNodeId: nodeRelations.sourceNodeId,
-          targetNodeId: nodeRelations.targetNodeId,
-          relationType: nodeRelations.relationType,
-        })
-        .from(nodeRelations)
-        .where(
-          or(
-            inArray(nodeRelations.sourceNodeId, allProjectNodeIds),
-            inArray(nodeRelations.targetNodeId, allProjectNodeIds),
-          ),
-        );
-    }
-
-    // Aggregate relations to module level
-    const edgeMap = new Map<string, ModuleEdge>();
-    for (const rel of relations) {
-      const sourceModule = fileToModule.get(rel.sourceNodeId) ?? rel.sourceNodeId;
-      const targetModule = fileToModule.get(rel.targetNodeId) ?? rel.targetNodeId;
-
-      // Skip if same module or if either is not a known module
-      const moduleIdSet = new Set(modules.map((m) => m.id));
-      if (sourceModule === targetModule) continue;
-      if (!moduleIdSet.has(sourceModule) || !moduleIdSet.has(targetModule)) continue;
-
-      const key = `${sourceModule}:${targetModule}:${rel.relationType}`;
-      const existing = edgeMap.get(key);
-      if (existing) {
-        existing.count++;
-      } else {
-        edgeMap.set(key, {
-          sourceModuleId: sourceModule,
-          targetModuleId: targetModule,
-          relationType: rel.relationType,
-          count: 1,
-        });
+      for (const mod of modules) {
+        const walk = (n: NodeOverview) => {
+          if (n.type === "file") fileToModule.set(n.id, mod.id);
+          n.children.forEach(walk);
+        };
+        mod.children.forEach(walk);
       }
-    }
 
-    return actionSuccess({
-      nodes: moduleNodes,
-      edges: [...edgeMap.values()],
+      const moduleIdSet = new Set(modules.map((m) => m.id));
+      const edgeMap = new Map<string, ModuleEdge>();
+      for (const rel of relations.items) {
+        const sourceModule = fileToModule.get(rel.source_node_id) ?? rel.source_node_id;
+        const targetModule = fileToModule.get(rel.target_node_id) ?? rel.target_node_id;
+        if (sourceModule === targetModule) continue;
+        if (!moduleIdSet.has(sourceModule) || !moduleIdSet.has(targetModule)) continue;
+        const key = `${sourceModule}:${targetModule}:${rel.relation_type}`;
+        const existing = edgeMap.get(key);
+        if (existing) existing.count++;
+        else
+          edgeMap.set(key, {
+            sourceModuleId: sourceModule,
+            targetModuleId: targetModule,
+            relationType: rel.relation_type,
+            count: 1,
+          });
+      }
+
+      return actionSuccess({ nodes: moduleNodes, edges: [...edgeMap.values()] });
     });
   } catch (error) {
     return actionError(error);
@@ -276,111 +201,72 @@ interface FeatureNode {
 }
 
 interface FeatureRelation {
-  id: number;
+  id: string;
   sourceNodeId: string;
   targetNodeId: string;
   relationType: string;
   description: string | null;
 }
 
+/**
+ * 模块详情（拷贝层 relation-graph 钻取消费）。
+ * 后端无聚合端点 / 前端从 /overview + /relations 派生。
+ */
 export async function getModuleRelationDetail(
   moduleNodeId: string,
+  projectId: string,
 ): Promise<ActionResult<{ features: FeatureNode[]; relations: FeatureRelation[] }>> {
   try {
-    const user = await requireAuth();
-
-    const [moduleNode] = await db.select().from(nodes).where(eq(nodes.id, moduleNodeId));
-    if (!moduleNode) {
-      return actionError(new AppError("模块不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await checkProjectAccess(user.id, moduleNode.projectId, "viewer");
-
-    // Get child feature nodes (files directly or deeply under this module)
-    const childFiles = await db
-      .select()
-      .from(nodes)
-      .where(
-        and(
-          eq(nodes.projectId, moduleNode.projectId),
-          eq(nodes.type, "file"),
-          sql`${nodes.path} like '%' || ${moduleNodeId} || '%'`,
-        ),
-      );
-
-    // Get enabled dimensions for completion
-    const dimConfigs = await db
-      .select()
-      .from(projectDimensionConfigs)
-      .where(
-        and(
-          eq(projectDimensionConfigs.projectId, moduleNode.projectId),
-          eq(projectDimensionConfigs.enabled, true),
-        ),
-      );
-    const totalDims = dimConfigs.length;
-
-    // Get dimension fill counts
-    const childFileIds = childFiles.map((f) => f.id);
-    let fillMap = new Map<string, number>();
-
-    if (childFileIds.length > 0) {
-      const dimFillCounts = await db
-        .select({
-          nodeId: dimensionRecords.nodeId,
-          filledCount: sql<number>`count(distinct ${dimensionRecords.dimensionTypeId})::int`,
-        })
-        .from(dimensionRecords)
-        .where(inArray(dimensionRecords.nodeId, childFileIds))
-        .groupBy(dimensionRecords.nodeId);
-
-      for (const r of dimFillCounts) {
-        fillMap.set(r.nodeId, r.filledCount);
+    return await withAuthRedirect(async () => {
+      const overview = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
+      const findInTree = (tree: NodeOverview[], id: string): NodeOverview | null => {
+        for (const n of tree) {
+          if (n.id === id) return n;
+          const sub = findInTree(n.children, id);
+          if (sub) return sub;
+        }
+        return null;
+      };
+      const moduleNode = findInTree(overview.tree, moduleNodeId);
+      if (!moduleNode) {
+        return actionError(new AppError("模块不存在", "blocking", "NOT_FOUND", 404));
       }
-    }
 
-    const features: FeatureNode[] = childFiles.map((f) => {
-      const filled = fillMap.get(f.id) ?? 0;
-      const percent = totalDims > 0 ? Math.round((filled / totalDims) * 100) : 0;
-      return {
+      const childFiles: NodeOverview[] = [];
+      const walk = (n: NodeOverview) => {
+        if (n.type === "file") childFiles.push(n);
+        n.children.forEach(walk);
+      };
+      moduleNode.children.forEach(walk);
+
+      const features: FeatureNode[] = childFiles.map((f) => ({
         id: f.id,
         name: f.name,
         type: f.type,
-        completionPercent: percent,
-      };
-    });
+        completionPercent: Math.round(f.completion_rate * 100),
+      }));
 
-    // Get cross-module relations: one end is inside this module, the other is outside
-    let relations: FeatureRelation[] = [];
-    if (childFileIds.length > 0) {
-      const allRelations = await db
-        .select()
-        .from(nodeRelations)
-        .where(
-          or(
-            inArray(nodeRelations.sourceNodeId, childFileIds),
-            inArray(nodeRelations.targetNodeId, childFileIds),
-          ),
-        );
+      const childFileIdSet = new Set(childFiles.map((f) => f.id));
+      const relations = await serverApiGet<RelationListResponse>(
+        `/api/projects/${projectId}/relations`,
+      );
 
-      const childFileIdSet = new Set(childFileIds);
-      relations = allRelations
+      const crossModule = relations.items
         .filter((r) => {
-          // Cross-module: one end inside, one end outside
-          const sourceInside = childFileIdSet.has(r.sourceNodeId);
-          const targetInside = childFileIdSet.has(r.targetNodeId);
-          return sourceInside !== targetInside;
+          const inSrc = childFileIdSet.has(r.source_node_id);
+          const inTgt = childFileIdSet.has(r.target_node_id);
+          return inSrc !== inTgt;
         })
-        .map((r) => ({
+        .map<FeatureRelation>((r) => ({
           id: r.id,
-          sourceNodeId: r.sourceNodeId,
-          targetNodeId: r.targetNodeId,
-          relationType: r.relationType,
-          description: r.description,
+          sourceNodeId: r.source_node_id,
+          targetNodeId: r.target_node_id,
+          relationType: r.relation_type,
+          description: r.notes,
         }));
-    }
 
-    return actionSuccess({ features, relations });
+      return actionSuccess({ features, relations: crossModule });
+    });
   } catch (error) {
     return actionError(error);
   }

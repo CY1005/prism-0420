@@ -1,17 +1,29 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
-import { logger } from "@/lib/logger";
-import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3b 显式 punt stub：参数保留作为 M17 子片 3c 接入时的契约锚点 */
+import { type ActionResult, actionError, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";
-import { logActivity } from "./activity-log";
 
-const API_BASE = process.env.API_URL ?? "http://localhost:8001";
-const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+/**
+ * 拷贝层 AI 智能导入 wizard（M17 imports 后端形态）。
+ *
+ * **本子片（3b）DOWNGRADE 范围**：
+ *  - 旧路径调老 Prism web 内置 `/api/import/ai-*` 端点（默认 `localhost:8001`）。
+ *  - prism-0420 OpenAPI 真实路径：`/api/projects/{pid}/imports*`（task_id 异步 / WS 进度通道）。
+ *  - 端点 shape 完全不同（task_id 流转 + ImportTaskStatusEnum 11 态 + WS 推送）。
+ *  - 子片 3b prompt 字面允许：「ai-import 强依赖 WS / SSE 实装 → 显式标 punt 子片 3c」。
+ *
+ * **本文件契约保留**（types 仍 export / consumer ai-import-wizard.tsx 在 eslint ignore 内）：
+ *  - 4 个 action 返回 `actionError(NOT_IMPLEMENTED)` / 不静默吞错。
+ *  - drizzle / requireAuth / `localhost:8001` 老路径全删除（拷贝层债务关闸）。
+ *
+ * **子片 3c TODO**（接入 M17）：
+ *  - aiAnalyzeZip → POST /api/projects/{pid}/imports（multipart）→ task_id
+ *  - 进度 → GET /api/projects/{pid}/imports/{task_id} 轮询，或 WS /ws/imports/{task_id}
+ *  - aiConfirmImport → POST /api/projects/{pid}/imports/{task_id}/confirm
+ *  - aiUndoImport → POST /api/projects/{pid}/imports/{task_id}/cancel + DELETE 已建节点
+ *  - aiAdjustMapping → POST /api/projects/{pid}/imports/{task_id}/review
+ */
 
 export interface MappingRow {
   id: string;
@@ -83,223 +95,42 @@ export interface AIConfirmResult {
   relations_created: number;
 }
 
-// ─── AI Analyze (calls FastAPI) ──────────────────────────────────────────────
-
-export async function aiAnalyzeZip(
-  projectId: string,
-  files: object[],
-): Promise<ActionResult<AIAnalyzeResult>> {
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
-
-    if (!files.length) {
-      return actionError(new AppError("文件列表不能为空", "blocking", "VALIDATION_ERROR", 400));
-    }
-
-    const res = await fetch(`${API_BASE}/api/import/ai-analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-      body: JSON.stringify({
-        project_id: projectId,
-        user_id: user.id,
-        files,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: "AI分析失败" }));
-      return actionError(
-        new AppError(body.detail || "AI分析失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
-      );
-    }
-
-    const data: AIAnalyzeResult = await res.json();
-
-    logger.action("import.ai_analyze", user.id, {
-      projectId,
-      totalItems: data.stats.total_items,
-      conflicts: data.stats.conflicts,
-    });
-
-    return actionSuccess(data);
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-// ─── AI Adjust Mapping ───────────────────────────────────────────────────────
-
 export interface MappingAdjustment {
   id: string;
   recommended_module_id: string;
   recommended_dimension_id: number | null;
 }
 
-export async function aiAdjustMapping(
-  projectId: string,
-  sessionId: string,
-  adjustments: MappingAdjustment[],
-): Promise<void> {
-  // Fire-and-forget: persist mapping adjustments; errors are non-blocking
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
+const PUNT_MSG =
+  "AI 智能导入将在子片 3c 接入 M17 ImportTask 异步任务 + WS 进度通道（当前路径 punt）";
 
-    await fetch(`${API_BASE}/api/import/ai-mapping`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        project_id: projectId,
-        adjustments,
-      }),
-    });
-  } catch {
-    // Non-blocking; local state is the source of truth
-  }
+export async function aiAnalyzeZip(
+  _projectId: string,
+  _files: object[],
+): Promise<ActionResult<AIAnalyzeResult>> {
+  return actionError(new AppError(PUNT_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
 }
 
-// ─── AI Confirm Import ───────────────────────────────────────────────────────
+export async function aiAdjustMapping(
+  _projectId: string,
+  _sessionId: string,
+  _adjustments: MappingAdjustment[],
+): Promise<void> {
+  // fire-and-forget / 子片 3c 接入 M17 review 端点
+}
 
 export async function aiConfirmImport(
-  projectId: string,
-  sessionId: string,
-  mappingRows: MappingRow[],
+  _projectId: string,
+  _sessionId: string,
+  _mappingRows: MappingRow[],
 ): Promise<ActionResult<AIConfirmResult>> {
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
-
-    if (!mappingRows.length) {
-      return actionError(new AppError("没有要导入的项目", "blocking", "VALIDATION_ERROR", 400));
-    }
-
-    const res = await fetch(`${API_BASE}/api/import/ai-confirm`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        project_id: projectId,
-        user_id: user.id,
-        mapping_rows: mappingRows,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: "导入失败" }));
-      return actionError(
-        new AppError(body.detail || "导入失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
-      );
-    }
-
-    const data: AIConfirmResult = await res.json();
-
-    logger.action("import.ai_confirm", user.id, {
-      projectId,
-      sessionId,
-      imported: data.imported,
-      merged: data.merged,
-      skipped: data.skipped,
-      errors: data.errors.length,
-    });
-
-    await logActivity({
-      projectId,
-      userId: user.id,
-      actionType: "ai_import",
-      targetType: "project",
-      targetId: projectId,
-      summary: `AI智能导入完成：导入${data.imported}个，合并${data.merged}个，跳过${data.skipped}个`,
-      metadata: {
-        session_id: sessionId,
-        imported: data.imported,
-        merged: data.merged,
-        skipped: data.skipped,
-        error_count: data.errors.length,
-        relations_created: data.relations_created,
-      },
-    });
-
-    revalidatePath(`/projects/${projectId}`);
-
-    return actionSuccess(data);
-  } catch (error) {
-    return actionError(error);
-  }
+  return actionError(new AppError(PUNT_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
 }
 
-// ─── AI Undo Import ───────────────────────────────────────────────────────────
-
 export async function aiUndoImport(
-  projectId: string,
-  sessionId: string,
-  createdNodeIds: string[],
+  _projectId: string,
+  _sessionId: string,
+  _createdNodeIds: string[],
 ): Promise<ActionResult<{ deleted: number; errors: string[] }>> {
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
-
-    if (!createdNodeIds.length) {
-      return actionError(new AppError("没有可撤销的导入记录", "blocking", "VALIDATION_ERROR", 400));
-    }
-
-    const res = await fetch(`${API_BASE}/api/import/undo`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        project_id: projectId,
-        user_id: user.id,
-        created_node_ids: createdNodeIds,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: "撤销失败" }));
-      return actionError(
-        new AppError(body.detail || "撤销失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
-      );
-    }
-
-    const data = await res.json();
-
-    logger.action("import.ai_undo", user.id, {
-      projectId,
-      sessionId,
-      deleted: data.deleted,
-    });
-
-    await logActivity({
-      projectId,
-      userId: user.id,
-      actionType: "ai_import_undo",
-      targetType: "project",
-      targetId: projectId,
-      summary: `AI导入已撤销：删除${data.deleted}个功能项`,
-      metadata: { session_id: sessionId, deleted: data.deleted },
-    });
-
-    revalidatePath(`/projects/${projectId}`);
-
-    return actionSuccess(data);
-  } catch (error) {
-    return actionError(error);
-  }
+  return actionError(new AppError(PUNT_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
 }

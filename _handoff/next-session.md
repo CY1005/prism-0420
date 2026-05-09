@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-3a-ii-完成 / 子片 3b 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-3b-完成 / 子片 3c 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,26 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-ii-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3b-完成）
+
+- **Phase 2.2 子片 3b 完成**（actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze 部分 + errors.ts NEXT_REDIRECT 立修）：
+  - **scope 自决收缩**（feedback_decision_transparency A 模式 / SR-P22-3 第 3 实证）：cold-start prompt「6 actions 完整改 + 7 页面解锁」→ 实际可达 4 actions 完整 + 1 部分 + 2 全 punt（M11/M13/M14/M17 SSE+WS+session 流程不在 prism-0420 OpenAPI 直接路径），7 页面解锁全留子片 5 集中处理
+  - 9 文件改：lib/validators/node.ts schema 加 projectId / lib/errors.ts 加 isNextRedirectError 豁免（NEXT_REDIRECT 透出）/ actions/nodes.ts 完全 rewrite 23→11+2 stub / actions/relations.ts 完全 rewrite + 模块级聚合派生 / actions/panorama.ts 完全 rewrite 接 /overview / actions/import.ts 全 punt actionError(NOT_IMPLEMENTED) / actions/import-ai.ts 同 / actions/analyze.ts getAffectedNodes 实装 + 6 stub punt / eslint.config.mjs 渐进还债 6 文件移除 ignore
+  - 累计 vitest 20 PASS / eslint 0 errors 0 warnings / pytest 不动（仅前端改）
+  - **R1+R2 第 3 数据点**（端点契约真验证）：R1 Sonnet reuse + R2 Opus spec / R1 标 2 P1 + 3 P2 / R2 标 1 P1 + 2 P2 / 复审立修 2 项（getRelationsByNode 包 withAuthRedirect 修 spec §3 字面违反 + errors.ts NEXT_REDIRECT 透出修全 actions 通用硬伤）+ punt 6 项进 cross-sprint pool
+  - **R 范式第 3 数据点 ROI**：R2 spec 仍真漏抓 1 spec 字面违反（`getRelationsByNode` 缺 redirect helper）/ R1 reuse 找出 NEXT_REDIRECT 全捕硬伤（影响所有 mutation / 跨 actions 通用）/ SR-P22-2 立规精神第 3 实证支撑 / R1+R2 配比 1+1 ROI 持续高于 R1=3 + R2=1
+  - **scope 修订归档**：cold-start 6 actions+7 页面 → 实际 4 actions 完整 + 1 部分 + 2 全 punt + 0 页面真接（消费方签名漂移留子片 5 cleanup 批次）/ SR-P22-3 第 3 实证（M01 register + 3a-ii 26 broken imports + 3b SSE/WS 不在 OpenAPI 三实证）
+
+- **下一步推荐**：**子片 3c — competitor + issue + search + admin + openclaw 长尾**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 3c」段
+  - 估 cost $3-5 / 估时 1 天 / **建议开新 session**（context 累积 R1+R2 + 大量 schema 读取 / 新 session ROI 高）
+  - 含：M06 competitor refs + M07 issues + M10 search + M16 stats + M19 export 长尾接入；evaluate 是否同时收尾子片 3b punt 的 M11 cold-start 真接 + M13 SSE + M17 imports（视 budget 决定）
+
+- **Phase 2.2 全集进度**：4/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b）/ 还需 3 子片（3c + 4 + 5）/ 总估 $7-12 + 2.5-3.5 天
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-ii-完成）
 
 - **Phase 2.2 子片 3a-ii 完成**（actions/{projects,project-settings,versions} + lib/server-auth.getServerUser + /projects 列表 + /projects/new 真接 backend）：
   - 决策路径：CY 询"按架构决策原则应该选哪个" → 选 (a) 小 scope（2 页面真接 + 4 页面 ignore 留 3b/3c / 不超 subslice 边界 / 单会话 cost 在档）

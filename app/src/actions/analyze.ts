@@ -1,7 +1,8 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3b 部分 punt：SSE/test-points/comparison 6 个 stub 参数保留作为子片 3c 接 M13/M14 真端点的契约锚点 */
+import { redirect } from "next/navigation";
+import { serverApiGet, UnauthenticatedError } from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";
 import type {
@@ -15,8 +16,30 @@ import type {
   BackfillResponse,
   AnalyzerResult,
 } from "@/services/analyzer";
+import type { components } from "@/types/api";
 
-const API_BASE = process.env.API_URL ?? "http://localhost:8001";
+type AffectedNodesResponse = components["schemas"]["AffectedNodesResponse"];
+
+/**
+ * 拷贝层 analyze 路径迁移：
+ *  - `getAffectedNodes` → 已 rebase 到 prism-0420 OpenAPI
+ *      `GET /api/projects/{pid}/nodes/{nid}/analyze/affected-nodes`（M13 / R-X1）。
+ *  - SSE/test-points/comparison/backfill 流程：旧实装走 Prism 内置 analyzer 微服务（localhost:8001）;
+ *    prism-0420 OpenAPI 仅暴露 requirement/save/affected-nodes 三端点 + 单独 `/comparison/*` 路径，
+ *    SSE 渲染契约 + test-points 实装路径 + comparison/backfill batch 路径需子片 3c 接 M13/M14 真实端点。
+ *  - 子片 3b prompt 字面允许：「analysis SSE / 流式契约 → 显式标 punt 子片 3c 或 Phase 2.3」。
+ */
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
 
 export interface AffectedNodesResult {
   node_id: string;
@@ -29,140 +52,71 @@ export async function getAffectedNodes(
   projectId: string,
 ): Promise<ActionResult<AffectedNodesResult>> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "viewer");
-
-    const params = new URLSearchParams({ node_id: nodeId, project_id: projectId });
-    const res = await fetch(`${API_BASE}/api/analyze/affected-nodes?${params.toString()}`);
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: "查询影响节点失败" }));
-      return actionError(
-        new AppError(
-          body.detail || "查询影响节点失败",
-          "blocking",
-          ErrorCode.INTERNAL_ERROR,
-          res.status,
-        ),
+    return await withAuthRedirect(async () => {
+      const data = await serverApiGet<AffectedNodesResponse>(
+        `/api/projects/${projectId}/nodes/${nodeId}/analyze/affected-nodes`,
       );
-    }
-
-    const data: AffectedNodesResult = await res.json();
-    return actionSuccess(data);
+      return actionSuccess({
+        node_id: data.node_id,
+        affected_node_ids: data.affected_node_ids,
+        analysis_record_id: data.analysis_record_id ?? null,
+      });
+    });
   } catch (error) {
     return actionError(error);
   }
 }
 
-// ─── Helper for internal POST ─────────────────────
+const PUNT_MSG_SSE =
+  "需求 SSE 分析 / test-points / comparison batch 将在子片 3c 接入 M13/M14 真实端点（当前 punt）";
 
-async function internalPost<T>(path: string, body: unknown): Promise<AnalyzerResult<T>> {
-  try {
-    const resp = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const text = await resp.text();
-      return { ok: false, error: `HTTP ${resp.status}: ${text}` };
-    }
-    const data = (await resp.json()) as T;
-    return { ok: true, data };
-  } catch (e) {
-    return { ok: false, error: `分析服务不可用: ${(e as Error).message}` };
-  }
+function puntResult<T>(): AnalyzerResult<T> {
+  return { ok: false, error: PUNT_MSG_SSE };
 }
 
-// ─── Analysis Server Actions ─────────────────────
-
 export async function saveAnalysisAction(
-  projectId: string,
-  nodeId: string,
-  layers: LayerResult[],
+  _projectId: string,
+  _nodeId: string,
+  _layers: LayerResult[],
 ): Promise<AnalyzerResult<{ dimension_record_id: string; message: string }>> {
-  const analysisResult = JSON.stringify(
-    layers.map((l) => ({
-      level: l.level,
-      affected_modules: l.affected_modules,
-      completeness_issues: l.completeness_issues,
-      suggestions: l.suggestions,
-    })),
-  );
-  const lastMeta = layers.findLast((l) => l.metadata)?.metadata;
-  return internalPost("/api/analyze/save", {
-    project_id: projectId,
-    node_id: nodeId,
-    analysis_result: analysisResult,
-    metadata: lastMeta
-      ? {
-          model: lastMeta.model,
-          tokens_used: lastMeta.tokens_used,
-          analysis_time_ms: lastMeta.analysis_time_ms,
-        }
-      : null,
-  });
+  // 子片 3c 接入：POST /api/projects/{pid}/nodes/{nid}/analyze/save
+  return puntResult();
 }
 
 export async function generateTestPointsAIAction(
-  req: GenerateTestPointsRequest,
+  _req: GenerateTestPointsRequest,
 ): Promise<AnalyzerResult<GenerateTestPointsResponse>> {
-  return internalPost<GenerateTestPointsResponse>("/api/analyze/generate-test-points", req);
+  return puntResult();
 }
 
 export async function saveTestPointsAction(
-  projectId: string,
-  nodeId: string,
-  testPoints: AITestPoint[],
+  _projectId: string,
+  _nodeId: string,
+  _testPoints: AITestPoint[],
 ): Promise<
   AnalyzerResult<{ saved_count: number; dimension_record_ids: string[]; message: string }>
 > {
-  return internalPost("/api/analyze/save-test-points", {
-    project_id: projectId,
-    node_id: nodeId,
-    test_points: testPoints.map((tp) => ({
-      title: tp.title,
-      description: tp.description,
-      priority: tp.priority,
-      category: tp.category,
-      steps: tp.steps,
-      expected_result: tp.expected_result,
-    })),
-  });
+  return puntResult();
 }
 
-// ─── Comparison Server Actions ───────────────────
-
 export async function generateComparisonAction(
-  req: ComparisonGenerateRequest,
+  _req: ComparisonGenerateRequest,
 ): Promise<AnalyzerResult<ComparisonGenerateResponse>> {
-  return internalPost<ComparisonGenerateResponse>("/api/comparison/generate", req);
+  return puntResult();
 }
 
 export async function backfillRowAction(
-  req: BackfillRequest,
+  _req: BackfillRequest,
 ): Promise<AnalyzerResult<BackfillResponse>> {
-  return internalPost<BackfillResponse>(`/api/comparison/${req.comparison_id}/backfill`, {
-    row_index: req.row_index,
-    node_id: req.node_id,
-    competitor_id: req.competitor_id,
-  });
+  return puntResult();
 }
 
 export async function exportComparisonAction(
-  comparisonId: string,
+  _comparisonId: string,
 ): Promise<AnalyzerResult<string>> {
-  try {
-    const resp = await fetch(
-      `${API_BASE}/api/comparison/${encodeURIComponent(comparisonId)}/export`,
-    );
-    if (!resp.ok) {
-      const text = await resp.text();
-      return { ok: false, error: `HTTP ${resp.status}: ${text}` };
-    }
-    const data = (await resp.json()) as { markdown: string };
-    return { ok: true, data: data.markdown };
-  } catch (e) {
-    return { ok: false, error: `分析服务不可用: ${(e as Error).message}` };
-  }
+  return puntResult();
 }
+
+// 防 unused-import 误判
+void AppError;
+void ErrorCode;

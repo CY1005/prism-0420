@@ -28,7 +28,8 @@ related:
 | 1 | `12cc62c` | codegen + http-client + Bearer JWT | $2-3 | — (deferred) | — (deferred) |
 | 2 | `3b9bbc1` | auth flow + CORS + cookie 通道 + 4 e2e | $3-4 | 0 立修 / 4 punt | 0 / 5 punt |
 | 3a-i | `e521656`+`ee3a2ad` | spec 06 §3 SSR auth 通道 + server-auth/server-http-client + 7 unit tests | $1-2 | — (sink only) | — (sink only) |
-| 3a-ii | (本次关闸) | actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new 真接 backend | ~$5 | 5 立修候选 / 复审 3 立修 + 2 punt | 4 P1 立修 / 8 P2 punt |
+| 3a-ii | `1a5e3d6` | actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new 真接 backend | ~$5 | 5 立修候选 / 复审 3 立修 + 2 punt | 4 P1 立修 / 8 P2 punt |
+| 3b | (本次关闸) | actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze getAffectedNodes 实装 / 6 stub punt + errors.ts isRedirectError 豁免 | ~$5 | 2 P1 候选 / 复审 1 立修 + 1 降 P2 punt | 1 P1 立修 / 2 P2 punt |
 
 **R1+R2 第 2 数据点结论**：
 - R1 reuse 5 P1 候选 / 复审：3 立修（projectsData mock dead / createVersion releaseMode workspace.tsx 在 ignore 范围 punt / handleCreateVersion 错误吞 workspace.tsx 在 ignore 范围 punt / eslint glob `[projectId]` 字面 char class 已 workaround / `getProjects` 401 处理与 R2 同根因合并立修）
@@ -72,6 +73,48 @@ R1 标 2 项 P1（均为拷贝层 broken imports）：
 - **double `/auth/refresh` on mount（401 路径）** — context 调 apiPost("/auth/refresh") + http-client 401 retry 触发 2 次实际 refresh；属网络浪费但功能正确 / 子片 3+ 优化（apiFetch 加 `skipRetry` 选项 / context 改裸 fetch 绕 retry）。**punt 时机**：子片 3a 评估或 Phase 2.3 perf。
 - **`registerSchema` / `RegisterInput` dead code** — `src/lib/validators/auth.ts:8-15`；CY 选 (a) 跳过 register 改造 / 保留 schema 备 M01 未来扩展。**punt 时机**：M01 register 落地或下一 sprint cleanup。
 - **`getAccessToken` re-export from auth-context** — `auth-context.tsx:104` re-export 当前无消费方 / 子片 3+ 评估清理。**punt 时机**：子片 5 关闸 cleanup。
+
+## §3b 子片 3b findings（R1+R2 第 3 数据点）
+
+### R2 spec P1 立修（1 项 / 已修）
+
+1. **`getRelationsByNode` 缺 `withAuthRedirect`** — `actions/relations.ts:85-97` 原版裸 try/catch 把 UnauthenticatedError 吞入 actionError / spec 06 §3「access token 拿不到 → redirect /login」字面违反。**已修**：read action 包 withAuthRedirect。
+
+### R1 reuse P1 复审
+
+- **R1 P1-1 workspace.tsx dimension CRUD 签名不匹配**（updateDimensionRecord/deleteDimensionRecord 老调用缺 projectId/nodeId/dimensionTypeId）— workspace.tsx 在 eslint ignore + tsc baseline 已含此类错 → **降 P2 punt 子片 5 cleanup**（SR-P22-3 实证：消费方页面在 3b scope 外）
+- **R1 P1-2 `actionError` 全捕吞 NEXT_REDIRECT**（影响所有 mutation）— 是真硬伤 / 跨所有 action 通用 / 已修：`errors.ts` 加 isNextRedirectError 豁免（按 digest 字面识别）
+
+### R1 reuse P2 punt（3 项进 cross-sprint 池）
+
+| # | 描述 | file:line | 触发时机 |
+|---|------|-----------|----------|
+| P22-3b-1 | `withAuthRedirect` helper 在 5 个 action 文件重复 / 抽到 lib/server-helpers.ts | projects.ts + nodes.ts + relations.ts + panorama.ts + analyze.ts | 子片 3c/5 cleanup |
+| P22-3b-2 | `findInTree` 工具函数在 nodes.ts + relations.ts + panorama.ts 重复 / 抽到 lib/tree-utils.ts | nodes.ts:282 + relations.ts inline + panorama.ts inline | 子片 3c/5 cleanup |
+| P22-3b-3 | `getModuleRelations` stub 死代码留 nodes.ts 内 / consumer 真用 relations.ts.getRelationGraph | nodes.ts:404 | 子片 5 cleanup（删 stub）|
+| P22-3b-4 | workspace.tsx dimension CRUD 调用签名不匹配 | workspace.tsx:688/712 | 子片 5 cleanup（消费方页面解锁批次）|
+
+### R2 spec P2 punt（2 项进 pool）
+
+| # | 描述 | file:line | 触发时机 |
+|---|------|-----------|----------|
+| P22-3b-5 | `getRelationGraph` 串行 fetch 两次（overview + relations）/ 无单请求 memo | relations.ts:123 | Phase 2.3 perf |
+| P22-3b-6 | `getPanoramaData` parentId 无效时静默返空 / UX 有歧义 | panorama.ts:49 | UX 验证轮 |
+
+### 子片 3b prompt-vs-reality 漂移（SR-P22-3 第 3 实证）
+
+cold-start prompt「子片 3b」段写「6 actions 完整改造 + 7 页面解锁运行 + R1+R2」/ 实际可达：
+- ✅ 4 actions 完整改造（nodes / relations / panorama / analyze:getAffectedNodes）
+- ⏸ 2 actions 显式 punt（import.ts ZIP 流程 + import-ai.ts AI 导入 + analyze.ts 6 SSE/test-points/comparison stubs）— 路径完全不在 prism-0420 OpenAPI / M17/M13/M14 真端点接入留子片 3c
+- ⏸ 7 页面 unlock — actions 改造后 page consumer 签名漂移（workspace.tsx + features + modules + relation-graph + comparison + import + analysis）/ 全在 eslint ignore / 子片 5 cleanup 集中处理
+
+**根因**：cold-start prompt 把「actions 改 + 7 页面跑通 + R1+R2」并联成单子片 / 实际「actions 多文件 + 大 SSE/WS 流程 + 页面消费方深耦合」3 块串联工作 / 单 session $4-6 budget 承受不了 / SR-P22-3 第 3 实证「prompt 块本身分层错」（M01 register + 3a-ii broken imports + 3b SSE/WS 三实证 → 子片 5 关闸前 sink 立规）。
+
+**3b scope 修订归档**：
+- 4 actions 完整接 backend / 1 action 部分接（getAffectedNodes）+ 6 stub
+- 2 actions 完全 punt（import + import-ai）/ 显式 actionError(NOT_IMPLEMENTED) 不静默吞错
+- errors.ts 立修 NEXT_REDIRECT 透出（影响全 actions）
+- 7 页面深耦合解锁全 punt 子片 5（workspace.tsx 在 ignore / 不破 lint / 消费方签名漂移留 cleanup 批次集中处理）
 
 ## §3a 子片 3a-ii findings（R1+R2 第 2 数据点）
 
@@ -126,7 +169,7 @@ cold-start prompt「子片 3a-ii」段写 6 页面（projects 列表 + new + [id
 |---------|------|----------|
 | SR-P22-1 | feedback_decision_layering 自检第 4 问（已即时落） | ✅ 已立 |
 | SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1 / 第 2 数据点实证 R2 真漏抓硬伤 ROI 高于 R1）| 5 数据点后实证 sink |
-| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports 26 处 vs subslice 边界 = 双实证）| 子片 5 关闸前 sink |
+| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports + 3b SSE/WS 路径完全不在 OpenAPI = 三实证）| 子片 5 关闸前 sink |
 
 ## §5 元贡献（实证）
 

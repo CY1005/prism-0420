@@ -268,9 +268,10 @@ R1+R2 试运行（第 3 数据点）：
 
 ---
 
-## 子片 3b — node + 模块树 + relation-graph + comparison + import
+## 子片 3b — node + 模块树 + relation-graph + comparison + import ✅
 
-> **estimated cost**: $4-6 / **estimated time**: 1.5 天 / **依赖**: 子片 3a
+> **commit**: 待回填 / **estimated cost**: $4-6 / **依赖**: 子片 3a / **status**: completed
+> **scope 修订（SR-P22-3 第 3 实证）**：4 actions 完整改 + 1 部分 + 2 全 punt + errors.ts NEXT_REDIRECT 立修；7 页面解锁全 punt 子片 5。R1+R2 第 3 数据点：1 P1 立修 + 1 errors.ts 修 + 6 P2 punt。详见 `design/audit/p22-pilot-template-validation.md` §3b。
 
 ```
 继续 prism-0420 Phase 2.2 子片 3b：node + 模块树 + relation-graph + comparison + import。

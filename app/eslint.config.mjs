@@ -19,20 +19,16 @@ const eslintConfig = defineConfig([
     // 子片 3：actions/* + services/* + app/{各业务路由}（API client 改造）→ 逐文件移除
     // 子片 4：app/teams/* + components/teams/*（M20 新写）→ 移除
     // 子片 3a-ii: actions/{projects,project-settings,versions} 已改 server-http-client / 不 ignore
+    // 子片 3b: actions/{nodes,relations,panorama,import,import-ai,analyze} 已改 / 不 ignore
+    //   - import / import-ai / analyze SSE+WS 流程显式 actionError(NOT_IMPLEMENTED) → 子片 3c 接 M11/M13/M17/M14 真端点
     "src/actions/activity-log.ts",
     "src/actions/admin.ts",
-    "src/actions/analyze.ts",
     "src/actions/competitor-references.ts",
     "src/actions/competitors.ts",
     "src/actions/export.ts",
     "src/actions/feed.ts",
-    "src/actions/import-ai.ts",
-    "src/actions/import.ts",
     "src/actions/issues.ts",
-    "src/actions/nodes.ts",
-    "src/actions/panorama.ts",
     "src/actions/project-stats-proxy.ts",
-    "src/actions/relations.ts",
     "src/actions/search.ts",
     "src/actions/teams.ts",
     "src/actions/templates.ts",

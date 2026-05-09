@@ -1,5 +1,15 @@
 import { ErrorCode } from "./error-codes";
 
+/**
+ * Next.js `redirect()` 抛 `Error` 含 `digest = "NEXT_REDIRECT;..."`，必须透出不能 catch 后吞。
+ * 公共 API 未导出 isRedirectError（v15）/ 此处按 digest 字面识别。
+ */
+function isNextRedirectError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const digest = (error as Error & { digest?: unknown }).digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
 // 错误严重程度
 export type ErrorSeverity = "blocking" | "warning" | "info";
 
@@ -63,7 +73,11 @@ export type ActionResult<T = void> =
   | { success: false; error: string; code: ErrorCode; severity: ErrorSeverity };
 
 // 包装 Server Action 的错误处理
+// spec 06 §3：UnauthenticatedError → redirect("/login") 通过 NEXT_REDIRECT 抛出 / 必须透出不能吞。
 export function actionError(error: unknown): ActionResult<never> {
+  if (isNextRedirectError(error)) {
+    throw error;
+  }
   if (error instanceof AppError) {
     return { success: false, error: error.message, code: error.code, severity: error.severity };
   }

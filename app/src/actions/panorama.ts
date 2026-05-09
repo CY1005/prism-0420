@@ -1,11 +1,24 @@
 "use server";
 
-import { db } from "@/db";
-import { nodes, dimensionRecords, projectDimensionConfigs } from "@/db/schema";
-import { eq, and, asc, sql, isNull, max } from "drizzle-orm";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
-import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { redirect } from "next/navigation";
+import { serverApiGet, UnauthenticatedError } from "@/lib/server-http-client";
+import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
+import type { components } from "@/types/api";
+
+type OverviewResponse = components["schemas"]["OverviewResponse"];
+type OverviewStatsResponse = components["schemas"]["OverviewStatsResponse"];
+type NodeOverview = components["schemas"]["NodeOverview"];
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
 
 interface TreemapItem {
   nodeId: string;
@@ -15,102 +28,64 @@ interface TreemapItem {
   completionPercent: number;
 }
 
+/**
+ * Treemap 数据（拷贝层 treemap-view 消费）。
+ * 后端 /overview 端点已返 NodeOverview 树（含 completion_rate）。
+ * 此处取根 / 给定 parentId 的直接子节点 + 派生 featureCount（folder = leaf file 数 / file = 1）。
+ */
 export async function getPanoramaData(
   projectId: string,
   parentId?: string,
 ): Promise<ActionResult<TreemapItem[]>> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "viewer");
+    return await withAuthRedirect(async () => {
+      const overview = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
 
-    // Get children of parentId (or root nodes if no parentId)
-    const children = parentId
-      ? await db
-          .select()
-          .from(nodes)
-          .where(and(eq(nodes.projectId, projectId), eq(nodes.parentId, parentId)))
-          .orderBy(asc(nodes.sortOrder))
-      : await db
-          .select()
-          .from(nodes)
-          .where(and(eq(nodes.projectId, projectId), isNull(nodes.parentId)))
-          .orderBy(asc(nodes.sortOrder));
+      const findInTree = (tree: NodeOverview[], id: string): NodeOverview | null => {
+        for (const n of tree) {
+          if (n.id === id) return n;
+          const sub = findInTree(n.children, id);
+          if (sub) return sub;
+        }
+        return null;
+      };
 
-    // Get enabled dimension count for completion calculation
-    const dimConfigs = await db
-      .select()
-      .from(projectDimensionConfigs)
-      .where(
-        and(
-          eq(projectDimensionConfigs.projectId, projectId),
-          eq(projectDimensionConfigs.enabled, true),
-        ),
-      );
-    const totalDims = dimConfigs.length;
+      const children: NodeOverview[] = parentId
+        ? (findInTree(overview.tree, parentId)?.children ?? [])
+        : overview.tree;
 
-    // Get all file nodes in the project for counting descendants
-    const allFileNodes = await db
-      .select({
-        id: nodes.id,
-        path: nodes.path,
-        parentId: nodes.parentId,
-      })
-      .from(nodes)
-      .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "file")));
-
-    // Get dimension fill counts per file node
-    const dimFillCounts = await db
-      .select({
-        nodeId: dimensionRecords.nodeId,
-        filledCount: sql<number>`count(distinct ${dimensionRecords.dimensionTypeId})::int`,
-      })
-      .from(dimensionRecords)
-      .innerJoin(nodes, eq(dimensionRecords.nodeId, nodes.id))
-      .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "file")))
-      .groupBy(dimensionRecords.nodeId);
-
-    const fillMap = new Map<string, number>();
-    for (const r of dimFillCounts) {
-      fillMap.set(r.nodeId, r.filledCount);
-    }
-
-    const items: TreemapItem[] = children.map((child) => {
-      if (child.type === "file") {
-        const filled = fillMap.get(child.id) ?? 0;
-        const percent = totalDims > 0 ? Math.round((filled / totalDims) * 100) : 0;
+      const items: TreemapItem[] = children.map((child) => {
+        if (child.type === "file") {
+          return {
+            nodeId: child.id,
+            name: child.name,
+            type: child.type,
+            featureCount: 1,
+            completionPercent: Math.round(child.completion_rate * 100),
+          };
+        }
+        // folder：递归统计 leaf file 数 + 平均完善度
+        let fileCount = 0;
+        let completionSum = 0;
+        const walk = (n: NodeOverview) => {
+          if (n.type === "file") {
+            fileCount++;
+            completionSum += n.completion_rate;
+          }
+          n.children.forEach(walk);
+        };
+        walk(child);
         return {
           nodeId: child.id,
           name: child.name,
           type: child.type,
-          featureCount: 1,
-          completionPercent: percent,
+          featureCount: fileCount,
+          completionPercent: fileCount > 0 ? Math.round((completionSum / fileCount) * 100) : 0,
         };
-      }
+      });
 
-      // Folder: count leaf file nodes under it (path contains child.id)
-      const descendantFiles = allFileNodes.filter((f) => f.path.includes(child.id));
-      const featureCount = descendantFiles.length;
-
-      // Average completion of descendant files
-      let avgCompletion = 0;
-      if (featureCount > 0 && totalDims > 0) {
-        const totalCompletion = descendantFiles.reduce((sum, f) => {
-          const filled = fillMap.get(f.id) ?? 0;
-          return sum + (filled / totalDims) * 100;
-        }, 0);
-        avgCompletion = Math.round(totalCompletion / featureCount);
-      }
-
-      return {
-        nodeId: child.id,
-        name: child.name,
-        type: child.type,
-        featureCount,
-        completionPercent: avgCompletion,
-      };
+      return actionSuccess(items);
     });
-
-    return actionSuccess(items);
   } catch (error) {
     return actionError(error);
   }
@@ -123,64 +98,30 @@ interface ProjectStatsResult {
   lastUpdatedAt: Date | null;
 }
 
+/**
+ * 项目统计（M16 stats / overview/stats 端点）。
+ * 后端 OverviewStats 字段映射：
+ *  - file_nodes → totalFeatures
+ *  - total_nodes - file_nodes → totalModules（folder 数）
+ *  - avg_completion_rate (0-1) → avgCompletion (0-100)
+ *  - lastUpdatedAt：后端 stats 不返时间 / 此处保留 null（拷贝层 UI 拿不到 → 不显示）
+ */
 export async function getProjectStats(
   projectId: string,
 ): Promise<ActionResult<ProjectStatsResult>> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "viewer");
-
-    // Count folders and files
-    const [counts] = await db
-      .select({
-        totalModules: sql<number>`count(*) filter (where ${nodes.type} = 'folder')::int`,
-        totalFeatures: sql<number>`count(*) filter (where ${nodes.type} = 'file')::int`,
-        lastUpdatedAt: max(nodes.updatedAt),
-      })
-      .from(nodes)
-      .where(eq(nodes.projectId, projectId));
-
-    const totalModules = counts?.totalModules ?? 0;
-    const totalFeatures = counts?.totalFeatures ?? 0;
-    const lastUpdatedAt = counts?.lastUpdatedAt ?? null;
-
-    // Calculate average completion across all file nodes
-    let avgCompletion = 0;
-    if (totalFeatures > 0) {
-      const dimConfigs = await db
-        .select()
-        .from(projectDimensionConfigs)
-        .where(
-          and(
-            eq(projectDimensionConfigs.projectId, projectId),
-            eq(projectDimensionConfigs.enabled, true),
-          ),
-        );
-      const totalDims = dimConfigs.length;
-
-      if (totalDims > 0) {
-        const dimFillCounts = await db
-          .select({
-            nodeId: dimensionRecords.nodeId,
-            filledCount: sql<number>`count(distinct ${dimensionRecords.dimensionTypeId})::int`,
-          })
-          .from(dimensionRecords)
-          .innerJoin(nodes, eq(dimensionRecords.nodeId, nodes.id))
-          .where(and(eq(nodes.projectId, projectId), eq(nodes.type, "file")))
-          .groupBy(dimensionRecords.nodeId);
-
-        const totalCompletion = dimFillCounts.reduce((sum, r) => {
-          return sum + (r.filledCount / totalDims) * 100;
-        }, 0);
-        avgCompletion = Math.round(totalCompletion / totalFeatures);
-      }
-    }
-
-    return actionSuccess({
-      totalModules,
-      totalFeatures,
-      avgCompletion,
-      lastUpdatedAt,
+    return await withAuthRedirect(async () => {
+      const data = await serverApiGet<OverviewStatsResponse>(
+        `/api/projects/${projectId}/overview/stats`,
+      );
+      const totalNodes = data.stats.total_nodes;
+      const fileNodes = data.stats.file_nodes;
+      return actionSuccess({
+        totalModules: Math.max(0, totalNodes - fileNodes),
+        totalFeatures: fileNodes,
+        avgCompletion: Math.round(data.stats.avg_completion_rate * 100),
+        lastUpdatedAt: null,
+      });
     });
   } catch (error) {
     return actionError(error);

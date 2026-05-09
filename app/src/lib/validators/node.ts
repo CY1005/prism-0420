@@ -17,6 +17,7 @@ export const createNodeSchema = z.object({
 
 export const renameNodeSchema = z.object({
   nodeId: z.string().uuid("无效的节点 ID"),
+  projectId: z.string().uuid("无效的项目 ID"),
   name: z
     .string()
     .min(1, "名称不能为空")
@@ -27,10 +28,12 @@ export const renameNodeSchema = z.object({
 
 export const deleteNodeSchema = z.object({
   nodeId: z.string().uuid("无效的节点 ID"),
+  projectId: z.string().uuid("无效的项目 ID"),
 });
 
 export const createDimensionRecordSchema = z.object({
   nodeId: z.string().uuid("无效的节点 ID"),
+  projectId: z.string().uuid("无效的项目 ID"),
   dimensionTypeId: z.number().int().positive("无效的维度类型"),
   // content 是动态 JSONB，允许任意结构但限制总大小
   content: z

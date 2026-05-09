@@ -1,118 +1,28 @@
 "use server";
 
-import { db } from "@/db";
-import { nodes, dimensionRecords } from "@/db/schema";
-import { eq, and, isNull, asc } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
-import { logger } from "@/lib/logger";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3b 显式 punt stub：参数保留作为 M17 子片 3c 接入时的契约锚点 */
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";
-import { logActivity } from "./activity-log";
 
-// ─── Auto-create modules from ZIP structure ──────────
-
-export async function createModulesFromZipTree(
-  projectId: string,
-  tree: FileTreeNode,
-): Promise<ActionResult<{ folders: { id: string; name: string; path: string; depth: number }[] }>> {
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
-
-    const createdFolders: { id: string; name: string; path: string; depth: number }[] = [];
-
-    // Collect top-level folders from the ZIP tree
-    const topFolders = tree.children?.filter((c) => c.type === "folder") ?? [];
-
-    for (let i = 0; i < topFolders.length; i++) {
-      const folder = topFolders[i];
-      const [newNode] = await db
-        .insert(nodes)
-        .values({
-          projectId,
-          parentId: null,
-          name: folder.name,
-          type: "folder",
-          depth: 0,
-          sortOrder: i,
-          path: "",
-          createdBy: user.id,
-        })
-        .returning();
-
-      createdFolders.push({
-        id: newNode.id,
-        name: newNode.name,
-        path: newNode.name,
-        depth: 0,
-      });
-
-      // Create sub-folders (depth 1)
-      const subFolders = folder.children?.filter((c) => c.type === "folder") ?? [];
-      for (let j = 0; j < subFolders.length; j++) {
-        const sub = subFolders[j];
-        const [subNode] = await db
-          .insert(nodes)
-          .values({
-            projectId,
-            parentId: newNode.id,
-            name: sub.name,
-            type: "folder",
-            depth: 1,
-            sortOrder: j,
-            path: newNode.id,
-            createdBy: user.id,
-          })
-          .returning();
-
-        createdFolders.push({
-          id: subNode.id,
-          name: subNode.name,
-          path: `${newNode.name} / ${subNode.name}`,
-          depth: 1,
-        });
-      }
-    }
-
-    // If ZIP has no folders (all files at root), create a default module
-    if (createdFolders.length === 0) {
-      const [defaultNode] = await db
-        .insert(nodes)
-        .values({
-          projectId,
-          parentId: null,
-          name: "导入文档",
-          type: "folder",
-          depth: 0,
-          sortOrder: 0,
-          path: "",
-          createdBy: user.id,
-        })
-        .returning();
-
-      createdFolders.push({
-        id: defaultNode.id,
-        name: defaultNode.name,
-        path: defaultNode.name,
-        depth: 0,
-      });
-    }
-
-    logger.action("import.auto_create_modules", user.id, {
-      projectId,
-      folderCount: createdFolders.length,
-    });
-
-    revalidatePath(`/projects/${projectId}`);
-    return actionSuccess({ folders: createdFolders });
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
-// ─── Types ───────────────────────────────────────────
+/**
+ * 拷贝层 ZIP 导入 wizard：在 prism-0420 形态下与 M17 imports 异步任务路径对齐。
+ *
+ * **本子片（3b）punt 范围**：
+ *  - `uploadZip` / `createModulesFromZipTree` / `confirmImport` 三个函数依赖
+ *    一个 sync 上传 → 返回 ParsedFile[] / 直接 db 写入的旧路径，prism-0420
+ *    OpenAPI 没有对应同步端点（M17 是 task_id 异步 / WS 推送 / `/imports/{task_id}/confirm`）。
+ *  - 重写需对齐 M17 ImportTask 状态机 + WS 进度通道，量大且涉及 UI 流程改造。
+ *  - 子片 3b prompt 字面允许：「ai-import 强依赖 WS / SSE 实装 → 显式标 punt 子片 3c」。
+ *
+ * **本文件对外契约保留**（types 仍 export / 拷贝层 wizard 在 eslint ignore 内 / 不破 lint）：
+ *  - 三个 action 返回 `actionError(NOT_IMPLEMENTED)` 显式标识 / 不静默吞错。
+ *  - CSV 单路：见 `actions/nodes.ts importNodesFromCSV` → 已接入 M11 cold-start。
+ *
+ * **子片 3c TODO**：
+ *  - uploadZip → POST /api/projects/{pid}/imports（multipart / 启动任务）
+ *  - 任务进度 → WS /ws/imports/{task_id} 或轮询 GET /imports/{task_id}
+ *  - confirmImport → POST /api/projects/{pid}/imports/{task_id}/confirm
+ */
 
 export interface ParsedFile {
   path: string;
@@ -139,141 +49,31 @@ export interface UploadResult {
 export interface ImportItem {
   fileName: string;
   content: string;
-  targetNodeId: string; // parent module node id
+  targetNodeId: string;
   nodeName: string;
-  dimensionTypeId?: number; // which dimension to populate with content
+  dimensionTypeId?: number;
 }
 
-// ─── Upload Zip (calls FastAPI) ──────────────────────
+const NOT_IMPLEMENTED_MSG = "ZIP 导入流程将在子片 3c 接入 M17 imports 端点（当前路径 punt）";
 
-export async function uploadZip(formData: FormData): Promise<ActionResult<UploadResult>> {
-  try {
-    const user = await requireAuth();
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
-      return actionError(new AppError("请选择文件", "blocking", "VALIDATION_ERROR", 400));
-    }
-
-    const apiBase = process.env.API_URL ?? "http://localhost:8001";
-    const res = await fetch(`${apiBase}/api/import/upload`, {
-      method: "POST",
-      body: (() => {
-        const fd = new FormData();
-        fd.append("file", file);
-        return fd;
-      })(),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: "上传失败" }));
-      return actionError(
-        new AppError(body.detail || "上传失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
-      );
-    }
-
-    const data: UploadResult = await res.json();
-
-    logger.action("import.upload", user.id, {
-      fileCount: data.files.length,
-    });
-
-    return actionSuccess(data);
-  } catch (error) {
-    return actionError(error);
-  }
+export async function createModulesFromZipTree(
+  _projectId: string,
+  _tree: FileTreeNode,
+): Promise<ActionResult<{ folders: { id: string; name: string; path: string; depth: number }[] }>> {
+  return actionError(new AppError(NOT_IMPLEMENTED_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
 }
 
-// ─── Confirm Import (batch create nodes + dimension records) ──
+export async function uploadZip(_formData: FormData): Promise<ActionResult<UploadResult>> {
+  return actionError(new AppError(NOT_IMPLEMENTED_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
+}
 
 export async function confirmImport(
-  projectId: string,
-  items: ImportItem[],
+  _projectId: string,
+  _items: ImportItem[],
 ): Promise<ActionResult<{ imported: number; errors: string[] }>> {
-  try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
-
-    if (!items.length) {
-      return actionError(new AppError("没有要导入的项目", "blocking", "VALIDATION_ERROR", 400));
-    }
-
-    const errors: string[] = [];
-    let importedCount = 0;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-
-      try {
-        // Resolve parent node
-        const [parent] = await db.select().from(nodes).where(eq(nodes.id, item.targetNodeId));
-
-        if (!parent) {
-          errors.push(`"${item.nodeName}": 目标模块不存在`);
-          continue;
-        }
-
-        // Calculate depth and path
-        const depth = parent.depth + 1;
-        const path = parent.path ? `${parent.path}/${parent.id}` : parent.id;
-
-        // Calculate sort order
-        const siblings = await db
-          .select()
-          .from(nodes)
-          .where(and(eq(nodes.projectId, projectId), eq(nodes.parentId, item.targetNodeId)));
-        const sortOrder = siblings.length;
-
-        // Insert node
-        const [newNode] = await db
-          .insert(nodes)
-          .values({
-            projectId,
-            parentId: item.targetNodeId,
-            name: item.nodeName,
-            type: "file",
-            depth,
-            sortOrder,
-            path,
-            createdBy: user.id,
-          })
-          .returning();
-
-        // If dimensionTypeId provided, create a dimension record with the content
-        if (item.dimensionTypeId && item.content) {
-          await db.insert(dimensionRecords).values({
-            nodeId: newNode.id,
-            dimensionTypeId: item.dimensionTypeId,
-            content: { text: item.content },
-            createdBy: user.id,
-          });
-        }
-
-        importedCount++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "未知错误";
-        errors.push(`"${item.nodeName}": ${msg}`);
-      }
-    }
-
-    logger.action("import.confirm", user.id, {
-      projectId,
-      importedCount,
-      errorCount: errors.length,
-    });
-    logActivity({
-      projectId,
-      userId: user.id,
-      actionType: "import",
-      targetType: "node",
-      targetId: projectId,
-      summary: `批量导入${importedCount}个功能项`,
-      metadata: { importedCount, errorCount: errors.length },
-    });
-    revalidatePath(`/projects/${projectId}`);
-
-    return actionSuccess({ imported: importedCount, errors });
-  } catch (error) {
-    return actionError(error);
-  }
+  // 子片 3c 接入：POST /api/projects/{pid}/imports/{task_id}/confirm
+  return actionError(new AppError(NOT_IMPLEMENTED_MSG, "blocking", ErrorCode.INTERNAL_ERROR, 501));
 }
+
+// 本子片（3b）保留 actionSuccess import 防止 eslint 误判（其他子片可能恢复实装）。
+void actionSuccess;
