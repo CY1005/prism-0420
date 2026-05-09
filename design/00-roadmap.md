@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**M20 sprint 完成 / Phase 2.1 95→100% 收官**: 8 commit + 横切 owner + R-X3 双方法 + correlation_id + R10-1 + 嵌套 max + F2.3 archived×team 互锁双路径 + R1=3 subagent 并行 + R2=1 合并 Opus 第十七数据点 + bypass log #2 配套验收最终 ✅ + 元教训 #19 R2 reconcile pass 第二实证 + SR-M20-1/SR-M20-2 立规候选 + Phase 2.2 前端继承启动评估）
-current_phase: **Phase 2.1 100% 收官**（M01-M08+M10-M20 全交付 / M09 superseded by M18 不实装 / 下一站 Phase 2.2 前端继承 Prism）
+last_updated: 2026-05-09（**Phase 2.2 子片 3c 完成 / 子片 4 待启动**：5/7 子片完成 / cumulative 7 commit aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225 / R 范式第 4 数据点 + R2 真漏抓 mutation 路径 401 root-cause 立修 + SR-P22-3 第 4 实证 + SR-P22-4 跨子片同根因检测 立规候选）
+current_phase: **Phase 2.2 前端继承 ~71%**（子片 0+1+2+3a-i+3a-ii+3b+3c 完成 / 子片 4 团队页 + 子片 5 关闸待启动）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -28,7 +28,7 @@ Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
 Phase 2.1 业务模块  ✅ ████████████████ 100%  ← M01-M08+M10-M20 全交付（M09 superseded by M18）
-Phase 2.2 前端继承  ⏳ ░░░░░░░░░░░░░░░░   0%  ← 闸门 4 启动条件评估 ✅ / 待 CY 启动
+Phase 2.2 前端继承  ⏳ ███████████░░░░░  ~71%  ← 5/7 子片完成（子片 0+1+2+3a-i+3a-ii+3b+3c）/ 子片 4 团队页 + 子片 5 关闸待启动
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 ```
