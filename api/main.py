@@ -19,6 +19,7 @@ from api.routers import (
     competitor_router,
     dimension_router,
     embedding_admin_router,
+    export_router,
     industry_news_router,
     issue_router,
     module_relation_router,
@@ -129,6 +130,7 @@ app.include_router(ai_snapshot_router.ai_snapshot_task_router)
 app.include_router(import_router_mod.import_router)
 app.include_router(search_router.router)
 app.include_router(embedding_admin_router.router)
+app.include_router(export_router.export_router)
 
 
 @app.get("/health")
