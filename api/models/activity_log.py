@@ -133,6 +133,8 @@ _ACTION_TYPES = (
     "team_member_demoted_member",
     "project_joined_team",
     "project_left_team",
+    # M19 导入/导出（2026-05-09 sprint / design §10 + frontmatter line 51-53 字面）
+    "export",
 )
 
 _TARGET_TYPES = (
