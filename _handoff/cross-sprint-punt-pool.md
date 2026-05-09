@@ -63,7 +63,7 @@ policy:
 **剩余 41 项 STILL_PUNT 重新归类**：
 - **A 类 占位期残留 5 项**（#21-#24 + 部分 M11-B1 已关）：M18 embedding worker source_text + noop 转 succeeded + cron PCT 维度 + batch_backfill INSERT FROM unnest — 待 pgvector 真接通 + 真业务 path 启用时解锁
 - **B 类 真漏洞 0 项**（M-CLEANUP 已清完）
-- **C 类 性能黑洞 ~12 项**（元发现 #2 / M02 batch_update UPSERT / M04 batch_get_by_nodes / M05 query 优化 / M11 size 检查 / M12 _tenant_filter 等）— 推荐 Phase 2.3 上线前立专门 perf sprint 或显式接受
+- **C 类 性能黑洞 ~12 项**（元发现 #2 / M02 batch_update UPSERT / M04 batch_get_by_nodes / M05 query 优化 / M11 size 检查 / M12 _tenant_filter 等）— **2026-05-09 Phase 2.3 子 sprint D 决策升级 STILL_PUNT → DEFER_TO_POST_LAUNCH**（选项 C 上线优先+数据驱动 / 详见 `design/audit/phase23-perf-evaluation.md`）；触发条件 = 真负载 P95 > 500ms 告警 / 多租户场景启用 / Phase 3 数据回流后立 post-launch perf sprint
 - **D 类 条件触发型 ~10 项**（#3+#15 join / #16 WS golden / #17 _sanitize_filename / #25-#28 M19 punts / #18-#19 M17 重构等）— 触发条件未到 / 不动
 - **E 类 文档/UNVERIFIABLE ~14 项** — 子片 5 grep 验证 / 多数已被默默吸收 / 显式不立项
 
@@ -112,10 +112,12 @@ policy:
 **立规**：未来 punt 立项时若发现 ≥3 项指向同一未来动作（如"M? sprint 升级 X 时"），
 **自动升 P1 提前规划**到目标 sprint 计划段，不许做"分散登记"。
 
-### #2 "性能 sprint" 是 punt 黑洞
+### #2 "性能 sprint" 是 punt 黑洞 — **关闭于 2026-05-09 / Phase 2.3 子 sprint D**
 
 M02-M14 累计 **~12 项** punt 写"性能 sprint"，但项目从无独立性能 sprint 计划。M16
 audit 必看是否吸收 / 否则将永久驻留 punt 池。
+
+**2026-05-09 关闭**：12 项 status 升级 STILL_PUNT → DEFER_TO_POST_LAUNCH（详见 `design/audit/phase23-perf-evaluation.md`）。决策选项 C：上线优先 + 数据驱动 + Phase 3 数据回流后立 post-launch perf sprint。pool 状态明确归宿 / 黑洞**关闭**。
 
 ### #3 UNVERIFIABLE 占 49% — 大量 punt 是"文档/决议"类
 

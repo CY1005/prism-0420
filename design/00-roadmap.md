@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.3 子 sprint A 关闸 / §8.0 工程规约补完**：03-cicd + 04-observability + 05-security 三 spec accepted-minimal → accepted / .github/workflows/ci.yml 7 jobs / api/core/config.py prod CORS guard / spec 06 §2 路径前缀+logout body 备注 / punt 池 #1+#2+#3+#5 关闭 / §8.0 12/12 ✅ / 1629 PASS 守护）
-current_phase: **Phase 2.3 集成验证 子 sprint A 完成**（A ✅ / 下一步 B 集成 e2e + 性能基线）
+last_updated: 2026-05-09（**Phase 2.3 4 子 sprint A+B+C+D 关闸**：A 工程规约补完 ✅ commit a42a786 / B 集成 e2e+性能基线 PARTIAL ✅ commit 9a4b192（Playwright pilot 1 真跑+9 skeleton+perf 2 smoke）/ C frontend-polish PARTIAL ✅ commit af6f78e（withAuthRedirect helper+logActivity no-op cleanup+isTeamOwner dead code）/ D perf 评估 ✅ 选项 C DEFER_TO_POST_LAUNCH（C 类 12 项升级 / 元发现 #2 黑洞关闭）/ 闸门 5 部分通过 / 上线 sprint 待补 e2e 完整+ci.yml workflow scope+docker-compose prod / cross-sprint pool 元发现 #2 关闭）
+current_phase: **Phase 2.3 集成验证 4 子 sprint 完成（PARTIAL 闸门 5）**（A+B+C+D ✅ / 上线 sprint 待立 / B-FOLLOW-UP+C-FOLLOW-UP+post-launch perf 三 punt 进 cross-sprint pool）
 ---
 
 # prism-0420 全项目 Roadmap
