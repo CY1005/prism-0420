@@ -904,6 +904,32 @@ class EmbeddingModelUpgradeInvalidError(AppError):
     message = "Model upgrade target is invalid or not configured"
 
 
+# ─────────────── M19 导入/导出 ───────────────
+
+
+class ExportNodeLimitExceededError(AppError):
+    """入口 A 多 node 选择超上限（design §7 字面 max 20）。"""
+
+    code = ErrorCode.EXPORT_NODE_LIMIT_EXCEEDED
+    http_status = 422
+    message = "Too many nodes selected for export (max 20)"
+
+
+class ExportNodeNotInProjectError(NotFoundError):
+    """node_id 不属于该 project 或不存在（cross-tenant 防御 + design §8 service 层校验）。"""
+
+    code = ErrorCode.EXPORT_NODE_NOT_IN_PROJECT
+    message = "One or more nodes do not belong to this project"
+
+
+class ExportEmptyContentError(AppError):
+    """所有目标 node 在 include 选项下均无内容可导出（design §13 EXPORT_EMPTY_CONTENT 422）。"""
+
+    code = ErrorCode.EXPORT_EMPTY_CONTENT
+    http_status = 422
+    message = "No content found for the selected nodes"
+
+
 class SilentFailure(BaseException):
     """audit m6 + verify L1+N4 + fix v2 决策 3=B：非 AppError 内部失败基类。
 

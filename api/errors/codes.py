@@ -197,3 +197,8 @@ class ErrorCode(StrEnum):
 
     # M18 删除一致性（baseline-patch 决策 5）
     EMBEDDING_DELETE_FAILED = "embedding_delete_failed"
+
+    # M19 导入/导出 (design §13 / 只读 / pilot=false / complexity=low)
+    EXPORT_NODE_LIMIT_EXCEEDED = "export_node_limit_exceeded"
+    EXPORT_NODE_NOT_IN_PROJECT = "export_node_not_in_project"
+    EXPORT_EMPTY_CONTENT = "export_empty_content"
