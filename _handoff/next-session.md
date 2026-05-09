@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (post-M19-sprint-complete)
+last_updated: 2026-05-09 (**post-M20-sprint-complete / Phase 2.1 100% 收官**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,10 +11,46 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-M19-sprint-complete）
+## 0. 状态快照（更新于 2026-05-09 post-M20-sprint-complete / **Phase 2.1 100% 收官**）
 
 - **Phase 2.0 工程基线**：✅ 100%
-- **Phase 2.1 业务模块**：⏳ 95%（M01-M08+M10-M19 完成；M09 superseded by M18 不实装；下一站 **M20 团队（最后一个 own）**）
+- **Phase 2.1 业务模块**：✅ **100%**（M01-M08+M10-M20 全交付；M09 superseded by M18 不实装）
+- **2026-05-09 M20 sprint 完成 / Phase 2.1 收官**（8 commit / 1613 PASS / R13-1 139 / L12+L13+R14 全过 / ruff 净 / **横切 owner + R-X3 双方法 + correlation_id F2.9 + R10-1 N+1 + 嵌套 max + F2.3 archived×team 互锁双路径 / pilot=false / complexity=medium / 最后一个 own sprint**）：
+  - commits:
+    - `f325b74` 启动期（reconcile pass A 8 / B 0 第十五次实证 / C 9 + §14.5 + 元教训 #19 三方对账 + Phase 2.1 收官启动 + bypass log #2 配套继续）
+    - `307a137` 子片 1（api/models/teams.py + alembic m20_team.py + projects.team_id FK 启用 + 17 model tests + conftest make_team / make_team_with_owner fixture / 跨模块 helper 规则十二连）
+    - `4c01f3a` 子片 2（api/dao/teams_dao.py TeamDAO + TeamMemberDAO + M20TenantContext UNION + lifespan 升级 / M02→M20 切换前后 baseline 不破 + 21 DAO tests）
+    - `d84b713` 子片 3（api/services/team_service.py 11 方法 + api/schemas/teams.py 8 schemas + 8 ErrorCode raise 接通 + 状态机 4 禁止转换 + 33 service tests）
+    - `49f7cff` R1 立修 8 P1（3 subagent 并行 / Opus + 2 Sonnet 合并去重 / N+1 list_for_user + delete_team residual count truncation + R-X3 violation rollback + count_owners FOR UPDATE + transfer from_role 永真 + main.py log 标签）+ 3 regression tests
+    - `8ee6e3c` 子片 4（Router 10 endpoints + 20 e2e + R10-1 N+1 e2e + cross-tenant 404 + 元教训 19 类 actionable）
+    - `615a5e8` R2 立修 3 P1 + 1 P2 顺修（1 合并 Opus endpoint 单审 / PATCH role 0 e2e + viewer 写 6 端点 403 + response_model）+ 9 e2e
+    - 子片 5 关闸（本 commit / design 回写 + audit/m20-pilot-template-validation.md + handoff §0 + roadmap **Phase 2.1 100% 收官** + cross-sprint punt 池接通 + 闸门 4 启动条件评估）
+  - **1512 → 1613 PASS (+101) / 5 skipped / R13-1 139 / L12+L13+R14 全过 / ruff 净**
+  - **闸门 2.5 第十五次 B 栏 0 项实证**：M05-M20 十五连稳定
+  - **bypass log #2 配套验收最终 ✅**：M16 bypass + M17/M18/M19/M20 真跑 = 累计 2 次 bypass 不复位 / 第 3 次触发闸门 3.4 L1 review
+  - **R1+R2 命中数据**（M02-M20 第十七数据点 / 详 audit/m20-pilot-template-validation.md）：
+    - R1=3 subagent：5 P1（spec+quality Opus）+ 1 P1（reuse Sonnet）+ 5 P1（quality+efficiency Sonnet）= 11 P1 / 合并去重 8 立修 + 7 punt
+    - R2=1 合并 Opus：3 P1 + 4 P2 = 7 项 / 立修 3 + 顺修 1 + punt 4
+    - **R2 真漏抓贡献**：PATCH role endpoint 0 router e2e（design §7.1 字面登记） + viewer 写所有写端点 403 主动复制覆盖度仅 1/7（M07 范式应 6/7） + PATCH role 缺 response_model
+  - **元贡献 5 项**（详 audit/m20-pilot-template-validation.md "元贡献清单" 段）：
+    1. **Phase 2.1 100% 收官**：M01-M08+M10-M20 全交付 / 16 own 模块（M09 superseded） / 闸门 4 启动条件评估通过 / Phase 2.2 前端继承 Prism 启动评估
+    2. **R-X3 双方法 + correlation_id F2.9 + R10-1 N+1 三者交叉首发**（delete_team + transfer_ownership / SR-M20-1 立规候选）
+    3. **横切 owner 模块（user_accessible_project_ids_subquery L3 SQL 注入升级）实证**：M02→M20 切换前后 M03-M19 既有 17 模块 0 改动 baseline 不破（SR-M20-2 立规候选）
+    4. **元教训 #19 R2 reconcile pass 第二实证**（M19 立 + M20 验证）→ SR-M19-1 立规收敛正式立到 sprint 启动期 reconcile A 栏首条 + R2 reconcile pass 必跑
+    5. **N/A 元教训显式声明范式扩展 11 项**（design §14.5 范式复用清单 20 项 / 半数 N/A / 单 sprint 历史最高密度）
+  - **R-X5 子选项实证**（design §14.5 L3 留空 4 项）：
+    1. 横切 owner 模块（最复杂单 sprint 形态）R1+R2 命中分布偏 R1-A spec+quality + R1-C N+1 + R2 endpoint 覆盖度
+    2. L3 SQL 注入升级横切 M03-M19 17 模块 baseline 不破（1529→1548 PASS +19 全 M20 新增 / 0 regressions）
+    3. Phase 2.1 100% 收官 cross-sprint punt 池零长期累计新增（R2 P2 全 sprint-internal punt 不接通 long-term pool）
+    4. R-X3 + correlation_id + R10-1 三者交叉 sink 立规候选 SR-M20-1
+  - **cross-sprint punt 池接通**：本 sprint 关闭 #20（require_platform_admin 重新评估不触发 / 保留至下一 platform_admin 模块）/ 新增 0（R2 P2 全 sprint-internal punt）
+  - **闸门 4 启动条件评估**（Phase 2.2 前端继承 Prism）：
+    - [x] M01-M05+M20 后端代码 merge ✅
+    - [x] OpenAPI 契约稳定（10 M20 endpoints + 8 schemas accepted）✅
+    - [ ] `npm run codegen` 准备 — 待 Phase 2.2 启动时跑
+    - [ ] Phase 2.2 子片 0 prep — 待 CY 启动
+
+## 0a. 上一版本快照（M19 sprint 完成）
 - **2026-05-09 M19 sprint 完成**（8 commit / 1512 PASS / R13-1 136→139 / L12+L13+R14 全过 / ruff 净 / **纯只读导出 / pilot=false / complexity=low / R1+R2 第十七数据点 / bypass log #2 配套继续 ✅**）：
   - commits:
     - `3ad8efa` 启动期（reconcile pass A 6 / B 0 第十四次实证 / C 8 / §14.5 + bypass 验收 + punt 检查）
@@ -43,7 +79,7 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
   - **cross-sprint punt 池接通**：本 sprint 关闭 0 / 新增 4 punt（#25 _md_cell horizontal / #26 filename sanitize 输入 vs 输出分类 / #27 Cache-Control: no-store / #28 filename 含 project_name RFC 5987）/ 真漏洞 #20 require_platform_admin M19 evaluated 不触发（M19 viewer endpoint）/ M20 sprint 重新评估
   - **下一站 M20 团队**：Phase 2.1 最后一个 own sprint。M20 形态特殊：teams + team_members 双表 + space_id → team_id RENAME baseline-patch + ActionType+10 + TargetType+1 + Alembic 单 revision 合并 + 8.5 P1+P2 + 8.7 R-X3 + 10.3 R10-1 N+1。**M20 启动期 reconcile pass A 栏首条预录**：M19 元教训 #19 应用——`grep -n "404\|422\|500" tests.md` 与 `exceptions.py:http_status` + `design.md:§13` 字面比对（SR-M19-1 立规实证）。
 
-## 0a. 上一版本快照（M18 sprint 完成）
+## 0b. 上一版本快照（M18 sprint 完成）
 
 - **Phase 2.0 工程基线**：✅ 100%
 - **Phase 2.1 业务模块**：⏳ 90%（M01-M08+M10-M18 完成；下一站 M19 导入/导出；M09 superseded by M18 不实装）
