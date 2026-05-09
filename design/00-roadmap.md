@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.2 子片 4 完成 / 子片 5 待启动**：6/7 子片完成 / cumulative 8 commits + 子片 4 待 commit / R 范式第 5 数据点 + R2 真漏抓 client `.catch` 吞 NEXT_REDIRECT root-cause 立修 + SR-P22-3 第 5 实证 + SR-P22-4 全新写形态新场景变体实证 + SR-P22-5 立规候选新增 + scope 自决 6→3 路由 + M20 后端 4 项 gap 进 cross-sprint pool P22-4-backend-gap）
+last_updated: 2026-05-09（**Phase 2.2 子片 4 完成 / 子片 5 待启动**：6/7 子片完成 / cumulative 9 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add / R 范式第 5 数据点 + R2 真漏抓 client `.catch` 吞 NEXT_REDIRECT root-cause 立修 + SR-P22-3 第 5 实证 + SR-P22-4 全新写形态新场景变体实证 + SR-P22-5 立规候选新增 + scope 自决 6→3 路由 + M20 后端 4 项 gap 进 cross-sprint pool P22-4-backend-gap）
 current_phase: **Phase 2.2 前端继承 ~86%**（子片 0+1+2+3a-i+3a-ii+3b+3c+4 完成 / 子片 5 关闸待启动）
 ---
 
