@@ -1,24 +1,13 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { serverApiGet, UnauthenticatedError } from "@/lib/server-http-client";
+import { serverApiGet } from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import type { components } from "@/types/api";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type OverviewResponse = components["schemas"]["OverviewResponse"];
 type OverviewStatsResponse = components["schemas"]["OverviewStatsResponse"];
 type NodeOverview = components["schemas"]["NodeOverview"];
-
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
 
 interface TreemapItem {
   nodeId: string;

@@ -61,7 +61,6 @@ import {
   generateTestPointsAIAction,
   saveTestPointsAction,
 } from "@/actions/analyze";
-import { logActivityAuto } from "@/actions/activity-log";
 
 /** SSE streaming via internal proxy route instead of direct FastAPI call */
 function analyzeRequirementStream(
@@ -421,15 +420,7 @@ export default function AnalysisPage() {
       setAnalysisFlowMessage(
         `分析结果已保存到功能项 ${nodeId} 的需求分析维度，涉及 ${totalModules} 个模块`,
       );
-      // F15: Log to activity_logs
-      logActivityAuto({
-        projectId,
-        actionType: "analyze",
-        targetType: "node",
-        targetId: nodeId,
-        summary: `AI需求分析完成，涉及 ${totalModules} 个模块`,
-        metadata: { layers: layers.length, totalModules },
-      });
+      // activity_log 由 backend analyze service write_event 写（前端 no-op call 已删 / P22-3c-7 关闭）
     }
   };
 
@@ -452,15 +443,7 @@ export default function AnalysisPage() {
       setAnalysisFlowMessage(
         `分析结果已保存到功能项 ${nodeId} 的需求分析维度，生成了 ${selectedPoints.length} 条测试点`,
       );
-      // F15: Log to activity_logs
-      logActivityAuto({
-        projectId,
-        actionType: "analyze",
-        targetType: "node",
-        targetId: nodeId,
-        summary: `AI生成 ${selectedPoints.length} 条测试点并录入`,
-        metadata: { testPointCount: selectedPoints.length },
-      });
+      // activity_log 由 backend save_test_points service write_event 写（前端 no-op call 已删 / P22-3c-7 关闭）
     }
   };
 

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
   serverApiGet,
   serverApiPost,
@@ -9,7 +8,6 @@ import {
   serverApiDelete,
   UnauthenticatedError,
 } from "@/lib/server-http-client";
-import { getServerUser } from "@/lib/server-auth";
 import {
   createTeamSchema,
   updateTeamSchema,
@@ -21,18 +19,7 @@ import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";
 import type { components } from "@/types/api";
-
-/** spec 06 §3：UnauthenticatedError → redirect /login（read 路径专用 helper）。 */
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type TeamRead = components["schemas"]["TeamRead"];
 type TeamCreate = components["schemas"]["TeamCreate"];
@@ -59,22 +46,7 @@ export async function getTeam(teamId: string): Promise<TeamRead | null> {
   });
 }
 
-/**
- * 是否当前用户为该 team 的 owner（前端 RBAC 守卫）。
- * Backend TeamRead 不返回当前用户角色，仅按 creator_id 推断 owner / admin/member 子片 4 退化为 viewer。
- * cross-sprint pool P22-4-backend-gap：Phase 2.3 接 GET /me-role 后启用真守卫。
- */
-export async function isTeamOwner(teamId: string): Promise<boolean> {
-  const me = await getServerUser();
-  if (!me) return false;
-  if (me.role === "platform_admin") return true;
-  try {
-    const team = await serverApiGet<TeamRead>(`/api/teams/${teamId}`);
-    return team.creator_id === me.id;
-  } catch {
-    return false;
-  }
-}
+// isTeamOwner 已删（Phase 2.3 子 sprint C / P22-4-2 关闭 / 无 caller 死代码 / 页面直接 creator_id === me.id 推断）
 
 // ─── mutations ─────────────────────────────────────
 

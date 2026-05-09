@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
   serverApiGet,
   serverApiPost,
@@ -14,21 +13,7 @@ import { createProjectSchema } from "@/lib/validators/project";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import type { components } from "@/types/api";
-
-/**
- * Server-side 读 helper：UnauthenticatedError 直接 redirect /login（spec 06 §3 字面）。
- * 其他错误透出给 caller 决定（toast / error.tsx）。
- */
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type ProjectResponse = components["schemas"]["ProjectResponse"];
 type ProjectListResponse = components["schemas"]["ProjectListResponse"];

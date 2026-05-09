@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
   serverApiGet,
   serverApiPost,
@@ -14,6 +13,7 @@ import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import { defineAction } from "@/lib/define-action";
 import { createIssueSchema, updateIssueSchema, ISSUE_CATEGORIES } from "@/lib/validators/issue";
 import type { components } from "@/types/api";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type IssueResponse = components["schemas"]["IssueResponse"];
 type IssueListResponse = components["schemas"]["IssueListResponse"];
@@ -22,17 +22,6 @@ type IssueUpdate = components["schemas"]["IssueUpdate"];
 type IssueTransition = components["schemas"]["IssueTransition"];
 
 type IssueCategory = (typeof ISSUE_CATEGORIES)[number];
-
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
 
 export const createIssue = defineAction(
   createIssueSchema,

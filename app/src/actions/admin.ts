@@ -1,28 +1,17 @@
 "use server";
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：用户管理 4 函数 NOT_IMPLEMENTED stub（prism-0420 OpenAPI 暂未提供 admin 用户管理域 / 子片 5 后或 Phase 2.3 评估接入） */
-import { redirect } from "next/navigation";
-import { serverApiGet, serverApiPost, UnauthenticatedError } from "@/lib/server-http-client";
+import { serverApiGet, serverApiPost } from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import type { components } from "@/types/api";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type EmbeddingStatsResponse = components["schemas"]["EmbeddingStatsResponse"];
 type BackfillRequest = components["schemas"]["BackfillRequest"];
 type BackfillResponse = components["schemas"]["BackfillResponse"];
 type ModelUpgradeRequest = components["schemas"]["ModelUpgradeRequest"];
 type ModelUpgradeResponse = components["schemas"]["ModelUpgradeResponse"];
-
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
 
 /**
  * prism-0420 admin endpoint：embedding 域（M18 / platform_admin only）。

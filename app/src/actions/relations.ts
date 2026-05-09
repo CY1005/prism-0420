@@ -1,31 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import {
-  serverApiGet,
-  serverApiPost,
-  serverApiDelete,
-  UnauthenticatedError,
-} from "@/lib/server-http-client";
+import { serverApiGet, serverApiPost, serverApiDelete } from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import type { components } from "@/types/api";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type RelationResponse = components["schemas"]["RelationResponse"];
 type RelationListResponse = components["schemas"]["RelationListResponse"];
 type OverviewResponse = components["schemas"]["OverviewResponse"];
 type NodeOverview = components["schemas"]["NodeOverview"];
-
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
 
 interface RelationCreatePayload {
   source_node_id: string;

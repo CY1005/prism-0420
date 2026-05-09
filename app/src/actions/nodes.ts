@@ -20,6 +20,7 @@ import {
 } from "@/lib/validators/node";
 import { defineAction } from "@/lib/define-action";
 import type { components } from "@/types/api";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 
 type NodeResponse = components["schemas"]["NodeResponse"];
 type NodeWithChildren = components["schemas"]["NodeWithChildrenResponse"];
@@ -36,20 +37,6 @@ type DimensionResponse = components["schemas"]["DimensionResponse"];
 type DimensionCreate = components["schemas"]["DimensionCreate"];
 type DimensionUpdate = components["schemas"]["DimensionUpdate"];
 type VersionListResponse = components["schemas"]["VersionListResponse"];
-
-/**
- * spec 06 §3 字面：Server-side read action 401 → redirect /login。
- */
-async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
-    throw error;
-  }
-}
 
 interface TreeNode extends NodeWithChildren {
   children: TreeNode[];
