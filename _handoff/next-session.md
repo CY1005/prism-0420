@@ -32,7 +32,7 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - **C. frontend-polish 子 sprint**（子片 5 关闸时 defer 的 10 items：P22-3b-1 抽 lib/server-action-helpers.ts + P22-3c-1~8 命名/dead code/兼容层清理 + P22-4-2 isTeamOwner 死代码 / 估 cost $2-3 / 0.5 天 / 单独跑可走完整 R1+R2 pipeline 出 6 数据点）
     - **D. perf sprint 评估**（cross-sprint pool C 类 12 项 / 接受 / 立专门 sprint / 推上线后）
   - 推荐顺序：A → B → C → D（工程规约不补不能上 prod / 集成 e2e 是上线 gate / frontend-polish 可与 A/B 并行 / perf 可推上线后）
-  - cold-start prompt 待写：进 _handoff/ 单独 phase23-prompts.md 文件 + frontend-polish-prompts.md
+  - cold-start prompt：✅ 已写 `_handoff/phase23-prompts.md`（4 子 sprint A/B/C/D 全集 / commit `<待 push>`）
 
 - **Phase 2.2 全集进度**：✅ 7/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b + 3c + 4 + 5）/ 累计 ~$15-20 cost / ~5-6 天工作量 / R 范式 5 数据点完整
 
