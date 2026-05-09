@@ -129,7 +129,7 @@ E. 关闸：
 
 ## 子片 2 — auth flow（login/register/refresh）+ 1 e2e
 
-> **status: completed** (2026-05-09 / commit `<填入 hash>`) — register 跳过改造（M01 未来扩展 / CY 选 (a)）/ 4 backend cookie e2e + 13 vitest + R1+R2 第 1 数据点合并子片 1+2 / 见 `design/audit/p22-pilot-template-validation.md`
+> **status: completed** (2026-05-09 / commit `3b9bbc1`) — register 跳过改造（M01 未来扩展 / CY 选 (a)）/ 4 backend cookie e2e + 13 vitest + R1+R2 第 1 数据点合并子片 1+2 / 见 `design/audit/p22-pilot-template-validation.md`
 
 > **estimated cost**: $2-3 / **estimated time**: 0.5 天 / **依赖**: 子片 1 + 后端 alive（CY 启动 uvicorn）
 
