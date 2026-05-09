@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-5-完成 / Phase 2.2 100% / 下一步 Phase 2.3**)
+last_updated: 2026-05-09 (**post-Phase-2.3-4-子-sprint-完成 / 闸门 5 PARTIAL / 上线 sprint 待立**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,33 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-5-完成 / Phase 2.2 100%）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.3-4-子-sprint-完成 / 闸门 5 PARTIAL）
+
+- **Phase 2.3 4 子 sprint A+B+C+D 串跑完成**（commits a42a786 → 9a4b192 → af6f78e → 07e4007）：
+  - **A 工程规约补完** ✅ `a42a786`：03-cicd / 04-observability / 05-security 三 spec accepted-minimal → accepted（§8.0 12/12 ✅）/ api/core/config.py prod CORS guard validator（§8.6 punt #1 关闭）/ spec 06 §2 路径前缀+REFRESH_COOKIE_PATH=/auth+logout body=None 备注（punt #3+#5 关闭）/ roadmap §8.0 12 checkbox 全 ✅
+  - **🔴 A 后置债**：`.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift guard / deps-audit cron）已写完但 GH PAT 缺 `workflow` scope，留本地 untracked。**CY 给 PAT 加 workflow scope 后跑**：`cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Phase 2.3 子 sprint A 补 — ci.yml workflow file" && git push`
+  - **B 集成 e2e + 性能基线 PARTIAL** ✅ `9a4b192`：@playwright/test 1.59.1 + chromium 1217 装入 / app/playwright.config.ts / app/e2e/01-auth-flow.spec.ts 2 真跑 PASS / app/e2e/02-10 9 skeleton（test.describe.skip + 业务断言注释完整）/ tests/perf/test_baseline.py 2 smoke PASS + 1 skeleton / app/vitest.config.ts exclude e2e/ / .gitignore Playwright artifacts
+  - **B-FOLLOW-UP punt**：e2e #2-#10 完整断言（DB seed fixture + storageState login share + page object）+ pytest-benchmark + 1000 seed perf + R1+R2 范式 + CI e2e job 接通（service container 全栈装配）
+  - **C frontend-polish PARTIAL** ✅ `af6f78e`：P22-3b-1 withAuthRedirect 抽 horizontal helper（src/lib/server-action-helpers.ts + 11 actions 文件去重 inline + unused import 清扫）/ P22-3c-7 logActivity / logActivityAuto no-op 兼容层删（analysis/page.tsx 2 caller 删 + getActivityLogs 保留 total ?? 0）/ P22-4-2 isTeamOwner 死代码删
+  - **C-FOLLOW-UP punt**：P22-3c-1+2 result 类型统一 + P22-3c-3+4 命名规约 + P22-3c-5 findInTree 抽 lib/tree-utils.ts + **P22-3c-6 export.ts ExportPayload schema 待 CY 拍**（A 补 ExportResponse Pydantic schema vs B 删 consumer UI 旧字段）+ P22-3c-8 project-stats-proxy cleanup + eslint ignore 渐进还债 10+ 项
+  - **D perf 评估** ✅ `07e4007`：三选项 A 模式呈现 → 自决选项 C **DEFER_TO_POST_LAUNCH**（shadow+上线优先+数据驱动）；C 类 12 项 status 升级 STILL_PUNT → DEFER_TO_POST_LAUNCH（cross-sprint pool 元发现 #2 性能 sprint 黑洞**关闭**）；触发条件落字面（真负载 P95 > 500ms 告警 / 多租户启用 / Phase 3 数据回流）；audit/phase23-perf-evaluation.md / cross-sprint-punt-pool.md 同步
+  - **守护**：backend pytest **1629 PASS** / vitest 4 files **20 tests PASS** / Playwright e2e **2 PASS** / perf smoke **2 PASS** / pre-commit hooks 全过
+
+- **下一步推荐**：**上线 sprint 三路径任 CY 拍**
+  - **路径 A（最快上线）**：CY 加 PAT workflow scope + push ci.yml（5 分钟）→ 直接进上线 sprint（前置 1+2 一并打包 / cost $8-12 / 2-3 天 / 含 e2e #2-10 完整断言 + perf 1000 seed + docker-compose prod + Caddyfile + deploy.yml）
+  - **路径 B（C-FOLLOW-UP 先做）**：先清前端债 cost $2-3 / 0.5 天 / 但不解锁上线
+  - **路径 C（推荐 / 解耦最清晰）**：CY push ci.yml 5 分钟 → B-FOLLOW-UP 单跑 sprint（cost $5-8 / 1.5 天 / 完整 e2e 10 路径 + perf 1000 seed + R1+R2 范式）→ 上线 sprint（cost $3-5 / 0.5-1 天 / 仅 deploy 模板+冒烟）
+
+- **三类 punt 进 cross-sprint pool**（上线 sprint 立项依据）：
+  - **B-FOLLOW-UP**（高优先级 / 阻塞闸门 5 第 1+2+3 项）：e2e + DB fixture + perf seed + R 范式
+  - **C-FOLLOW-UP**（中优先级 / 不阻塞上线）：P22-3c-1~6+8 + eslint ignore 渐进还债
+  - **post-launch perf**（低优先级 / 上线后启动）：M+1 月 Phase 3 数据回流后立 / C 类 12 项重新评估
+
+- **闸门 5 状态汇总**：§8.0 ✅ / §8.1 5 项部分（e2e+perf 部分 / CI 文件齐备但未接通 / docker-compose prod 推上线 sprint）→ Phase 2.3 整体 PARTIAL，**上线 sprint 待立**
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-5-完成 / Phase 2.2 100%）
 
 - **Phase 2.2 子片 5 完成 / Phase 2.2 100% 关闸**（D 类 #3 IssueResponse + #15 DimensionResponse join 真装配 + Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + cross-sprint pool 41→39）：
   - **D 类 #3 装配**：Issue model 加 `created_by_user` + `assigned_to_user` relationship（`lazy="raise"` 防 async 隐式 lazy load）+ IssueDAO `_JOINS = (selectinload(node), selectinload(created_by_user), selectinload(assigned_to_user))` 应用到 `list_by_project` + `get_by_id` + IssueService.create/update/transition 三处 mutation 后 `refetch via dao.get_by_id` 拿带 joins 的实例 + router `_resp` 显式装配 join 字段
