@@ -1,0 +1,92 @@
+/**
+ * Phase 2.2 子片 3a — 服务端 fetch wrapper（spec 06 §3 / α-P1 链路）。
+ *
+ * Server Component / Server Action 调用后端业务 endpoint：
+ * getServerAccessToken() → Authorization: Bearer → fetch backend
+ *
+ * 与 services/http-client.ts（客户端）API 对齐 / 错误类型复用 ApiError + UnauthenticatedError。
+ * 401 不自动 retry：refresh 已在 getServerAccessToken 处理 / Server 端无第二次机会。
+ *
+ * 不在客户端使用 / Client Components 走 services/http-client.ts（spec 06 §2 子片 1）。
+ */
+
+import { getServerAccessToken } from "./server-auth";
+import { ApiError, UnauthenticatedError } from "@/services/http-client";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+interface FastApiErrorBody {
+  detail?: unknown;
+  error_code?: string;
+  message?: string;
+}
+
+async function parseError(resp: Response): Promise<ApiError> {
+  let body: FastApiErrorBody = {};
+  try {
+    body = (await resp.json()) as FastApiErrorBody;
+  } catch {
+    // 非 json body
+  }
+  const errorCode = typeof body.error_code === "string" ? body.error_code : null;
+  const message =
+    (typeof body.message === "string" && body.message) ||
+    (typeof body.detail === "string" && body.detail) ||
+    resp.statusText ||
+    `HTTP ${resp.status}`;
+  if (resp.status === 401) {
+    return new UnauthenticatedError(message);
+  }
+  return new ApiError(resp.status, errorCode, message, body.detail);
+}
+
+interface RequestOptions extends Omit<RequestInit, "body"> {
+  body?: unknown;
+}
+
+export async function serverApiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { body, headers, ...rest } = options;
+  const token = await getServerAccessToken();
+  if (!token) {
+    throw new UnauthenticatedError(
+      "no server-side access token (refresh cookie missing or expired)",
+    );
+  }
+  const finalHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+    ...(headers as Record<string, string> | undefined),
+  };
+
+  const resp = await fetch(`${BASE_URL}${path}`, {
+    ...rest,
+    headers: finalHeaders,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!resp.ok) {
+    throw await parseError(resp);
+  }
+  if (resp.status === 204) {
+    return undefined as T;
+  }
+  return (await resp.json()) as T;
+}
+
+export const serverApiGet = <T>(path: string, options?: RequestOptions) =>
+  serverApiFetch<T>(path, { ...options, method: "GET" });
+
+export const serverApiPost = <T>(path: string, body?: unknown, options?: RequestOptions) =>
+  serverApiFetch<T>(path, { ...options, method: "POST", body });
+
+export const serverApiPatch = <T>(path: string, body?: unknown, options?: RequestOptions) =>
+  serverApiFetch<T>(path, { ...options, method: "PATCH", body });
+
+export const serverApiPut = <T>(path: string, body?: unknown, options?: RequestOptions) =>
+  serverApiFetch<T>(path, { ...options, method: "PUT", body });
+
+export const serverApiDelete = <T = void>(path: string, options?: RequestOptions) =>
+  serverApiFetch<T>(path, { ...options, method: "DELETE" });
+
+export { ApiError, UnauthenticatedError };
