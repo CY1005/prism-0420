@@ -38,9 +38,9 @@ related: design/01-engineering/06-frontend-spec.md（auth + codegen sanction）
 
 1. **冷启动按序读**（每 session 前 5 分钟）：
    - CLAUDE.md（L135 后端不抄 / 前端可拷改）
-   - design/01-engineering/06-frontend-spec.md §1+§2（codegen + auth 决策）
+   - design/01-engineering/06-frontend-spec.md §1+§2+**§3 SSR auth 通道**（codegen + 客户端 auth + 服务端 auth）
    - design/adr/ADR-001-shadow-prism.md §6（前端继承策略）
-   - design/adr/ADR-004-auth-cross-cutting.md（Auth 横切 / P1 不动 / P3 已 cover Cookie）
+   - design/adr/ADR-004-auth-cross-cutting.md（Auth 横切 / P1 不动 / P3 已 cover Cookie / **§3.5.1 prism-0420 当前 Server Action 走 α-P1 链路**）
    - _handoff/cross-sprint-punt-pool.md 状态分布快照段
    - _handoff/p22-sprint-prompt.md（总 sprint）+ 本文件对应子片段
    - 上一子片 commit message（`git log -1 --format=%B HEAD`）
@@ -222,11 +222,14 @@ F. 关闸：
 - /projects/[projectId]/settings 设置
 - /projects/[projectId]/features/[featureId] 功能项档案（含 dimension 渲染）
 
-实施模式（每页面一致）：
+实施模式（每页面一致 / spec 06 §3 字面驱动 / α-P1 链路）：
 1. 删 import drizzle / next-auth / postgres / db schema
-2. actions/* 改：旧 db.query → http-client fetch /api/<path> + 用 src/types/api.ts 的 operations 类型
-3. lib/*-data.ts 改：旧 SQL → http-client 调用 + 类型转换
-4. page.tsx 改：调 actions / 错误处理改 prism-0420 ErrorCode 范式（子片 1 http-client 抛 ApiError / page 捕获 → toast 或 error.tsx）
+2. actions/* (`"use server"`) 改：旧 db.query → **`serverApiPost/Patch/Delete` from `@/lib/server-http-client`** + 用 src/types/api.ts 的 operations 类型；不得 import `@/services/http-client`（spec 06 §3 防层级混淆 lint 准则）
+3. lib/*-data.ts 改：旧 SQL → **`serverApiGet`** 调用 + 类型转换（异步 server function / 由 RSC 调用）
+4. page.tsx：
+   - **Server Component**（默认）→ 调 lib/*-data.ts → 走 server-http-client → P1 链路
+   - **Client Component**（`"use client"` form / interactive UI）→ 调 actions/* Server Action → 走 server-http-client → P1 链路
+   - 错误处理：捕 ApiError → 401 → redirect /login（next/navigation `redirect`）/ 5xx → error.tsx / 业务码 → toast
 5. 关键交互冒烟测试：CY 协助手测过列表加载 + 创建 + 详情 + 编辑
 
 eslint ignore 移除：

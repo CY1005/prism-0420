@@ -92,10 +92,95 @@ sanction_path: AI 自决（feedback_decision_layering 5 步流程跑后判定为
 
 ---
 
-## §3 后续条目占位
+## §3 SSR auth 通道（Server Component / Server Action 鉴权）
 
-前端规约后续如需补（lint 规则 / 路由约定 / state 管理 / error boundary 等）→ 本文件继续 §3 §4 加 / 防 spec 文件爆炸。
+### 决策
+
+**α-P1**：Server 端 `cookies().get('refresh_token')` → `POST /auth/refresh` → access_token → `Authorization: Bearer` 调后端业务 endpoint（走 ADR-004 P1 字面）。
+
+不走 ADR-004 P2 HMAC 通道（**原因**：P2 §3.5 信任链字面假设 Next.js Server Action 已通过 next-auth `getServerSession` 拿到 user_id；prism-0420 子片 0 prep 删 next-auth / Server Action 当前没 user_id；要走 P2 必须先通过 refresh cookie 推 user_id，与 α-P1 成本相同 / α-P1 路径更短）。
+
+### 与既有决策的关系
+
+- **spec 06 §2（access 内存 / refresh cookie）**：✅ 字面零修订。客户端仍 access in memory；服务端独立 refresh→access 链路 / 两条互不污染。
+- **ADR-004 P1**：✅ 字面零修订。Bearer 仍是后端唯一 access 通道 / `dependencies.py:54` `_resolve_bearer` 不变。
+- **ADR-004 P3**：✅ 字面合规。P3 「Cookie 或 body refresh_token」/ 服务端读 cookie 已是字面允许。
+- **ADR-004 P2**：保留作演进选项 / Phase 2.3 评估是否启用（强安全敏感操作 / 防御深度需求）/ 见 ADR-004 §3.5 备注。
+
+### 安全模型
+
+| 层 | 客户端 | 服务端（Server Action / RSC）|
+|---|---|---|
+| access token 存储 | React context（内存）| 单次请求生命期内（不持久化 / 不入 cookie / 不入 module 全局）|
+| access token 来源 | login response body | 服务端 refresh cookie → `/auth/refresh` 现拿现用 |
+| refresh token | httpOnly cookie 自动携带 | 同 cookie 由 Server `cookies()` 读 |
+| XSS 抵御 | access 内存（无 JS 可读 cookie 路径漏出 access）| 服务端无 JS 执行环境 / N/A |
+| latency cost | 0 | 每个 Server Action / RSC 数据 fetch +1 refresh hop（80-150ms / Phase 2.3 可加 in-process 单请求 memo cache 优化为每请求 1 次）|
+
+### 实施 layout
+
+```
+app/src/lib/
+├── server-auth.ts          # cookies() → /auth/refresh → access_token (单请求 memo)
+└── server-http-client.ts   # serverApiGet/Post/Patch/Delete + ApiError 类型化（与 client http-client.ts 对齐）
+
+app/src/services/
+├── http-client.ts          # 客户端（spec 06 §2 子片 1 / 不动）
+└── auth-token-store.ts     # 客户端（spec 06 §2 子片 2 / 不动）
+```
+
+### API 契约（server-auth.ts）
+
+```typescript
+// app/src/lib/server-auth.ts
+import { cookies } from "next/headers";
+import { cache } from "react";  // RSC tree 内同请求 memo
+
+/**
+ * 服务端获取当前请求的 access_token。
+ * - 同请求多次调用（一个 RSC 树 / 一个 Server Action 内）只触发一次 /auth/refresh
+ * - 无 cookie / refresh 失效 → 返 null（调用方决定 redirect /login 或抛 UnauthenticatedError）
+ */
+export const getServerAccessToken = cache(async (): Promise<string | null> => { ... });
+```
+
+```typescript
+// app/src/lib/server-http-client.ts
+import { getServerAccessToken } from "./server-auth";
+import { ApiError, UnauthenticatedError } from "@/services/http-client";
+
+export async function serverApiFetch<T>(path: string, options?: RequestOptions): Promise<T>;
+export const serverApiGet, serverApiPost, serverApiPatch, serverApiDelete;
+// 401 不自动 retry（refresh 失败已在 getServerAccessToken 处理 / Server 端无第二次机会）
+```
+
+### 引用方
+
+- **Server Actions** (`app/src/actions/*.ts`)：`"use server"` / 全部走 `serverApiPost/Patch/Delete` + `getServerAccessToken`
+- **Server Components 数据 fetch** (`app/src/lib/*-data.ts`)：异步 server function / 走 `serverApiGet`
+- **Client Components**（pages with `"use client"` / 含 form）：仍走 `services/http-client.ts`（spec 06 §2 子片 1 / §2 子片 2 已立）
+
+### 实施清单（子片 3a 起）
+
+- [ ] `app/src/lib/server-auth.ts`（~30 行 + tests）
+- [ ] `app/src/lib/server-http-client.ts`（~60 行 + tests）
+- [ ] 子片 3a-3c-4 各业务页面 / actions / lib data 按引用方分类逐个改造
+- [ ] eslint ignore 渐进还债（同 spec 06 §2 范式）
+- [ ] CI guard：Phase 2.3 上线前补「Server-only fetch 不得 import `services/http-client.ts` / Client 组件不得 import `lib/server-*.ts`」lint 规则（防层级混淆）
+
+### 3-5 月后果
+
+- ✅ 客户端 + 服务端 access 通道分离 / 安全模型清晰 / 故障域独立
+- ✅ Prism SSR 范式继承零冲突（Server Components + Server Actions 仍是主范式）
+- ✅ Phase 2.3 性能优化空间充足（per-request access cache / cookie burst / P2 HMAC 升级 / 多档可选）
+- ❌ 每 Server Action / RSC 数据 fetch +80-150ms refresh hop（用户感知 typically 看不出 / cache 优化空间充足）
 
 ---
 
-last_updated: 2026-05-09
+## §4 后续条目占位
+
+前端规约后续如需补（lint 规则 / 路由约定 / state 管理 / error boundary 等）→ 本文件继续 §4 §5 加 / 防 spec 文件爆炸。
+
+---
+
+last_updated: 2026-05-09（§3 SSR auth 通道沉淀 / 子片 3a 启动期）
