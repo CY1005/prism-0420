@@ -83,7 +83,7 @@ import {
 import { CompetitorManagement, type Competitor } from "@/components/competitor-reference-card";
 import { Rss, Eye, EyeOff, Trash2, Plus } from "lucide-react";
 import { exportProject } from "@/actions/export";
-import { getTeams, migrateProjectToTeam } from "@/actions/teams";
+import { getTeams, moveProjectTeam } from "@/actions/teams";
 
 type TabType =
   | "basic"
@@ -370,7 +370,7 @@ export default function ProjectSettingsPage({
   // F20: Migrate project to team
   const handleMigrateToTeam = async () => {
     setMigrating(true);
-    const result = await migrateProjectToTeam(projectId, selectedTeamId || null);
+    const result = await moveProjectTeam(projectId, selectedTeamId || null);
     if (result.success) {
       setMigrateConfirmDialog(false);
       setSelectedTeamId("");

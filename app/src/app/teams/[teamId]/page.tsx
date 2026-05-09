@@ -1,32 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, useTransition, use } from "react";
 import Link from "next/link";
-import { use } from "react";
-import {
-  Bell,
-  LogOut,
-  ChevronRight,
-  UserPlus,
-  Trash2,
-  FolderOpen,
-  Users,
-  Settings,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Users, Trash2, AlertTriangle, UserPlus, Crown, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -35,497 +24,622 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/contexts/auth-context";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import {
-  getTeamById,
+  getTeam,
   updateTeam,
   deleteTeam,
-  inviteMember,
+  transferOwnership,
+  addMember,
   removeMember,
-  updateMemberRole,
-  getTeamProjects,
 } from "@/actions/teams";
-import { logout, getSessionUser } from "@/actions/auth";
-import { useRouter } from "next/navigation";
+import { handleActionResult } from "@/lib/client-error";
+import { isNextRedirectError } from "@/lib/errors";
+import type { components } from "@/types/api";
 
-type TeamDetail = {
-  id: string;
-  name: string;
-  description: string | null;
-  ownerId: string;
-  createdAt: Date;
-  members: {
-    id: string;
-    userId: string;
-    role: string;
-    joinedAt: Date;
-    userName: string;
-    userEmail: string;
-  }[];
-};
-
-type TeamProject = {
-  id: string;
-  name: string;
-  description: string | null;
-  templateType: string;
-  createdAt: Date;
-};
-
-const ROLE_BADGE: Record<string, { label: string; variant: string }> = {
-  admin: { label: "管理员", variant: "default" },
-  member: { label: "成员", variant: "secondary" },
-};
+type TeamRead = components["schemas"]["TeamRead"];
 
 export default function TeamDetailPage({ params }: { params: Promise<{ teamId: string }> }) {
-  const { teamId } = use(params);
   const router = useRouter();
-  const [team, setTeam] = useState<TeamDetail | null>(null);
-  const [projects, setProjects] = useState<TeamProject[]>([]);
-  const [currentUserId, setCurrentUserId] = useState("");
-  const [userName, setUserName] = useState("");
-  const [userInitials, setUserInitials] = useState("");
+  const { teamId } = use(params);
+  const { user, isLoading } = useAuth();
+  const [team, setTeam] = useState<TeamRead | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  // Edit team state
-  const [editDialog, setEditDialog] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editDesc, setEditDesc] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // Invite state
-  const [inviteDialog, setInviteDialog] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
-  const [inviting, setInviting] = useState(false);
-
-  // Delete state
-  const [deleteDialog, setDeleteDialog] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const loadTeam = async () => {
-    try {
-      const data = await getTeamById(teamId);
-      setTeam(data as TeamDetail);
-    } catch {
-      // ignore
-    }
-  };
-
-  const loadProjects = async () => {
-    try {
-      const data = await getTeamProjects(teamId);
-      setProjects(data as TeamProject[]);
-    } catch {
-      // ignore
-    }
+  const reload = () => {
+    getTeam(teamId)
+      .then((t) => {
+        if (!t) setLoadError(true);
+        else setTeam(t);
+      })
+      .catch((error) => {
+        if (isNextRedirectError(error)) throw error;
+        setLoadError(true);
+      });
   };
 
   useEffect(() => {
-    loadTeam();
-    loadProjects();
-    getSessionUser().then((user) => {
-      if (user) {
-        setCurrentUserId(user.id);
-        setUserName(user.name);
-        setUserInitials(user.name.charAt(0));
-      }
-    });
-  }, [teamId]);
-
-  const isOwner = team?.ownerId === currentUserId;
-  const isAdmin =
-    isOwner || team?.members.some((m) => m.userId === currentUserId && m.role === "admin");
-
-  const handleEditTeam = async () => {
-    setSaving(true);
-    const result = await updateTeam(teamId, {
-      name: editName.trim(),
-      description: editDesc.trim() || undefined,
-    });
-    if (result.success) {
-      setEditDialog(false);
-      await loadTeam();
+    if (isLoading) return;
+    if (!user) {
+      router.replace("/login");
+      return;
     }
-    setSaving(false);
-  };
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isLoading, teamId, router]);
 
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
-    setInviting(true);
-    const result = await inviteMember({
-      teamId,
-      email: inviteEmail.trim(),
-      role: inviteRole,
-    });
-    if (result.success) {
-      setInviteDialog(false);
-      setInviteEmail("");
-      setInviteRole("member");
-      await loadTeam();
-    }
-    setInviting(false);
-  };
-
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm("确认移除该成员？")) return;
-    const result = await removeMember(teamId, userId);
-    if (result.success) await loadTeam();
-  };
-
-  const handleChangeRole = async (userId: string, newRole: string) => {
-    const result = await updateMemberRole(teamId, userId, newRole);
-    if (result.success) await loadTeam();
-  };
-
-  const handleDeleteTeam = async () => {
-    setDeleting(true);
-    const result = await deleteTeam(teamId);
-    if (result.success) {
-      router.push("/teams");
-    }
-    setDeleting(false);
-  };
-
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  if (!team) {
+  if (loadError) {
     return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">加载中...</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Card className="max-w-md p-8 text-center">
+          <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+          <p className="mb-4 text-slate-700">团队不存在或你无权访问</p>
+          <Link href="/teams">
+            <Button variant="outline">返回团队列表</Button>
+          </Link>
+        </Card>
       </div>
     );
   }
 
+  if (!team) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-slate-500">加载中…</p>
+      </div>
+    );
+  }
+
+  const isOwner = user?.id === team.creator_id;
+
   return (
-    <div className="bg-background flex min-h-screen flex-col">
-      <header className="border-border bg-card flex h-14 items-center justify-between border-b px-6">
-        <Link
-          href="/projects"
-          className="text-foreground hover:text-primary text-lg font-semibold transition-colors"
-        >
-          Prism
-        </Link>
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Bell className="text-muted-foreground h-4 w-4" />
-          </Button>
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-6">
+          <Link href="/teams">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              返回
+            </Button>
+          </Link>
           <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
-            </Avatar>
-            <span className="text-foreground text-sm">{userName}</span>
+            <Users className="h-5 w-5 text-slate-500" />
+            <h1 className="text-lg font-semibold text-slate-900">{team.name}</h1>
+            {isOwner && (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                <Crown className="h-3 w-3" />
+                Owner
+              </span>
+            )}
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
-            <LogOut className="text-muted-foreground h-4 w-4" />
-          </Button>
         </div>
       </header>
 
-      <div className="border-border bg-card border-b px-6 py-3">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="/teams">团队空间</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator>
-              <ChevronRight className="h-4 w-4" />
-            </BreadcrumbSeparator>
-            <BreadcrumbItem>
-              <BreadcrumbPage>{team.name}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
+      <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+        <TeamInfoCard team={team} />
+        <TeamEditCard team={team} canEdit={isOwner} onUpdated={reload} />
+        <TeamMembersCard team={team} canManage={isOwner} onChanged={reload} />
+        {isOwner && <TeamTransferCard team={team} onTransferred={reload} />}
+        {isOwner && <TeamDangerCard team={team} />}
+      </main>
+    </div>
+  );
+}
 
-      <div className="mx-auto w-full max-w-4xl space-y-8 px-6 py-6">
-        {/* Team Info Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-foreground text-2xl font-bold">{team.name}</h1>
-            {team.description && <p className="text-muted-foreground mt-1">{team.description}</p>}
-            <p className="text-muted-foreground mt-2 text-xs">
-              创建于 {new Date(team.createdAt).toLocaleDateString("zh-CN")}
-            </p>
+// ─── Info ───────────────────────────────────────────
+
+function TeamInfoCard({ team }: { team: TeamRead }) {
+  return (
+    <Card className="p-6">
+      <h2 className="mb-4 text-base font-semibold text-slate-900">基本信息</h2>
+      <dl className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+        <div>
+          <dt className="mb-1 text-slate-500">团队名称</dt>
+          <dd className="text-slate-900">{team.name}</dd>
+        </div>
+        <div>
+          <dt className="mb-1 text-slate-500">成员数</dt>
+          <dd className="text-slate-900">{team.member_count}</dd>
+        </div>
+        <div className="md:col-span-2">
+          <dt className="mb-1 text-slate-500">描述</dt>
+          <dd className="whitespace-pre-wrap text-slate-900">{team.description || "（无描述）"}</dd>
+        </div>
+        <div>
+          <dt className="mb-1 text-slate-500">创建于</dt>
+          <dd className="text-slate-900">{new Date(team.created_at).toLocaleString("zh-CN")}</dd>
+        </div>
+        <div>
+          <dt className="mb-1 text-slate-500">最近更新</dt>
+          <dd className="text-slate-900">{new Date(team.updated_at).toLocaleString("zh-CN")}</dd>
+        </div>
+      </dl>
+    </Card>
+  );
+}
+
+// ─── Edit ───────────────────────────────────────────
+
+function TeamEditCard({
+  team,
+  canEdit,
+  onUpdated,
+}: {
+  team: TeamRead;
+  canEdit: boolean;
+  onUpdated: () => void;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(team.name);
+  const [description, setDescription] = useState(team.description ?? "");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    setError("");
+    startTransition(async () => {
+      const result = await updateTeam(team.id, {
+        name: name.trim() !== team.name ? name.trim() : undefined,
+        description:
+          description.trim() !== (team.description ?? "") ? description.trim() : undefined,
+        version: team.version,
+      });
+      const handled = handleActionResult(result, router);
+      if (handled.ok) {
+        setEditing(false);
+        onUpdated();
+      } else if (!handled.autoHandled) {
+        setError(handled.message);
+      }
+    });
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">编辑团队</h2>
+        {canEdit && !editing && (
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditing(true)}>
+            <Edit3 className="h-3.5 w-3.5" />
+            编辑
+          </Button>
+        )}
+      </div>
+      {!canEdit ? (
+        <p className="text-sm text-slate-500">
+          仅团队 owner 可编辑（admin 编辑权限待 Phase 2.3 启用）
+        </p>
+      ) : !editing ? (
+        <p className="text-sm text-slate-500">点击右上角「编辑」修改团队名称或描述</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">团队名称</Label>
+            <Input
+              id="edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              disabled={isPending}
+            />
           </div>
-          {isAdmin && (
+          <div className="space-y-2">
+            <Label htmlFor="edit-desc">描述</Label>
+            <Textarea
+              id="edit-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+              rows={3}
+              disabled={isPending}
+            />
+          </div>
+          {error && (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditing(false);
+                setName(team.name);
+                setDescription(team.description ?? "");
+                setError("");
+              }}
+              disabled={isPending}
+            >
+              取消
+            </Button>
+            <Button onClick={submit} disabled={isPending || !name.trim()}>
+              {isPending ? "保存中…" : "保存"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Members ────────────────────────────────────────
+
+function TeamMembersCard({
+  team,
+  canManage,
+  onChanged,
+}: {
+  team: TeamRead;
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const router = useRouter();
+  const [addOpen, setAddOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [role, setRole] = useState<"admin" | "member">("member");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const submitAdd = () => {
+    setError("");
+    startTransition(async () => {
+      const result = await addMember(team.id, userId.trim(), role);
+      const handled = handleActionResult(result, router);
+      if (handled.ok) {
+        setAddOpen(false);
+        setUserId("");
+        setRole("member");
+        onChanged();
+      } else if (!handled.autoHandled) {
+        setError(handled.message);
+      }
+    });
+  };
+
+  const submitRemove = () => {
+    setError("");
+    startTransition(async () => {
+      const result = await removeMember(team.id, userId.trim());
+      const handled = handleActionResult(result, router);
+      if (handled.ok) {
+        setRemoveOpen(false);
+        setUserId("");
+        const residual = handled.data?.residual_count ?? 0;
+        if (residual > 0) {
+          alert(
+            `已从团队移除。该用户在 ${residual} 个项目中仍保留独立成员身份（M20 design Q3=A 软切断）。`,
+          );
+        }
+        onChanged();
+      } else if (!handled.autoHandled) {
+        setError(handled.message);
+      }
+    });
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">成员管理</h2>
+        {canManage && (
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
+              className="gap-2"
               onClick={() => {
-                setEditName(team.name);
-                setEditDesc(team.description || "");
-                setEditDialog(true);
+                setError("");
+                setAddOpen(true);
               }}
             >
-              <Settings className="h-3.5 w-3.5" />
-              编辑
+              <UserPlus className="h-3.5 w-3.5" />
+              添加成员
             </Button>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Members Section */}
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Users className="h-5 w-5" />
-              成员 ({team.members.length})
-            </h2>
-            {isAdmin && (
-              <Button variant="default" size="sm" onClick={() => setInviteDialog(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                邀请成员
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setError("");
+                setRemoveOpen(true);
+              }}
+            >
+              移除成员
+            </Button>
           </div>
-
-          <div className="border-border overflow-hidden rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="w-12">头像</TableHead>
-                  <TableHead>用户名</TableHead>
-                  <TableHead>邮箱</TableHead>
-                  <TableHead>角色</TableHead>
-                  {isAdmin && <TableHead className="w-40">操作</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {team.members.map((member) => {
-                  const roleInfo = ROLE_BADGE[member.role] || {
-                    label: member.role,
-                    variant: "secondary",
-                  };
-                  const isMemberOwner = member.userId === team.ownerId;
-                  return (
-                    <TableRow key={member.id}>
-                      <TableCell>
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-muted text-sm">
-                            {member.userName?.charAt(0) || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {member.userName}
-                        {isMemberOwner && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            创建者
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{member.userEmail}</TableCell>
-                      <TableCell>
-                        {isOwner && !isMemberOwner ? (
-                          <Select
-                            value={member.role}
-                            onValueChange={(v) => v && handleChangeRole(member.userId, v)}
-                          >
-                            <SelectTrigger className="h-8 w-24">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">管理员</SelectItem>
-                              <SelectItem value="member">成员</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant={roleInfo.variant as "default" | "secondary"}>
-                            {roleInfo.label}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      {isAdmin && (
-                        <TableCell>
-                          {!isMemberOwner && (
-                            <button
-                              className="text-destructive text-sm hover:underline"
-                              onClick={() => handleRemoveMember(member.userId)}
-                            >
-                              移除
-                            </button>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Projects Section */}
-        <div>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-            <FolderOpen className="h-5 w-5" />
-            团队项目 ({projects.length})
-          </h2>
-
-          {projects.length === 0 ? (
-            <Card className="border-2 border-dashed p-8 text-center">
-              <FolderOpen className="text-muted-foreground/40 mx-auto mb-3 h-10 w-10" />
-              <p className="text-muted-foreground text-sm">
-                暂无团队项目，可在项目设置中将个人项目迁移到此团队
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {projects.map((project) => (
-                <Link key={project.id} href={`/projects/${project.id}`}>
-                  <div className="hover:border-primary/30 cursor-pointer rounded-lg border p-4 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{project.name}</span>
-                        {project.description && (
-                          <p className="text-muted-foreground mt-0.5 text-sm">
-                            {project.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-xs">
-                          {project.templateType}
-                        </Badge>
-                        <ChevronRight className="text-muted-foreground h-4 w-4" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Delete Team (owner only) */}
-        {isOwner && (
-          <>
-            <Separator />
-            <div>
-              <h2 className="text-destructive mb-2 text-lg font-semibold">危险区域</h2>
-              <p className="text-muted-foreground mb-4 text-sm">
-                删除团队将移除所有成员关系，团队项目将变为个人项目。此操作不可撤销。
-              </p>
-              <Button variant="destructive" size="sm" onClick={() => setDeleteDialog(true)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                删除团队
-              </Button>
-            </div>
-          </>
         )}
       </div>
 
-      {/* Edit Team Dialog */}
-      <Dialog open={editDialog} onOpenChange={setEditDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>编辑团队</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>团队名称</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>团队描述</Label>
-              <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog(false)}>
-              取消
-            </Button>
-            <Button onClick={handleEditTeam} disabled={!editName.trim() || saving}>
-              {saving ? "保存中..." : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <p className="mb-1 font-medium">当前共 {team.member_count} 名成员</p>
+        <p className="text-slate-500">
+          成员名单展示等 backend 上线{" "}
+          <code className="rounded bg-white px-1 text-xs">GET /api/teams/{"{id}"}/members</code>{" "}
+          endpoint 后启用（cross-sprint pool P22-4-backend-gap / Phase 2.3）。
+          {canManage && " 管理操作可按用户 ID 直接进行。"}
+        </p>
+      </div>
 
-      {/* Invite Member Dialog */}
-      <Dialog open={inviteDialog} onOpenChange={setInviteDialog}>
+      {/* Add member dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>邀请成员</DialogTitle>
+            <DialogTitle>添加成员</DialogTitle>
+            <DialogDescription>
+              按用户 ID 添加成员（用户检索功能待 Phase 2.3 启用）。
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label>邮箱</Label>
+              <Label htmlFor="add-user-id">用户 ID（UUID）</Label>
               <Input
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="输入用户邮箱"
-                onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                autoFocus
+                id="add-user-id"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                disabled={isPending}
               />
             </div>
             <div className="space-y-2">
-              <Label>角色</Label>
+              <Label htmlFor="add-role">角色</Label>
               <Select
-                value={inviteRole}
-                onValueChange={(v) => v && setInviteRole(v as "admin" | "member")}
+                value={role}
+                onValueChange={(v) => setRole(v as "admin" | "member")}
+                disabled={isPending}
               >
-                <SelectTrigger>
+                <SelectTrigger id="add-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">管理员</SelectItem>
-                  <SelectItem value="member">成员</SelectItem>
+                  <SelectItem value="member">member</SelectItem>
+                  <SelectItem value="admin">admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteDialog(false)}>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={isPending}>
               取消
             </Button>
-            <Button onClick={handleInvite} disabled={!inviteEmail.trim() || inviting}>
-              {inviting ? "邀请中..." : "邀请"}
+            <Button onClick={submitAdd} disabled={isPending || !userId.trim()}>
+              {isPending ? "添加中…" : "添加"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm Dialog */}
-      <Dialog open={deleteDialog} onOpenChange={setDeleteDialog}>
+      {/* Remove member dialog */}
+      <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>确认删除团队</DialogTitle>
+            <DialogTitle>移除成员</DialogTitle>
             <DialogDescription>
-              删除团队「{team.name}」将移除所有成员关系。团队项目将变为个人项目。此操作不可撤销。
+              按用户 ID 移除成员。该用户在 project 中的独立 ProjectMember 不会被自动清理（M20 Q3=A
+              软切断）。
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rm-user-id">用户 ID（UUID）</Label>
+              <Input
+                id="rm-user-id"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                disabled={isPending}
+              />
+            </div>
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog(false)}>
+            <Button variant="outline" onClick={() => setRemoveOpen(false)} disabled={isPending}>
               取消
             </Button>
-            <Button variant="destructive" onClick={handleDeleteTeam} disabled={deleting}>
-              {deleting ? "删除中..." : "确认删除"}
+            <Button
+              variant="destructive"
+              onClick={submitRemove}
+              disabled={isPending || !userId.trim()}
+            >
+              {isPending ? "移除中…" : "确认移除"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Card>
+  );
+}
+
+// ─── Transfer ───────────────────────────────────────
+
+function TeamTransferCard({ team, onTransferred }: { team: TeamRead; onTransferred: () => void }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [newOwnerId, setNewOwnerId] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    setError("");
+    startTransition(async () => {
+      const result = await transferOwnership(team.id, newOwnerId.trim());
+      const handled = handleActionResult(result, router);
+      if (handled.ok) {
+        setOpen(false);
+        setNewOwnerId("");
+        setConfirmText("");
+        onTransferred();
+      } else if (!handled.autoHandled) {
+        setError(handled.message);
+      }
+    });
+  };
+
+  return (
+    <Card className="border-amber-200 p-6">
+      <h2 className="mb-2 text-base font-semibold text-slate-900">转让所有权</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        将团队 owner 转让给另一名成员；原 owner 自动降为 admin。目标用户必须已是该团队的 admin 或
+        member。
+      </p>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setError("");
+          setOpen(true);
+        }}
+      >
+        转让所有权
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>转让所有权</DialogTitle>
+            <DialogDescription>
+              转让后你将自动降为 admin，无法直接撤回。请输入目标用户 ID 并在下方输入团队名{" "}
+              <strong>{team.name}</strong> 确认。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-owner-id">新 owner 用户 ID（UUID）</Label>
+              <Input
+                id="new-owner-id"
+                value={newOwnerId}
+                onChange={(e) => setNewOwnerId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                disabled={isPending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="transfer-confirm">输入 &quot;{team.name}&quot; 确认</Label>
+              <Input
+                id="transfer-confirm"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                disabled={isPending}
+              />
+            </div>
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submit}
+              disabled={isPending || !newOwnerId.trim() || confirmText !== team.name}
+            >
+              {isPending ? "转让中…" : "确认转让"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ─── Danger ─────────────────────────────────────────
+
+function TeamDangerCard({ team }: { team: TeamRead }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const submit = () => {
+    setError("");
+    startTransition(async () => {
+      const result = await deleteTeam(team.id);
+      const handled = handleActionResult(result, router);
+      if (handled.ok) {
+        router.replace("/teams");
+      } else if (!handled.autoHandled) {
+        setError(handled.message);
+      }
+    });
+  };
+
+  return (
+    <Card className="border-red-200 p-6">
+      <h2 className="mb-2 flex items-center gap-2 text-base font-semibold text-red-700">
+        <AlertTriangle className="h-4 w-4" />
+        危险操作
+      </h2>
+      <p className="mb-1 text-sm text-slate-600">
+        删除团队不可撤销（hard delete / M20 design §3 Q8=B）。
+      </p>
+      <p className="mb-4 text-sm text-slate-500">
+        删除前必须先迁出所有归属该团队的项目，否则后端会返回{" "}
+        <code className="rounded bg-slate-100 px-1 text-xs">TEAM_HAS_PROJECTS</code> 错误。
+      </p>
+      <Button
+        variant="destructive"
+        className="gap-2"
+        onClick={() => {
+          setError("");
+          setOpen(true);
+        }}
+      >
+        <Trash2 className="h-4 w-4" />
+        删除团队
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-700">永久删除团队</DialogTitle>
+            <DialogDescription>
+              此操作不可撤销。请输入团队名 <strong>{team.name}</strong> 确认。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm">输入 &quot;{team.name}&quot; 确认</Label>
+              <Input
+                id="delete-confirm"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                disabled={isPending}
+              />
+            </div>
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submit}
+              disabled={isPending || confirmText !== team.name}
+            >
+              {isPending ? "删除中…" : "永久删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

@@ -369,6 +369,18 @@ UNVERIFIABLE 8 项
 - P22-3b-2 findInTree 重复持续 3 处 / 与 P22-3c-5 同源
 - **3c 立修 root-cause**：`errors.ts.actionError` 加 isUnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错（影响 3a/3b 全栈，但 3c 关闸时立修 / 无残留 punt）
 
+### Phase 2.2 子片 4 punt 池（详 design/audit/p22-pilot-template-validation.md §3d）
+
+| # | 项 | 状态 / 触发时机 |
+|---|---|---|
+| P22-4-1 | TeamMemberRemoveResponse.residual_project_members 仅展示 count / 详情未消费 | Phase 2.3 GET members endpoint 上线后统一展示残留成员详情 |
+| P22-4-2 | isTeamOwner action 死代码 / page 直接 creator_id 推断未调用 | 子片 5 cleanup 决定保留（Phase 2.3 server component 预留）or 删除 |
+| P22-4-backend-gap | M20 后端 4 项 endpoint 缺口 — 子片 4 启动期 ls 穷举发现：(a) GET /api/teams/{tid}/members 列成员名单 + role + user_name；(b) GET 候选用户检索 endpoint（add member + transfer 下拉数据源 / 当前只能 by user_id 输入）；(c) GET /api/teams/{tid}/me-role admin/member RBAC 真守卫数据源；(d) ❌ soft-delete + restore = M20 design §3 Q8=B 字面已决 hard delete + RESTRICT FK / **不立项 / prompt 字面错记纠正** | Phase 2.3 集成期评估补 (a)+(b)+(c) / (d) 撤销 |
+
+**4 trend update**：
+- P22-3b-1 helper 重复从 10 文件扩散到 11 文件（superset / teams.ts +1）/ 抽 lib/server-action-helpers.ts 时机持续 / Phase 2.3 启动前必抽
+- **4 立修 root-cause**：`errors.ts isNextRedirectError` 加 export + 3 处 client `.catch` rethrow（teams/page + teams/[teamId] + projects/page 同根因连带修）/ R 范式第 5 数据点 R2 真漏抓 client-side 同根因新场景变体 / SR-P22-4 实证扩展
+
 ---
 
 ## 维护规约

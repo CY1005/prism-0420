@@ -23,7 +23,7 @@ const eslintConfig = defineConfig([
     //   - import / import-ai / analyze SSE+WS 流程显式 actionError(NOT_IMPLEMENTED) → 子片 3c 接 M11/M13/M17/M14 真端点
     // 子片 3c: actions/{competitors,competitor-references,issues,search,admin,activity-log,export,project-stats-proxy} 改 server-http-client / 已合规 / 不 ignore
     //   - templates / feed 全函数 NOT_IMPLEMENTED stub（OpenAPI 无对应域 / 子片 5 后或 Phase 2.3 评估）
-    "src/actions/teams.ts",
+    // 子片 4: actions/teams.ts 全 rewrite / app/teams/** 全新写 / validators/team.ts 全 rewrite / 不 ignore
     // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
     // 子片 2-3 改造逐文件移除剩余条目
     "src/services/analyzer.ts",
@@ -60,7 +60,6 @@ const eslintConfig = defineConfig([
     "src/lib/validators/competitor.ts",
     "src/lib/validators/node.ts",
     "src/lib/validators/project.ts",
-    "src/lib/validators/team.ts",
     "src/components/ai-import-wizard.tsx",
     "src/components/ai-mapping-table.tsx",
     "src/components/analysis-result.tsx",
@@ -100,7 +99,6 @@ const eslintConfig = defineConfig([
     "src/app/projects/**/workspace.tsx",
     "src/app/projects/**/[projectId]/page.tsx",
     "src/app/search/**",
-    "src/app/teams/**",
     "src/app/layout.tsx",
     "src/app/page.tsx",
   ]),

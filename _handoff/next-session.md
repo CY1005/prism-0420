@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-3c-完成 / 子片 4 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-4-完成 / 子片 5 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,27 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3c-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-4-完成）
+
+- **Phase 2.2 子片 4 完成**（M20 团队页新写 / Prism 无 / 全新写 / scope 自决 6→3 路由 + 9 actions + 1 projects-side / **errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修 client-side NEXT_REDIRECT 同根因新场景变体**）：
+  - **scope 自决收缩**（feedback_decision_layering 5 维矩阵 + feedback_self_decide_no_ask + feedback_problem_layered_analysis 失效信号 #7 / SR-P22-3 第 5 实证）：cold-start prompt「6 路由 + soft-delete restore」→ 实际可达 3 路由（/teams + /teams/new + /teams/[teamId] 合并 5 cards info/edit/members/transfer/danger）+ 9 actions + 1 projects-side moveProjectTeam / soft-delete restore = M20 design §3 Q8=B 字面已决 hard delete + RESTRICT FK / **prompt 字面错记 / 撤销不立项**
+  - 8 文件改：actions/teams.ts 全 rewrite（10 actions / 含 moveProjectTeam）+ validators/team.ts 全 rewrite（5 zod schemas）+ app/teams/page.tsx 全 rewrite + app/teams/new/page.tsx 新增 + app/teams/[teamId]/page.tsx 全 rewrite + app/projects/[projectId]/settings/page.tsx 改 migrateProjectToTeam → moveProjectTeam（仍 ignore）+ lib/errors.ts isNextRedirectError 加 export + app/projects/page.tsx 加 client `.catch` rethrow + design/02-modules/M20-team/02-frontend-design.md 新增轻量草案 + eslint.config.mjs 移 3 ignore（actions/teams + validators/team + app/teams/**）+ design/audit/p22-pilot-template-validation.md §3d + cross-sprint-punt-pool.md + p22-subslice-prompts.md
+  - 累计 vitest 20 PASS / eslint 0 errors 0 warnings / pytest 不动（仅前端改）
+  - **R1+R2 第 5 数据点**（全新写形态 ROI 验证）：R1 Sonnet reuse 0 P1 + 3 P2 punt（withAuthRedirect 11 处 trend persistent / header h-16 vs h-14 token / confirm-by-name Dialog 2 次未达临界）/ R2 Opus spec 2 P1 立修 + 1 降 P2 + 2 P2 punt
+  - **R 范式第 5 数据点 ROI 新维度**：R2 spec 抓到 client `.catch(() => set([]))` 吞 NEXT_REDIRECT 是子片 3b NEXT_REDIRECT 硬伤的 **client-side 同根因新场景变体**（root-cause 不限 server actionError / client useEffect catch 是同根因新场景）/ 子片 3a-ii 已合规 projects/page.tsx 同根因连带修 / **R2 真漏抓 root-cause**：errors.ts isNextRedirectError 加 export + 3 处 `.catch` 重写一改通修 N+ caller / SR-P22-4 全新写形态新场景变体实证支撑 / R1+R2 配比 1+1 ROI 持续高于 R1=3 + R2=1
+  - **scope 修订归档**：cold-start 6 路由 → 实际 3 路由 / R1+R2 第 5 数据点 / SR-P22-3 第 5 实证（M01 register + 3a-ii 26 broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 + 4 prompt 凭印象写 soft-delete restore = 五实证）/ M20 后端 4 项 endpoint gap 进 cross-sprint pool P22-4-backend-gap：(a) GET /api/teams/{tid}/members + (b) GET 候选用户检索 + (c) GET /me-role / (d) soft-delete restore = 字面已决不立项
+  - **SR-P22-5 立规候选新增**（关闸 sink 第 5 项）：handoff prompt 写 endpoint 字面前必 grep schema/router / 5 数据点 5 实证 / handoff prompt 写时 grep 一次省下游 sprint 反复识破成本
+
+- **下一步推荐**：**子片 5 — D 类 #3+#15 join 真装配 + Phase 2.2 关闸 audit + handoff 同步 + 子片 4 长尾 cleanup**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 5」段
+  - 估 cost $1-2 / 估时 0.5 天 / **可同会话续 or 新 session（视累计 cost）**
+  - 含：D 类 #3 IssueResponse + #15 DimensionResponse join 字段后端真装配 + 前端真用 + Phase 2.2 关闸 audit + 4 SR-P22 立规 sink + 子片 4 长尾 cleanup（withAuthRedirect 抽 helper / consumer 漂移修复 / cross-sprint pool 关闭项）
+
+- **Phase 2.2 全集进度**：6/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b + 3c + 4）/ 还需 1 子片（5 关闸）/ 总估 $1-2 + 0.5 天
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3c-完成）
 
 - **Phase 2.2 子片 3c 完成**（actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错 root-cause**）：
   - **scope 自决收缩**（feedback_decision_transparency A 模式 / SR-P22-3 第 4 实证）：cold-start prompt「10 actions + 7 页面」→ 实际可达 6 actions 完整 + 2 端点重写 + 2 全 punt（templates/feed/openclaw/admin 用户管理/项目级 ZIP 导出 5 个域 OpenAPI 无对应路径）/ 7 页面解锁全留子片 5 集中处理

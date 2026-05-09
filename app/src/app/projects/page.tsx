@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { getProjects } from "@/actions/projects";
 import { useAuth } from "@/contexts/auth-context";
+import { isNextRedirectError } from "@/lib/errors";
 import type { components } from "@/types/api";
 
 type ProjectResponse = components["schemas"]["ProjectResponse"];
@@ -54,7 +55,10 @@ export default function ProjectsPage() {
     }
     getProjects()
       .then((projects) => setApiProjects(projects))
-      .catch(() => setApiProjects([]));
+      .catch((error) => {
+        if (isNextRedirectError(error)) throw error;
+        setApiProjects([]);
+      });
   }, [user, isLoading, router]);
 
   const handleLogout = async () => {

@@ -5,7 +5,12 @@ import { ErrorCode } from "./error-codes";
  * Next.js `redirect()` 抛 `Error` 含 `digest = "NEXT_REDIRECT;..."`，必须透出不能 catch 后吞。
  * 公共 API 未导出 isRedirectError（v15）/ 此处按 digest 字面识别。
  */
-function isNextRedirectError(error: unknown): boolean {
+/**
+ * Next.js `redirect()` 抛 `Error` 含 `digest = "NEXT_REDIRECT;..."`，必须透出不能 catch 后吞。
+ * 同时供 client 侧使用（useEffect 里 server action 的 `.catch(() =&gt; ...)` 会吞 redirect 把 401
+ * 退化为空数据 / 子片 4 R2 真漏抓 root-cause + 子片 3a-ii projects/page.tsx 同根因）。
+ */
+export function isNextRedirectError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const digest = (error as Error & { digest?: unknown }).digest;
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
