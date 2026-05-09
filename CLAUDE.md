@@ -12,21 +12,23 @@ GitHub：https://github.com/CY1005/prism-0420
 
 ## 当前阶段
 
-**Phase 2.0：工程基线（A 决策完成 / B 代码未起，进度 25%）**（截至 2026-04-29）
+**Phase 2.2：前端继承 Prism（子片 1+2 已完成，剩 3a-5 子片）**（截至 2026-05-09）
 
 **真实进度**（权威来源 `design/00-roadmap.md`，每次进度变化必须同步更新）：
 - ✅ Phase 0 准备 100%
 - ✅ Phase 1 设计前置 100%（2026-04-26 完成）
   - 档位 A 架构骨架 7 份 / 档位 B 工程规约 5 份 / 档位 C 模块详设 M01–M20 全交付 / 5 个 ADR
-- ⏳ **Phase 2.0 工程基线 25%** ← 当前位置
-  - A 决策（quality-spec / engineering-spec §13）已 accepted
-  - B 代码（仓库脚手架 / make dev / make test / make migrate / api/errors / api/auth / activity_log_service / tenant_filter）未起
-- ⏳ Phase 2.1 业务模块 0%（M01 用户系统是探针模块）
-- ⏳ Phase 2.2 前端继承 Prism 0%
+- ✅ Phase 2.0 工程基线 100%（2026-05-05 一日完成 B1-B10 全跑通）
+- ✅ Phase 2.1 业务模块 100%（M01-M08+M10-M20 全交付，5/7-5/9 三天连完 18 sprint，M09 superseded by M18）
+- ⏳ **Phase 2.2 前端继承 进行中** ← 当前位置
+  - 子片 0 prep `aa6dbd0`（拷 Prism web 基底 + shadcn/zod/openapi-typescript + 删 next-auth/drizzle）
+  - 子片 1 `12cc62c`（codegen 接通 + http-client 重写 + Bearer JWT 占位 + 6 unit tests）
+  - 子片 2（本次）— auth flow 改造（access 内存 React context + refresh httpOnly cookie + CORS）+ login/register 页面 + 13 vitest + 4 backend cookie e2e + R1+R2 第 1 数据点
+  - 子片 3a-5 待启动（projects/dimension 5 页 → node/relation-graph 5 页 → 长尾 + admin → M20 团队页新写 → 关闸 audit）
 - ⏳ Phase 2.3 集成验证 0%
 - ⏳ Phase 3 数据对照报告 0%
 
-**下一件事**：B1 仓库脚手架（api/ + app/ + .env.example + Makefile）。详见 `design/00-phase-gate.md` 闸门 2 checkbox。
+**下一件事**：Phase 2.2 子片 3a 启动（projects 列表 + 详情 + dimension 档案 5 页面）。详见 `_handoff/p22-subslice-prompts.md`「子片 3a」段 + `design/00-roadmap.md` §7。
 
 ## 协作规则（严格遵守）
 

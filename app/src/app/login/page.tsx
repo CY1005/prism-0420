@@ -1,8 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
-import { login } from "@/actions/auth";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context";
+import { ApiError } from "@/services/http-client";
+import { loginSchema } from "@/lib/validators/auth";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +13,38 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
-  const [state, formAction, isPending] = useActionState(login, {});
+  const { login } = useAuth();
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    const parsed = loginSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "输入格式错误");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await login(parsed.data.email, parsed.data.password);
+        router.push("/projects");
+      } catch (e) {
+        if (e instanceof ApiError) {
+          if (e.status === 401) setError("邮箱或密码错误");
+          else if (e.status === 403) setError(e.message || "账号不可用");
+          else if (e.status === 423) setError("账号已被锁定，请稍后再试");
+          else if (e.status >= 500) setError("服务暂不可用，请稍后再试");
+          else setError(e.message || "登录失败");
+        } else {
+          setError("网络错误，请检查后端服务");
+        }
+      }
+    });
+  }
 
   return (
     <div className="bg-background flex min-h-screen items-center justify-center p-4">
@@ -22,10 +56,12 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Separator />
-            {state?.error && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">{state.error}</div>
+            {error && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600" role="alert">
+                {error}
+              </div>
             )}
-            <form action={formAction} className="space-y-4">
+            <form action={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
                   邮箱

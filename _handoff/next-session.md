@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-1-完成 / 子片 2 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-2-完成 / 子片 3a 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,24 +11,37 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-1-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-2-完成）
 
-- **Phase 2.2 启动**：✅（启动期 commit 827da20 engineering-spec 06 + aa6dbd0 子片 0 prep + 852014a 子片 prompts 集合 + 本子片 1 commit）
-- **Phase 2.2 子片 1 完成**：✅ codegen + http-client + Bearer JWT 占位 + 6 unit tests
-  - OpenAPI export 脚本 `scripts/export_openapi.py`（76 paths / 148 schemas / app/openapi.json gitignored）
-  - codegen 接通：`pnpm run codegen` → app/src/types/api.ts 生成（8320 行 TS types）
-  - http-client 重写：access token in-memory + Authorization Bearer + credentials:include + 401 自动 refresh+retry + ApiError/UnauthenticatedError 类型化
-  - eslint ignore 渐进还债：services/** 拆细 9 旧文件个别 ignore / http-client.ts + auth-token-store.ts 已合规 / types/** ignore（codegen 输出）
-  - R1+R2 deferred 到子片 2 启动期合并跑（子片 1 仅工具链 / 无 endpoint 调用 / 子片 2 首次真用 endpoint 验契约更高 ROI）
+- **Phase 2.2 子片 2 完成**：✅ auth flow 改造（access 内存 React context + refresh httpOnly cookie + CORS）+ login/register 页面 + 13 vitest + 4 backend cookie e2e + R1+R2 第 1 数据点
+  - 后端 4 项（spec 06 §2 字面）：
+    - `/auth/login` 加 Set-Cookie `refresh_token` HttpOnly+Secure(prod)+SameSite=Strict+Path=/auth+Max-Age=30d（保留 body 字段做 deprecated 兼容）
+    - `/auth/refresh` Cookie 优先 + body 兜底（`RefreshRequest.refresh_token` 改 Optional / ADR-004 P3 字面双通道合规 / 不修订 ADR）
+    - `/auth/logout` 清 cookie + best-effort revoke
+    - `api/main.py` 加 CORSMiddleware（allow_credentials=True / allow_origins from settings.cors_origins / allow_headers=["Authorization","Content-Type"]）
+  - 前端 5 项（spec 06 §2 字面）：
+    - `app/src/contexts/auth-context.tsx` AuthProvider + useAuth hook（login/logout/refresh 走 http-client / mount 调 refresh 续杯）
+    - `app/src/services/auth-token-store.ts` 模块层 in-memory store 保留 / context 通过它桥接给非 React http-client
+    - `app/src/app/layout.tsx` RootLayout 包 AuthProvider
+    - `app/src/app/login/page.tsx` 重写 client 端 useAuth().login + ApiError 分支错误提示（401/403/423/5xx）
+    - `app/src/app/register/page.tsx` disabled banner（M01 design §4 字面注册属未来扩展 / CY 选 (a) 跳过改造）
+  - 测试：13 vitest（http-client 6 + auth-context 5 + smoke 2）+ 4 backend cookie channel e2e（test_m01_cookie_channel.py）+ M01 baseline 64 PASS 不破
+  - eslint ignore 渐进还债：累计移除 7 项（services/auth.ts deleted / contexts/** narrow / lib/validators/** narrow / app/login + app/register 全删）
+  - 删除：`app/src/actions/auth.ts`、`app/src/services/auth.ts`、`app/src/app/register/register-form.tsx`（next-auth / drizzle 依赖死耦）
+  - **R1+R2 第 1 数据点**（合并子片 1+2）：R1=1 Sonnet reuse + R2=1 Opus spec / R1 标 2 P1（拷贝层 broken imports）经复审降 P2（已知 punt 状态 / 子片 0 prep 起就坏）+ 4 P2 进 audit / R2 0 P1 + 5 P2 进 audit / 1 P2 立修同 commit（auth-context 冗余 catch）
+  - **新建 audit**：`design/audit/p22-pilot-template-validation.md`（§0 方法论 / §1 子片汇总 / §2 R2 spec P2 / §3 R1 reuse P1 复审降 P2 + P2 + 已修 / §4 SR-P22 立规候选 / §5 元贡献）
+  - **拷贝层 broken imports 累计 26 处**（`@/lib/auth` 20 + `@/actions/auth` 6）— 自子片 0 prep 起就坏 / 子片 3a-3c 改造时一并修
 
-- **下一步推荐**：**子片 2 — auth flow 改造**
-  - prompt：`_handoff/p22-subslice-prompts.md`「子片 2」段
-  - 前置：CY 跑 `cd /root/workspace/projects/prism-0420 && uv run uvicorn api.main:app --reload` 后端 alive（验 cookie set + CORS）
-  - 估 cost $2-3 / 估时 0.5 天
+- **下一步推荐**：**子片 3a — projects 列表 + 详情 + dimension 档案 5 页面**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 3a」段
+  - 前置：后端 alive（同子片 2）/ 已可跑 pnpm dev 验真路径
+  - 估 cost $4-6 / 估时 1.5 天 / 触发拷贝层 broken imports 一并修
 
-- **Phase 2.2 全集进度**：1/7 子片完成 / 还需 6 sessions / 总估 $17-27 + 5.5-7 天
+- **Phase 2.2 全集进度**：2/7 子片完成 / 还需 5 sessions / 总估 $14-22 + 5-6.5 天
 
 - **决策落盘新规**：`feedback_decision_layering.md`（自检 4 问 + 决策处理流程 5 步 / SR-P22-1 已即时落自检第 4 问）
+
+- **scope 决策记录**：CY 选 (a) 跳过 register 改造（M01 design §4 字面"开放自助注册属未来扩展（Q1=B/C/D）"/ 与 cold-start prompt 自行扩 spec scope 的对抗 / SR-P22-3 立规候选已加 audit §4）
 
 ---
 

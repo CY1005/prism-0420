@@ -9,11 +9,12 @@ from __future__ import annotations
 from uuid import UUID
 
 import jwt
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Cookie, Depends, Header, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.internal import verify_internal_signature
 from api.auth.jwt_utils import decode_jwt
+from api.core.config import settings
 from api.core.db import get_db
 from api.errors.exceptions import PermissionDeniedError, UnauthenticatedError
 from api.models.user import User
@@ -34,6 +35,30 @@ from api.schemas.auth import (
 from api.services.auth_service import AuthService, get_auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Phase 2.2 子片 2 — refresh cookie 名 / path（spec 06 §2）
+# Path=/auth 与 router prefix 对齐，refresh+logout endpoint 都能携带
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/auth"
+
+
+def _set_refresh_cookie(response: Response, raw_refresh: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=raw_refresh,
+        max_age=settings.refresh_token_ttl_days * 86400,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.app_env != "local",
+        samesite="strict",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+    )
 
 
 def _client_ip(request: Request) -> str | None:
@@ -135,6 +160,7 @@ async def current_user(
 async def login(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     svc = get_auth_service()
@@ -146,6 +172,8 @@ async def login(
         ip=_client_ip(request),
         user_agent=user_agent,
     )
+    # spec 06 §2: refresh 走 httpOnly cookie / body 字段保留做 deprecated 兼容
+    _set_refresh_cookie(response, raw_refresh)
     return TokenResponse(
         access_token=access_token,
         refresh_token=raw_refresh,
@@ -158,11 +186,14 @@ async def refresh(
     payload: RefreshRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ) -> RefreshResponse:
+    # spec 06 §2: cookie 优先 / body 兜底（ADR-004 P3 字面双通道）
+    raw = refresh_cookie or payload.refresh_token
+    if not raw:
+        raise UnauthenticatedError("missing refresh token")
     svc = get_auth_service()
-    _, access_token = await svc.refresh(
-        db, refresh_token=payload.refresh_token, ip=_client_ip(request)
-    )
+    _, access_token = await svc.refresh(db, refresh_token=raw, ip=_client_ip(request))
     return RefreshResponse(access_token=access_token)
 
 
@@ -170,10 +201,15 @@ async def refresh(
 async def logout(
     payload: RefreshRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
+    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ) -> LogoutResponse:
+    raw = refresh_cookie or payload.refresh_token
     svc = get_auth_service()
-    await svc.logout(db, refresh_token=payload.refresh_token, ip=_client_ip(request))
+    if raw:
+        await svc.logout(db, refresh_token=raw, ip=_client_ip(request))
+    _clear_refresh_cookie(response)
     return LogoutResponse()
 
 

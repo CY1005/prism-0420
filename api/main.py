@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from api.auth import tenant_filter
@@ -108,6 +109,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="prism-0420", version="0.1.0", lifespan=lifespan)
+# Phase 2.2 子片 2 — CORS for Next.js frontend (spec 06 §2 / refresh cookie 携带需 allow_credentials)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 register_exception_handlers(app)
 app.include_router(auth_router.router)
 app.include_router(project_router.router)

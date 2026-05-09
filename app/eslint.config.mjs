@@ -22,7 +22,7 @@ const eslintConfig = defineConfig([
     // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
     // 子片 2-3 改造逐文件移除剩余条目
     "src/services/analyzer.ts",
-    "src/services/auth.ts",
+    // src/services/auth.ts 子片 2 已删除（next-auth 客户端 / spec 06 §2 改 cookie 通道）
     "src/services/comparison.ts",
     "src/services/permission.service.ts",
     "src/services/project-stats.ts",
@@ -30,7 +30,8 @@ const eslintConfig = defineConfig([
     "src/services/relations.ts",
     "src/services/search.ts",
     "src/services/settings.ts",
-    "src/contexts/**",
+    // src/contexts/auth-context.{tsx,test.tsx} 子片 2 新写 / 不 ignore
+    "src/contexts/project-role-context.tsx",
     // codegen 输出 / 不 lint 是常规
     "src/types/**",
     "src/lib/admin-data.ts",
@@ -49,7 +50,12 @@ const eslintConfig = defineConfig([
     "src/lib/test-analysis-data.ts",
     "src/lib/tree-data.ts",
     "src/lib/use-page-context.ts",
-    "src/lib/validators/**",
+    // src/lib/validators/auth.ts 子片 2 zod schema / 已合规 / 不 ignore
+    "src/lib/validators/competitor.ts",
+    "src/lib/validators/issue.ts",
+    "src/lib/validators/node.ts",
+    "src/lib/validators/project.ts",
+    "src/lib/validators/team.ts",
     "src/components/ai-import-wizard.tsx",
     "src/components/ai-mapping-table.tsx",
     "src/components/analysis-result.tsx",
@@ -71,10 +77,9 @@ const eslintConfig = defineConfig([
     "src/app/admin/**",
     "src/app/api/**",
     "src/app/feature/**",
-    "src/app/login/**",
+    // src/app/login + register 子片 2 改造 / 已合规 / 不 ignore
     "src/app/openclaw/**",
     "src/app/projects/**",
-    "src/app/register/**",
     "src/app/search/**",
     "src/app/teams/**",
     "src/app/layout.tsx",

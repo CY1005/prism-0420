@@ -33,5 +33,8 @@ class Settings(BaseSettings):
     # 生产部署必须覆盖；密钥轮转 / HSM 留 §8.0 必补清单
     encryption_key: str = Field(default="ZGV2LW9ubHktYWVzLTMyYnl0ZS1lbmNyeXB0aW9uLWs=")
 
+    # Phase 2.2 子片 2 — 前端 CORS + refresh cookie（spec 06 §2 / B 路径）
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+
 
 settings = Settings()

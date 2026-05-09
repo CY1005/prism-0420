@@ -35,7 +35,9 @@ class TokenResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str = Field(..., min_length=1)
+    # Phase 2.2 子片 2: cookie 优先 / body 兜底（ADR-004 P3 字面合规）
+    # None 表示走 cookie 通道；空字符串仍 422（保 1619 baseline）
+    refresh_token: str | None = Field(default=None, min_length=1)
 
 
 class RefreshResponse(BaseModel):
