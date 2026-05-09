@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-M20-sprint-complete / Phase 2.1 100% 收官**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-1-完成 / 子片 2 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,28 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-M20-sprint-complete / **Phase 2.1 100% 收官**）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-1-完成）
+
+- **Phase 2.2 启动**：✅（启动期 commit 827da20 engineering-spec 06 + aa6dbd0 子片 0 prep + 852014a 子片 prompts 集合 + 本子片 1 commit）
+- **Phase 2.2 子片 1 完成**：✅ codegen + http-client + Bearer JWT 占位 + 6 unit tests
+  - OpenAPI export 脚本 `scripts/export_openapi.py`（76 paths / 148 schemas / app/openapi.json gitignored）
+  - codegen 接通：`pnpm run codegen` → app/src/types/api.ts 生成（8320 行 TS types）
+  - http-client 重写：access token in-memory + Authorization Bearer + credentials:include + 401 自动 refresh+retry + ApiError/UnauthenticatedError 类型化
+  - eslint ignore 渐进还债：services/** 拆细 9 旧文件个别 ignore / http-client.ts + auth-token-store.ts 已合规 / types/** ignore（codegen 输出）
+  - R1+R2 deferred 到子片 2 启动期合并跑（子片 1 仅工具链 / 无 endpoint 调用 / 子片 2 首次真用 endpoint 验契约更高 ROI）
+
+- **下一步推荐**：**子片 2 — auth flow 改造**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 2」段
+  - 前置：CY 跑 `cd /root/workspace/projects/prism-0420 && uv run uvicorn api.main:app --reload` 后端 alive（验 cookie set + CORS）
+  - 估 cost $2-3 / 估时 0.5 天
+
+- **Phase 2.2 全集进度**：1/7 子片完成 / 还需 6 sessions / 总估 $17-27 + 5.5-7 天
+
+- **决策落盘新规**：`feedback_decision_layering.md`（自检 4 问 + 决策处理流程 5 步 / SR-P22-1 已即时落自检第 4 问）
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-M20-sprint-complete / **Phase 2.1 100% 收官**）
 
 - **Phase 2.0 工程基线**：✅ 100%
 - **Phase 2.1 业务模块**：✅ **100%**（M01-M08+M10-M20 全交付；M09 superseded by M18 不实装）

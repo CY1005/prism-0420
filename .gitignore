@@ -11,6 +11,9 @@ build/
 .next/
 out/
 
+# Phase 2.2 子片 1 — codegen 输入（每次 codegen 前重生 / scripts/export_openapi.py 产）
+app/openapi.json
+
 # Environment
 .env
 .env.local

@@ -2,3 +2,6 @@
 node_modules
 pnpm-lock.yaml
 public
+# Phase 2.2 子片 1 — codegen 输入/输出（不格式化）
+openapi.json
+src/types/api.ts

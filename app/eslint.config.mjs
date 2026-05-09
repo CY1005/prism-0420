@@ -19,8 +19,20 @@ const eslintConfig = defineConfig([
     // 子片 3：actions/* + services/* + app/{各业务路由}（API client 改造）→ 逐文件移除
     // 子片 4：app/teams/* + components/teams/*（M20 新写）→ 移除
     "src/actions/**",
-    "src/services/**",
+    // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
+    // 子片 2-3 改造逐文件移除剩余条目
+    "src/services/analyzer.ts",
+    "src/services/auth.ts",
+    "src/services/comparison.ts",
+    "src/services/permission.service.ts",
+    "src/services/project-stats.ts",
+    "src/services/projects.ts",
+    "src/services/relations.ts",
+    "src/services/search.ts",
+    "src/services/settings.ts",
     "src/contexts/**",
+    // codegen 输出 / 不 lint 是常规
+    "src/types/**",
     "src/lib/admin-data.ts",
     "src/lib/comparison-data.ts",
     "src/lib/crypto.ts",
