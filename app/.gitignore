@@ -3,6 +3,11 @@
 # dependencies
 /node_modules
 /.pnp
+
+# Playwright e2e（Phase 2.3 子 sprint B）
+/test-results/
+/playwright-report/
+/playwright/.cache/
 .pnp.*
 .yarn/*
 !.yarn/patches
