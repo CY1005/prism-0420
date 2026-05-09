@@ -36,7 +36,26 @@ issue_router = APIRouter(
 
 
 def _resp(i: Issue) -> IssueResponse:
-    return IssueResponse.model_validate(i, from_attributes=True)
+    # Phase 2.2 子片 5 D 类 #3：装配 join 字段（DAO read paths 已 selectinload；model
+    # lazy="raise" 保证 caller 漏 eager load 时直接抛 / 不做静默 None 兜底）
+    return IssueResponse(
+        id=i.id,
+        project_id=i.project_id,
+        node_id=i.node_id,
+        category=i.category,
+        status=i.status,
+        title=i.title,
+        description=i.description,
+        tags=i.tags,
+        created_by=i.created_by,
+        assigned_to=i.assigned_to,
+        resolved_at=i.resolved_at,
+        created_at=i.created_at,
+        updated_at=i.updated_at,
+        node_name=i.node.name if i.node is not None else None,
+        created_by_name=(i.created_by_user.name if i.created_by_user is not None else None),
+        assigned_to_name=(i.assigned_to_user.name if i.assigned_to_user is not None else None),
+    )
 
 
 @issue_router.get("", response_model=IssueListResponse)

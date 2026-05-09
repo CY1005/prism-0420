@@ -88,3 +88,5 @@ class Issue(Base, TimestampMixin):
     # 不带 cascade='all, delete-orphan'（与 M04/M06 不同）— FK ON DELETE SET NULL DB 兜底
     # passive_deletes=True 让 SQLAlchemy 不在 Node 删除时主动 UPDATE issues
     node = relationship("Node", back_populates="issues")
+    created_by_user = relationship("User", foreign_keys=[created_by], lazy="raise")
+    assigned_to_user = relationship("User", foreign_keys=[assigned_to], lazy="raise")

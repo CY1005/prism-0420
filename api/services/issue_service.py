@@ -178,6 +178,11 @@ class IssueService:
         )
         await self.dao.create(db, i)
         await db.refresh(i, attribute_names=["created_at", "updated_at"])
+        # Phase 2.2 子片 5 D 类 #3：response join 字段（node_name / created_by_name /
+        # assigned_to_name）需 eager-load 三 relationship；model lazy="raise" 杜绝 async
+        # lazy-load 静默失败 / 此处再走一次 dao.get_by_id（带 _JOINS 选项）拿装配实例
+        loaded = await self.dao.get_by_id(db, i.id, project_id)
+        assert loaded is not None  # 刚 INSERT 后 SELECT 必命中
         await write_event(
             db=db,
             actor_user_id=actor_user_id,
@@ -192,7 +197,7 @@ class IssueService:
                 "status": "open",
             },
         )
-        return i
+        return loaded
 
     async def update(
         self,
@@ -234,6 +239,9 @@ class IssueService:
         if rows == 0:
             raise IssueNotFoundError(issue_id=str(issue_id))
         await db.refresh(existing, attribute_names=list(fields.keys()) + ["updated_at"])
+        # Phase 2.2 子片 5 D 类 #3：同 create — refetch with joins for response
+        loaded = await self.dao.get_by_id(db, issue_id, project_id)
+        assert loaded is not None
         await write_event(
             db=db,
             actor_user_id=actor_user_id,
@@ -241,10 +249,10 @@ class IssueService:
             action_type="issue_updated",
             target_type="issue",
             target_id=str(issue_id),
-            summary=f"Updated issue '{existing.title}'",
+            summary=f"Updated issue '{loaded.title}'",
             metadata={"changed_fields": list(fields.keys())},
         )
-        return existing
+        return loaded
 
     async def transition(
         self,
@@ -341,7 +349,10 @@ class IssueService:
                     "reason": note,
                 },
             )
-        return existing
+        # Phase 2.2 子片 5 D 类 #3：refetch with joins for response（get_for_update 不带 joins）
+        loaded = await self.dao.get_by_id(db, issue_id, project_id)
+        assert loaded is not None
+        return loaded
 
     async def delete(
         self,

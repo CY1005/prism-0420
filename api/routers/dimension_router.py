@@ -47,7 +47,22 @@ completion_router = APIRouter(
 
 
 def _record_response(rec: DimensionRecord) -> DimensionResponse:
-    return DimensionResponse.model_validate(rec, from_attributes=True)
+    # Phase 2.2 子片 5 D 类 #15：装配 join 字段（DAO read paths 已 selectinload；model
+    # lazy="raise" 保证 caller 漏 eager load 时直接抛 / 不做静默 None 兜底）
+    return DimensionResponse(
+        id=rec.id,
+        node_id=rec.node_id,
+        project_id=rec.project_id,
+        dimension_type_id=rec.dimension_type_id,
+        content=rec.content,
+        version=rec.version,
+        created_by=rec.created_by,
+        updated_by=rec.updated_by,
+        created_at=rec.created_at,
+        updated_at=rec.updated_at,
+        dimension_type_key=(rec.dimension_type.key if rec.dimension_type is not None else None),
+        updated_by_name=(rec.updated_by_user.name if rec.updated_by_user is not None else None),
+    )
 
 
 async def _list_enabled_types(db: AsyncSession, project_id: UUID) -> list[DimensionTypeRef]:

@@ -394,6 +394,10 @@ class DimensionService:
                 ) from e
             raise
         await db.refresh(rec, attribute_names=["created_at", "updated_at"])
+        # Phase 2.2 子片 5 D 类 #15：response join 字段（dimension_type_key /
+        # updated_by_name）需 eager-load；refetch via get_by_id 拿装配实例
+        loaded = await self.dao.get_by_id(db, rec.id, project_id)
+        assert loaded is not None
 
         await write_event(
             db=db,
@@ -410,7 +414,7 @@ class DimensionService:
                 "content_size": len(str(content or {})),
             },
         )
-        return rec
+        return loaded
 
     async def update_with_lock(
         self,
@@ -448,10 +452,15 @@ class DimensionService:
             raise ConflictError("Dimension record was modified by another user; please refresh")
 
         await db.refresh(existing, attribute_names=["version", "content", "updated_at"])
+        # Phase 2.2 子片 5 D 类 #15：updated_by 改写 → updated_by_user relationship 缓存
+        # 失效；refetch via get_by_id 重装配 + 顺带保证 dimension_type/updated_by_user joins
+        loaded = await self.dao.get_by_id(db, existing.id, project_id)
+        assert loaded is not None
 
         # type 名（写 summary 用，不阻断主流程）
-        dt = await self.dao.get_type_by_id(db, dimension_type_id)
-        type_key = dt.key if dt else f"type#{dimension_type_id}"
+        type_key = (
+            loaded.dimension_type.key if loaded.dimension_type else f"type#{dimension_type_id}"
+        )
 
         await write_event(
             db=db,
@@ -459,16 +468,16 @@ class DimensionService:
             project_id=project_id,
             action_type="dimension_record_updated",
             target_type=TARGET_DIMENSION_RECORD,
-            target_id=str(existing.id),
+            target_id=str(loaded.id),
             summary=f"Updated dimension '{type_key}'",
             metadata={
                 "node_id": str(node_id),
                 "dimension_type_id": dimension_type_id,
                 "old_version": old_version,
-                "new_version": existing.version,
+                "new_version": loaded.version,
             },
         )
-        return existing
+        return loaded
 
     async def delete(
         self,

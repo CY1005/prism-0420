@@ -14,9 +14,18 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.models.dimension_record import DimensionRecord
 from api.models.project import DimensionType
+
+# Phase 2.2 子片 5（D 类 #15 join 装配 / SR-CLEANUP-3 防假覆盖）：
+# DimensionResponse.dimension_type_key / updated_by_name 装配统一 selectinload tuple；
+# read 路径强制 eager load，与 model 层 lazy="raise" 配合杜绝 async lazy-load 静默失败。
+_JOINS = (
+    selectinload(DimensionRecord.dimension_type),
+    selectinload(DimensionRecord.updated_by_user),
+)
 
 
 class DimensionDAO:
@@ -42,6 +51,7 @@ class DimensionDAO:
         """节点下所有维度记录（档案页主查询）。"""
         result = await db.execute(
             select(DimensionRecord)
+            .options(*_JOINS)
             .where(
                 DimensionRecord.node_id == node_id,
                 DimensionRecord.project_id == project_id,
@@ -54,7 +64,9 @@ class DimensionDAO:
         self, db: AsyncSession, record_id: UUID, project_id: UUID
     ) -> DimensionRecord | None:
         result = await db.execute(
-            select(DimensionRecord).where(
+            select(DimensionRecord)
+            .options(*_JOINS)
+            .where(
                 DimensionRecord.id == record_id,
                 DimensionRecord.project_id == project_id,
             )
@@ -70,7 +82,9 @@ class DimensionDAO:
     ) -> DimensionRecord | None:
         """节点 + 维度类型唯一约束查询（创建/更新前 lookup）。"""
         result = await db.execute(
-            select(DimensionRecord).where(
+            select(DimensionRecord)
+            .options(*_JOINS)
+            .where(
                 DimensionRecord.node_id == node_id,
                 DimensionRecord.project_id == project_id,
                 DimensionRecord.dimension_type_id == dimension_type_id,

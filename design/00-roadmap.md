@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.2 子片 4 完成 / 子片 5 待启动**：6/7 子片完成 / cumulative 9 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add / R 范式第 5 数据点 + R2 真漏抓 client `.catch` 吞 NEXT_REDIRECT root-cause 立修 + SR-P22-3 第 5 实证 + SR-P22-4 全新写形态新场景变体实证 + SR-P22-5 立规候选新增 + scope 自决 6→3 路由 + M20 后端 4 项 gap 进 cross-sprint pool P22-4-backend-gap）
-current_phase: **Phase 2.2 前端继承 ~86%**（子片 0+1+2+3a-i+3a-ii+3b+3c+4 完成 / 子片 5 关闸待启动）
+last_updated: 2026-05-09（**Phase 2.2 子片 5 关闸 / Phase 2.2 100% 完成**：7/7 子片完成 / cumulative 10 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add+<子片 5> / D 类 #3+#15 IssueResponse + DimensionResponse join 装配 / cross-sprint pool 41→39 / SR-P22-2/3/4/5 立规已 sink / 1623→1629 PASS）
+current_phase: **Phase 2.2 前端继承 100%**（子片 0+1+2+3a-i+3a-ii+3b+3c+4+5 全完成 / 下一步 Phase 2.3 集成验证）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -28,14 +28,14 @@ Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
 Phase 2.1 业务模块  ✅ ████████████████ 100%  ← M01-M08+M10-M20 全交付（M09 superseded by M18）
-Phase 2.2 前端继承  ⏳ █████████████░░░  ~86%  ← 6/7 子片完成（子片 0+1+2+3a-i+3a-ii+3b+3c+4）/ 子片 5 关闸待启动
+Phase 2.2 前端继承  ✅ ████████████████ 100%  ← 7/7 子片完成（0+1+2+3a-i+3a-ii+3b+3c+4+5 / D 类 #3+#15 join 装配 + 关闸 audit）
 Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
 Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 ```
 
-**上次更新**：2026-05-07（M01 探针完成 + 闸门 3 通过 / 第 3 项 bypass 已登记）
+**上次更新**：2026-05-09（Phase 2.2 子片 5 关闸 / Phase 2.2 100% / 下一步 Phase 2.3）
 
-**下一步动作**：M02 项目管理 sprint（含 PROJECT_ARCHIVED ErrorCode F2.3）— 闸门 2.5 reconcile pass 启动
+**下一步动作**：Phase 2.3 集成验证（§8 + 工程规约 minimal 补完 + cross-sprint C 类 12 项 perf sprint 评估）
 
 ---
 
@@ -204,27 +204,36 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 ---
 
-## 7. Phase 2.2：前端继承 Prism + 改造 ⏳
+## 7. Phase 2.2：前端继承 Prism + 改造 ✅ 2026-05-09 完成
 
-> **闸门**：后端 OpenAPI 契约稳定（至少 M01-M05 + M20）才能开。
+> **闸门**：后端 OpenAPI 契约稳定（至少 M01-M05 + M20）才能开 — ✅ 通过。
 
-### 7.1 继承范围决策（CY 出骨架）
+### 7.1 继承范围决策（CY 出骨架）✅
 
-- [ ] 列出 Prism 前端目录清单 → 标注「直接继承 / 改造继承 / 重写 / 不要」四档
-- [ ] 类型同步策略（openapi-typescript 自动生成 vs 手动维护）
+- [x] 列出 Prism 前端目录清单 → 标注「直接继承 / 改造继承 / 重写 / 不要」四档
+- [x] 类型同步策略（openapi-typescript 自动生成）
 
-### 7.2 继承 + 改造（推估 1-1.5 周）
+### 7.2 继承 + 改造 ✅（实际 ~5-6 天 / 7 子片）
 
-- [ ] 拷贝 Prism `app/` 选定子集到 prism-0420
-- [ ] 路由调整（适配 prism-0420 Auth.js 配置）
-- [ ] API client 全替换（指向 prism-0420 后端）
-- [ ] 类型层全替换（prism-0420 OpenAPI codegen）
-- [ ] 关键交互冒烟测试（10 个核心页面手测过一遍）
+- [x] 子片 0 prep `aa6dbd0` — 拷 Prism `app/` 基底 + shadcn/zod/openapi-typescript + 删 next-auth/drizzle
+- [x] 子片 1 `12cc62c` — codegen + http-client + Bearer JWT 占位 + 6 unit tests
+- [x] 子片 2 `3b9bbc1` — auth flow（access 内存 React context + refresh httpOnly cookie + CORS）+ login/register 页面 + 13 vitest + 4 e2e
+- [x] 子片 3a-i `e521656`+`ee3a2ad` — SSR auth 通道 + server-auth/server-http-client + 7 unit tests
+- [x] 子片 3a-ii `1a5e3d6` — actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new
+- [x] 子片 3b `490ad23` — actions/{nodes,relations,panorama} + analyze getAffectedNodes + import/import-ai 全 punt + errors.ts isRedirectError 立修
+- [x] 子片 3c `bccb225` — actions/{competitors,competitor-references,issues,search,admin,activity-log} + export/project-stats-proxy 端点重写 + templates/feed 全 punt + errors.ts UnauthenticatedError → redirect root-cause 立修
+- [x] 子片 4 `0626add` — M20 团队页全新写（actions/teams.ts 10 actions + 3 路由 + errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修）
+- [x] 子片 5 `<本 commit>` — D 类 #3+#15 IssueResponse + DimensionResponse join 装配 + Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + cross-sprint pool 41→39 + 6 backend e2e（1623→1629 PASS）
 
-### 7.3 M20 团队页面（前端唯一新增）
+### 7.3 M20 团队页面（前端唯一新增）✅
 
-- [ ] M20 不在 Prism 现有前端 → 必须从头写（参考 shadcn pattern）
-- [ ] 团队列表 / 团队详情 / 成员管理 / 转让 / 删除等页面
+- [x] M20 全新写（子片 4）：3 路由 / 10 actions / 5 cards 合并 / 02-frontend-design.md 轻量草案
+
+### 7.4 R 范式试运行总结 ✅
+
+- 5 数据点完整：1+2 合并 / 3a-ii / 3b / 3c / 4
+- SR-P22-2/3/4/5 立规候选已 sink 到 feedback 体系
+- 详 `design/audit/p22-pilot-template-validation.md`
 
 ---
 

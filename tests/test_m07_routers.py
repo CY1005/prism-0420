@@ -271,3 +271,58 @@ async def test_unauthenticated_returns_401(auth_client, make_user):
     pid = await _create_project(auth_client, user.id)
     r = await auth_client.get(f"/api/projects/{pid}/issues")
     assert r.status_code == 401
+
+
+# ─────────────── G4: Phase 2.2 子片 5 — D 类 #3 join 字段装配 ───────────────
+# SR-CLEANUP-3 防假覆盖：字面断言响应 JSON 含 node_name / created_by_name /
+# assigned_to_name 非 None；selectinload + lazy="raise" 链路真通。
+
+
+async def test_list_issues_join_fields_populated(auth_client, make_user):
+    """D 类 #3 装配实证：list 返回 node_name / created_by_name / assigned_to_name 真值。"""
+    user = await make_user(email="m07-join-list@example.com", name="Alice Joiner")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="JoinNode")
+    await _create_issue(
+        auth_client,
+        user.id,
+        pid,
+        node_id=nid,
+        title="join-issue",
+        assigned_to=str(user.id),
+    )
+
+    r = await auth_client.get(f"/api/projects/{pid}/issues", headers=_bearer(user.id))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["node_name"] == "JoinNode"
+    assert item["created_by_name"] == "Alice Joiner"
+    assert item["assigned_to_name"] == "Alice Joiner"
+
+
+async def test_get_issue_join_fields_populated(auth_client, make_user):
+    user = await make_user(email="m07-join-get@example.com", name="Bob Reader")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="GetNode")
+    iid = await _create_issue(auth_client, user.id, pid, node_id=nid, title="g")
+
+    r = await auth_client.get(f"/api/projects/{pid}/issues/{iid}", headers=_bearer(user.id))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["node_name"] == "GetNode"
+    assert body["created_by_name"] == "Bob Reader"
+    assert body["assigned_to_name"] is None  # 未指派
+
+
+async def test_floating_issue_node_name_is_none(auth_client, make_user):
+    """游离 issue（node_id=None）→ node_name 必须 None，不能误填。"""
+    user = await make_user(email="m07-float@example.com", name="Carol")
+    pid = await _create_project(auth_client, user.id)
+    iid = await _create_issue(auth_client, user.id, pid, title="floating")  # node_id 未传
+
+    r = await auth_client.get(f"/api/projects/{pid}/issues/{iid}", headers=_bearer(user.id))
+    assert r.status_code == 200
+    assert r.json()["node_name"] is None
+    assert r.json()["created_by_name"] == "Carol"

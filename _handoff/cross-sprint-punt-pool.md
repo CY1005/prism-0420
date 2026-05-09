@@ -33,12 +33,18 @@ policy:
 
 | 状态 | 项数 | 占比 | 说明 |
 |---|---|---|---|
-| **STILL_PUNT** | **41** | 32% | 代码完全没动，问题还在（M-CLEANUP 关闭 8 项 49→41）|
-| **DONE** | **30** | 23% | 代码已落实（M-CLEANUP +8：#8/#9/#10/#11/#12/#13/#14/#3+#15 推迟 D 类）|
+| **STILL_PUNT** | **39** | 30% | 代码完全没动，问题还在（Phase 2.2 子片 5 关闭 #3+#15 41→39）|
+| **DONE** | **32** | 25% | 代码已落实（Phase 2.2 子片 5 +2：#3+#15 IssueResponse + DimensionResponse join 装配 / M-CLEANUP +8 / pre +22）|
 | **PARTIAL** | 2 | 2% | 部分子项做了 |
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-09 Phase 2.2 子片 5 关闸（D 类 #3+#15 装配 / 1623→1629 PASS）
+
+**关闭项 2**：
+- #3 ✅ IssueResponse join 字段（node_name/created_by_name/assigned_to_name）— 子片 5 / Issue model relationship + IssueDAO `_JOINS` selectinload + service 三处 refetch + router `_resp` 装配 + 3 e2e
+- #15 ✅ DimensionResponse join 字段（dimension_type_key/updated_by_name）— 子片 5 / DimensionRecord model relationship + DimensionDAO `_JOINS` selectinload + service 两处 refetch + router `_record_response` 装配 + 3 e2e
 
 ### 2026-05-09 M-CLEANUP sprint 关闸（4 commits / 1613→1619 PASS / 8 punt 关闭）
 
@@ -70,7 +76,7 @@ policy:
 | 1 | ~~**write_event stub 仍未替换为真 INSERT**~~ ✅ **DONE 2026-05-09 commit 959e0b4** | M15-B1 | 后续独立 sprint | ~~critical~~ | **M16 sprint 子片 0.5 L1+L3 batch 关闭** |
 | 20 | ~~**require_platform_admin Protocol 版 vs current_user 版去重**~~ ⏸️ **STILL_PUNT 2026-05-09 / M20 sprint 重新评估不触发**：M20 全走 require_user + assert_team_role / 无 platform_admin endpoint / 保留至下一含 platform_admin 模块（如未来 platform-admin 独立模块） | M18 R2 #2 | 子片 5+ 或后续 sprint | ~~medium~~ | M20 评估不触发 / 推迟到下一 platform_admin 模块 |
 | 2 | ~~**M03-M08 service ~14 处裸 CRUD `action_type="create/update/delete"`**~~ ✅ **DONE 2026-05-09 commit 5c592d5**（实际 7 模块 41 处 含 M02 + M11 cold_start 命名漂移 + M07 issue_unassigned + M08 module_relation_updated + M05 version_record_set_current + M06 competitor_ref_updated 4 NEW enum）| M15-B2 | 与 B1 同 sprint | ~~high~~ | **M16 sprint 子片 0.5 batch 关闭 + ci-lint R14 grep 守护立规防御未来** |
-| 3 | **IssueResponse 漏 join 字段（node_name/created_by_name/assigned_to_name）** | M07 R2 P2-1 | M13/M15 集成期补 | **high** — design §7 字面承诺；前端 N+1 拼接；列表卡顿 | M16 启动 reconcile 时拍 |
+| 3 | ~~**IssueResponse 漏 join 字段（node_name/created_by_name/assigned_to_name）**~~ ✅ **DONE 2026-05-09 / Phase 2.2 子片 5 关闸**：Issue 模型加 created_by_user/assigned_to_user relationship（lazy="raise"）+ IssueDAO `_JOINS` selectinload 应用到 list_by_project + get_by_id + IssueService create/update/transition 三处 refetch + router `_resp` 显式装配 + 3 backend e2e（test_list_issues_join_fields_populated / test_get_issue_join_fields_populated / test_floating_issue_node_name_is_none） | M07 R2 P2-1 | ~~M13/M15 集成期补~~ → **Phase 2.2 关闸**| ~~high~~ | DONE / 与 #15 一并 |
 | 4 | ~~**SSE generator 占 AsyncSession 300s**~~ ✅ **RE-EVALUATE 2026-05-09 / M16 sprint 已用 BackgroundTasks + 自起 SessionLocal 替代长持 SSE 范式** | M13-B13 | M16/M17 立异步 SSE 策略 | ~~high~~ | **M16 §12B 后台 fire-and-forget 子模板 + 自起 SessionLocal 隔离请求级 Depends(get_db) 已沉淀**（commit 2273f90 + 043e3e2 / audit/m16 元贡献 #5）；M13 `analyze_service.py` SSE generator 仍存量未迁但**新模块（M16/M17）已不触发同款** → 标 STATUS_CHANGE：从"M17 必查"降为"M13 后续重构 sprint 顺手迁"low |
 | 5 | ~~**M02 Project.ai_model 字段未实装**~~ ✅ **DONE 2026-05-09 / 子片 3 验证字段已存在不需 alembic add**（M02 model 字面已含 ai_model 列；M13-B16 punt 误判） | M13-B16 | M14+ baseline-patch | ~~medium~~ | **M16 sprint 子片 3 验证关闭** |
 | 6 | **M07 update 不支持 detach (None→NULL)** | M07 R1-A P2-2 | design §3/§7 reconcile + 产品决策 | medium — issue 节点关联无法解除；M14 link/unlink 已支持但 M07 主表残缺 | M16 启动让 CY 拍是否补 |
@@ -82,7 +88,7 @@ policy:
 | **12** | **M04-9 target_type 5 处 hard-code（service:327/378/436/482/516）** ⏳ 2026-05-09 M17 子片 0 prep 验证仍 STILL_PUNT；服务 M17 不触动 dimension_service 范围，本期不顺手清 | M04 R1-B B6 | M15 启动前 const 化（已过）| medium — 与 #1+#2 同根因（命名规约一致性）；若 #1 先升 schema 不 const 化会冲突 | M16 启动 reconcile A 栏首条 / 与 #2 同 batch |
 | **13** | **M04-1 dimension_records (updated_by, updated_at) 联合索引未建** ⏳ 2026-05-09 M17 子片 0 prep 验证：现仅有 (project_id, updated_at) 索引（model:52），(updated_by, updated_at) 仍缺 / STILL_PUNT | M04 R1-A A2 | M15/M19 | medium — dimension_records 是 M13/M14 写大量行的源表，缺联合索引会让 activity_stream 时间线查询慢 | 与 #1 同 sprint 评估是否提前建 |
 | **14** | **M04-8 db.get(DimensionType) 三处未走 DAO** ⏳ 2026-05-09 M17 子片 0 prep 验证仍 STILL_PUNT（service:349/428/474）；M17 不触 dimension_service，本期不清 | M04 R1-B B2.4 | M15 启动前（已过）| low — 风格统一性；service:349/428/474 三处 | M16 启动顺手清 |
-| **15** | **M04-R2 A1 DimensionResponse 缺 dimension_type_key/updated_by_name join 字段** | M04 R2 A1 | 前端真用时补 join | medium — 与 #3 IssueResponse 同款契约缺口；前端真用时必补 selectinload | 与 #3 一并 M16 启动拍 |
+| **15** | ~~**M04-R2 A1 DimensionResponse 缺 dimension_type_key/updated_by_name join 字段**~~ ✅ **DONE 2026-05-09 / Phase 2.2 子片 5 关闸**：DimensionRecord 模型加 dimension_type/updated_by_user relationship（lazy="raise"）+ DimensionDAO `_JOINS` 应用到 list_by_node + get_by_id + get_one + DimensionService create/update_with_lock 两处 refetch + router `_record_response` 显式装配 + 3 backend e2e（test_list_dimensions_join_fields_populated / test_get_dimension_join_fields_populated / test_update_dimension_join_fields_after_refetch）| M04 R2 A1 | ~~前端真用时补 join~~ → **Phase 2.2 关闸**| ~~medium~~ | DONE / 与 #3 一并 |
 | **16** | **WS golden e2e（accept 后 service push + client receive）** | M17 R2 P1-01 punt | M18 集成 sprint 或专门 WS integration sprint | medium — sync TestClient + async fixture 桥接复杂；当前 4 鉴权拒绝矩阵已覆盖安全边界，golden 留 integration | M18+ 启动评估是否落 integration helper |
 | **17** | **_sanitize_filename horizontal 化** | M17 R2 sink #1 | 第三实例（M18+ multipart 上传）触发 | medium — M11 cold_start + M17 import 重复实装；第三实例触发立规迁 api/utils/upload_helpers.py | 第三 multipart sprint 启动时迁 |
 | **18** | **M17 confirm_review 绕过 _transition 缺 import_status_changed event** | M17 R1-A P2-3 | M18+ 顺手补 | low — design §10 期望每次状态扭转都有 status_changed event；当前缺 awaiting_review→ai_step3 一条 | M18+ 启动顺手补 |
@@ -355,14 +361,14 @@ UNVERIFIABLE 8 项
 
 | # | 项 | 状态 / 触发时机 |
 |---|---|---|
-| P22-3c-1 | search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect / 是 P22-3b-1 子集 | 子片 5 cleanup（与 P22-3b-1 同批抽 lib/server-action-helpers.ts）|
-| P22-3c-2 | StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行 | 子片 5 cleanup（consumer 迁 panorama 时同时迁 result 格式）|
-| P22-3c-3 | issues.ts 命名前缀混用 list/get | 子片 5 命名规约统一 |
-| P22-3c-4 | competitor-references 命名缺资源前缀 | 子片 5 重命名 createCompetitorRef 等 |
-| P22-3c-5 | findInTree 三处重复（trend update of P22-3b-2）| 子片 5 抽 lib/tree-utils.ts |
-| P22-3c-6 | export.ts ExportPayload = unknown / OpenAPI 真不约束 / consumer UI 解析旧字段不再保证 | 子片 5 cleanup CY 拍补 ExportResponse schema or 删 consumer |
-| P22-3c-7 | activity-log.logActivity / logActivityAuto no-op 兼容层 / 残留 caller 未审计 | 子片 5 grep caller 全删 + 删函数 |
-| P22-3c-8 | project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor | 子片 5 cleanup（删本文件时一并）|
+| P22-3c-1 | search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect / 是 P22-3b-1 子集 | ~~子片 5 cleanup~~ → **整批 defer Phase 2.3 frontend-polish 子 sprint**（子片 5 关闸 scope 自决 / 详 audit §3f）|
+| P22-3c-2 | StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行 | ~~子片 5 cleanup~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-3 | issues.ts 命名前缀混用 list/get | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-4 | competitor-references 命名缺资源前缀 | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-5 | findInTree 三处重复（trend update of P22-3b-2）| ~~子片 5~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-6 | export.ts ExportPayload = unknown / OpenAPI 真不约束 / consumer UI 解析旧字段不再保证 | ~~子片 5~~ → defer Phase 2.3 frontend-polish（含 CY 拍补 ExportResponse schema or 删 consumer）|
+| P22-3c-7 | activity-log.logActivity / logActivityAuto no-op 兼容层 / 残留 caller 未审计 | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-8 | project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
 
 **3c trend update**：
 - P22-3b-1 helper 重复从 5 文件扩散到 10 文件（superset）/ 抽 lib/server-action-helpers.ts 时机已成熟
@@ -374,7 +380,7 @@ UNVERIFIABLE 8 项
 | # | 项 | 状态 / 触发时机 |
 |---|---|---|
 | P22-4-1 | TeamMemberRemoveResponse.residual_project_members 仅展示 count / 详情未消费 | Phase 2.3 GET members endpoint 上线后统一展示残留成员详情 |
-| P22-4-2 | isTeamOwner action 死代码 / page 直接 creator_id 推断未调用 | 子片 5 cleanup 决定保留（Phase 2.3 server component 预留）or 删除 |
+| P22-4-2 | isTeamOwner action 死代码 / page 直接 creator_id 推断未调用 | ~~子片 5 决定~~ → defer Phase 2.3 frontend-polish 子 sprint（与 P22-3c-1~8 同批）|
 | P22-4-backend-gap | M20 后端 4 项 endpoint 缺口 — 子片 4 启动期 ls 穷举发现：(a) GET /api/teams/{tid}/members 列成员名单 + role + user_name；(b) GET 候选用户检索 endpoint（add member + transfer 下拉数据源 / 当前只能 by user_id 输入）；(c) GET /api/teams/{tid}/me-role admin/member RBAC 真守卫数据源；(d) ❌ soft-delete + restore = M20 design §3 Q8=B 字面已决 hard delete + RESTRICT FK / **不立项 / prompt 字面错记纠正** | Phase 2.3 集成期评估补 (a)+(b)+(c) / (d) 撤销 |
 
 **4 trend update**：

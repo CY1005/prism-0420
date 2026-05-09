@@ -1,16 +1,17 @@
 ---
 title: Phase 2.2 R 范式试运行 + findings 沉淀
-status: in_progress
+status: completed
 owner: CY
 created: 2026-05-09（子片 2 关闸）
+completed: 2026-05-09（子片 5 关闸 / Phase 2.2 100%）
 purpose: |
-  Phase 2.2 子片 1+2 合并 R1+R2 第 1 数据点 / SR-P22-2 立规候选实证基础。
-  累计 5 数据点（子片 1+2 合并 → 3a → 3b → 3c → 4）后 sink 到 feedback_subagent_sprint §4。
+  Phase 2.2 全集 R1+R2 5 数据点（子片 1+2 合并 / 3a-ii / 3b / 3c / 4）+ 子片 5 D 类 #3+#15 join 装配
+  + Phase 2.2 关闸 audit；SR-P22-2/3/4/5 立规候选已 sink 到 feedback 体系。
 parent: design/01-engineering/06-frontend-spec.md（auth + codegen sanction）
 related:
-  - feedback_subagent_sprint.md（R 范式立规来源）
-  - feedback_decision_layering.md（5 步流程）
-  - _handoff/cross-sprint-punt-pool.md（子片 3 punt 项）
+  - feedback_subagent_sprint.md（R 范式立规来源 + SR-P22-2/4/5 sink 目标）
+  - feedback_decision_layering.md（5 步流程 + SR-P22-3 反模式表 sink 目标）
+  - _handoff/cross-sprint-punt-pool.md（子片 3-5 punt 项 + #3+#15 ✅ DONE）
 ---
 
 # Phase 2.2 R 范式试运行 + findings 沉淀
@@ -32,6 +33,7 @@ related:
 | 3b | `490ad23` | actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze getAffectedNodes 实装 / 6 stub punt + errors.ts isRedirectError 豁免 | ~$5 | 2 P1 候选 / 复审 1 立修 + 1 降 P2 punt | 1 P1 立修 / 2 P2 punt |
 | 3c | `bccb225` | actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错** | ~$6 | 4 P1 候选 / 复审 1 立修 + 3 降 P2 punt | 2 P1 立修（mutation 401 root-cause + admin NOT_IMPLEMENTED 类型） / 3 P2 punt |
 | 4 | `0626add` | actions/teams.ts 全 rewrite（10 actions / 含 moveProjectTeam）+ validators/team.ts 全 rewrite + 3 路由全新写（/teams 列表 + /teams/new + /teams/[teamId] 合并 5 cards info/edit/members/transfer/danger）+ 02-frontend-design.md 轻量草案 + **errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修（teams/page + teams/[teamId] + projects/page）** + scope 自决收 6→3 路由（SR-P22-3 第 5 实证）+ M20 后端 4 项 gap 进 cross-sprint pool P22-4-backend-gap | ~$3-4 | 0 P1 / 3 P2 punt | 2 P1 立修（client `.catch` 吞 NEXT_REDIRECT root-cause / projects/page 同根因连带修） + 1 降 P2 + 2 P2 punt |
+| 5 | `<本 commit>` | D 类 #3 IssueResponse + #15 DimensionResponse join 真装配（model relationships + DAO selectinload + service refetch + router `_resp` 装配）+ 6 backend e2e（3 M07 + 3 M04 / 字面断言 node_name/created_by_name/assigned_to_name/dimension_type_key/updated_by_name 真值 / SR-CLEANUP-3 防假覆盖）+ Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + handoff/roadmap/phase-gate 同步 | ~$1-2 | — (D 类装配纯实施 / 无 R 范式) | — (同左) |
 
 **R1+R2 第 2 数据点结论**：
 - R1 reuse 5 P1 候选 / 复审：3 立修（projectsData mock dead / createVersion releaseMode workspace.tsx 在 ignore 范围 punt / handleCreateVersion 错误吞 workspace.tsx 在 ignore 范围 punt / eslint glob `[projectId]` 字面 char class 已 workaround / `getProjects` 401 处理与 R2 同根因合并立修）
@@ -246,15 +248,36 @@ cold-start prompt「子片 4」段写「6 路由 + R-X3 RBAC + soft-delete + res
 
 **4 scope 修订归档**：3 路由真接 + 10 actions + 1 projects-side / R1+R2 第 5 数据点 + R2 真漏抓 client `.catch` 吞 redirect root-cause / SR-P22-3 第 5 实证支撑 / SR-P22-4 跨子片同根因检测**全新写形态新场景变体**实证（root-cause 不在 server actionError 而在 client useEffect catch / 历史 子片 3a-ii projects/page.tsx 同根因连带修）。
 
-## §4 SR-P22 立规候选 sink（待 5 数据点后实证）
+## §3e 子片 5 findings（D 类 #3+#15 join 装配 / Phase 2.2 关闸）
 
-| 立规 ID | 描述 | 立规时机 |
-|---------|------|----------|
-| SR-P22-1 | feedback_decision_layering 自检第 4 问（已即时落） | ✅ 已立 |
-| SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1 / 第 2 数据点实证 R2 真漏抓硬伤 ROI 高于 R1）| 5 数据点后实证 sink |
-| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports + 3b SSE/WS 路径完全不在 OpenAPI + 3c OpenAPI 域不对应 4 个 actions = 四实证 / 已成熟）| 子片 5 关闸前 sink |
-| SR-P22-4 | feedback_subagent_sprint §4 — R2 spec subagent **跨子片同根因漂移检测**是核心 ROI 维度（mutation 路径 401 静默吞错是 3a-ii read 路径硬伤的 mutation 同型 / 3a/3b R2 漏抓 / 3c R2 闭环 / 抓 root-cause 修一处通修 N+ caller / **第 5 数据点新场景变体实证**：root-cause 不限 server actionError / client useEffect `.catch` 吞 NEXT_REDIRECT 是同根因 client-side 新场景 / 子片 4 R2 闭环 + 历史 projects/page.tsx 同根因连带修） | 第 5 数据点支撑 / 子片 5 关闸前 sink |
-| SR-P22-5 | feedback_subagent_sprint §6 关闸沉淀 — handoff prompt 写 endpoint 字面前必 grep schema/router（5 数据点 5 实证：M01 register + 3a-ii broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 + 4 prompt 凭印象写 soft-delete restore / 子片 4 启动期 ls 穷举耗 30min 才识破 / handoff prompt 写时 grep 一次省下游 sprint 反复识破成本） | 子片 5 关闸前 sink |
+无 R1/R2 subagent — 子片 5 是纯 D 类装配实施（design §7 字面承诺 + cross-sprint pool #3+#15 关闭），R 范式不适用。
+
+**装配实证**（SR-CLEANUP-3 防假覆盖）：
+
+1. **Issue 模型**：加 `created_by_user` + `assigned_to_user` relationship（lazy="raise" 杜绝 async 隐式 lazy load）；`node` relationship 已存在
+2. **DimensionRecord 模型**：加 `dimension_type` + `updated_by_user` relationship（同 lazy="raise"）
+3. **IssueDAO**：`_JOINS = (selectinload(node), selectinload(created_by_user), selectinload(assigned_to_user))` 应用到 `list_by_project` + `get_by_id`
+4. **DimensionDAO**：`_JOINS = (selectinload(dimension_type), selectinload(updated_by_user))` 应用到 `list_by_node` + `get_by_id` + `get_one`
+5. **IssueService**：`create` / `update` / `transition` 三处 mutation 后 refetch via `dao.get_by_id` 拿带 joins 的实例返回（`get_for_update` 不带 joins → transition 必 refetch）
+6. **DimensionService**：`create` / `update_with_lock` 两处 mutation 后 refetch via `dao.get_by_id`（`update_with_lock` 必 refetch — `updated_by` 字段改写后 relationship 缓存失效）
+7. **Router `_resp` / `_record_response`**：显式装配 join 字段（不再用 `model_validate(from_attributes=True)` 隐式 / 装配点显式抛 `lazy="raise"` 异常防 caller 漏 eager load）
+
+**6 backend e2e**（pytest 1623→1629 / 全 PASS）：
+
+- M07: `test_list_issues_join_fields_populated` / `test_get_issue_join_fields_populated` / `test_floating_issue_node_name_is_none`
+- M04: `test_list_dimensions_join_fields_populated` / `test_get_dimension_join_fields_populated` / `test_update_dimension_join_fields_after_refetch`
+
+**前端真用 join 字段**：当前 `app/src/app/projects/[projectId]/issues/page.tsx` + dimension 渲染均**未消费** `node_name` / `created_by_name` / `dimension_type_key` / `updated_by_name`，DOM e2e 不触发。后端契约就位 + OpenAPI types 已声明（`types/api.ts:2473` 含 `node_name?: string | null`），前端任意一次 UI 增强（issue 列表展示节点名 / dimension 列表展示更新人）即可零改造消费 — Phase 2.3 集成验证或后续 UI sprint 自然激活。
+
+## §4 SR-P22 立规候选 sink（5 数据点已支撑 / 子片 5 完成）
+
+| 立规 ID | 描述 | 立规时机 | 状态 |
+|---------|------|----------|------|
+| SR-P22-1 | feedback_decision_layering 自检第 4 问（已即时落） | ✅ 已立 | DONE |
+| SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1 / 5 数据点实证 R2 真漏抓硬伤 ROI 高于 R1）| 子片 5 关闸 sink | DONE（feedback_subagent_sprint.md §4 追加附录） |
+| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（5 实证：M01 register + 3a-ii broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 + 4 prompt 凭印象写 soft-delete restore） | 子片 5 关闸 sink | DONE（feedback_decision_layering.md 反模式表追加） |
+| SR-P22-4 | feedback_subagent_sprint §4 — R2 spec subagent **跨子片同根因漂移检测**是核心 ROI 维度（5 数据点实证：mutation 路径 401 静默吞错 + client `.catch` 吞 NEXT_REDIRECT root-cause 修一处通修 N+ caller） | 子片 5 关闸 sink | DONE（与 SR-P22-2 合并 sink）|
+| SR-P22-5 | feedback_subagent_sprint §6 关闸沉淀 — handoff prompt 写 endpoint 字面前必 grep schema/router（5 实证 / 写 prompt 时 grep 一次省下游 sprint 反复识破成本） | 子片 5 关闸 sink | DONE（feedback_subagent_sprint.md §6 关闸 sink 附录）|
 
 ## §5 元贡献（实证）
 
@@ -262,7 +285,35 @@ cold-start prompt「子片 4」段写「6 路由 + R-X3 RBAC + soft-delete + res
 - **eslint ignore 渐进还债范式**：子片 1 移 `services/http-client.ts` + `auth-token-store.ts` + `types/**`；子片 2 移 `services/auth.ts`（删）+ `contexts/auth-context.{tsx,test.tsx}`（新写）+ `lib/validators/auth.ts` + `app/login/**` + `app/register/**`。每改一文件 → 移除 ignore → eslint ✓ 才 commit；累计移除 N=11 项。
 - **R 范式合并数据点 ROI**：子片 1 仅工具链（http-client mock 充分）/ 子片 2 真用 endpoint（cookie + CORS + e2e）；合并跑使 R2 spec 验证有真锚点（schema 同步 / cookie 通道 / CORS 配置全字面对照），ROI 显著高于子片 1 单独跑。
 - **R2 spec 跨子片同根因检测 ROI**（第 4 数据点新发现）：3c R2 抓到 mutation 路径 401 静默吞错是 3a-ii read 路径硬伤的同型再发 / root-cause 在 errors.ts.actionError 一改通修 11 mutation + 4 defineAction caller / 3a/3b R2 漏抓但 3c R2 闭环 / 验证 R2 spec subagent 不只是「本子片字面合规」检查器，更是「跨子片同根因漂移检测」机制 — 是 SR-P22-4 立规候选基础。
+- **D 类 #3+#15 装配实证**（子片 5 / cross-sprint pool 41→39）：design §7 字面承诺的 join 字段（IssueResponse.node_name+created_by_name+assigned_to_name / DimensionResponse.dimension_type_key+updated_by_name）从 M07/M04 sprint 期 punt（"前端真用时补"）→ Phase 2.2 关闸前一并装配；6 backend e2e 字面断言真值（SR-CLEANUP-3 防假覆盖立规生效）；前端零改造消费（OpenAPI types 已含 optional 字段 / 任意 UI 增强自然激活）。
+
+## §3f 子片 4 长尾 cleanup scope 自决（feedback_decision_layering 5 维矩阵 / feedback_self_decide_no_ask）
+
+**handoff prompt 列项**：withAuthRedirect 抽 helper / consumer 漂移修复 / cross-sprint pool 关闭项（涉及 P22-3b-1 + P22-3c-1~8 + P22-4-2 共 10 items）。
+
+**自决评估**：
+- 层级：纯 frontend polish / sprint audit 级 / 自决范围
+- 影响：无契约影响 / 无回归风险 / 不阻断 Phase 2.3 启动
+- ROI：P22-3b-1 抽 helper trend 5→10 文件已临界（高 ROI 单点）；其他 7 项是命名规约 / dead code / 注释清理（中低 ROI）
+- 成本：全做估 cost +$2-3 + 0.5 天 / 已超出子片 5 estimated $1-2
+- **scope 自决**：**子片 5 关闸只完成 Phase 2.2 核心交付（D 类 #3+#15 装配 + audit + handoff sync + SR-P22 立规 sink）**；子片 4 长尾 10 items **整批 defer 到独立 frontend polish 子 sprint**（建议夹带 Phase 2.3 §8.0 工程规约 minimal 补完时一并）
+
+**Why 不连带做**：
+- 子片 5 范围 estimated $1-2 / 0.5 天 — D 类装配 + audit 已消耗预算上限
+- 长尾 cleanup 单独 sprint 启动期可走完整 R1+R2 pipeline / 一次性出 ROI 数据点
+- 防 sprint scope creep（feedback_problem_layered_analysis 失效信号 #7）
+
+**触发时机**：Phase 2.3 启动包内显式登记一个 "frontend-polish" 子 sprint / 或 Phase 2.3 §8.0 工程规约 minimal 补完时夹带；不漂移成"永久驻留 cross-sprint pool"。
+
+## §6 Phase 2.2 关闸结论
+
+- ✅ **子片 0-5 全完成** / 7 子片合计 ~$15-20 cost / ~5-6 天工作量
+- ✅ **R 范式 5 数据点完整**：1+2 合并 / 3a-ii / 3b / 3c / 4 — SR-P22-2/4 立规已 sink
+- ✅ **D 类 #3+#15 装配** / cross-sprint pool 41→39
+- ✅ **eslint ignore 渐进还债**：累计移除 N=11+ 项（子片 1-4），子片 5 仅 backend 改无 eslint 影响
+- ✅ **测试基线**：1629 PASS / 5 skipped / 0 failed
+- ⏭ **下一步推荐**：Phase 2.3 集成验证 + perf sprint 评估（ROADMAP §8 + cross-sprint C 类 12 项）
 
 ---
 
-last_updated: 2026-05-09
+last_updated: 2026-05-09（子片 5 关闸 / Phase 2.2 100%）

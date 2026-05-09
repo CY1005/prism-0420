@@ -212,21 +212,25 @@ S5）。M17 启动前必须 ✅：
 
 ---
 
-## 闸门 4：后端 → 前端继承
+## 闸门 4：后端 → 前端继承 ✅ 2026-05-09 全 ✅
 
 启动 **Phase 2.2 前端继承 Prism** 之前：
-- [ ] M01-M05 + M20 后端代码 merge（OpenAPI 契约稳定）
-- [ ] `npm run codegen` 能从后端 OpenAPI 生成 TS 类型
-- [ ] 前端 api-client 至少 1 个真实 endpoint 调通（不是 mock）
+- [x] M01-M05 + M20 后端代码 merge（OpenAPI 契约稳定）
+- [x] `npm run codegen` 能从后端 OpenAPI 生成 TS 类型
+- [x] 前端 api-client 至少 1 个真实 endpoint 调通（不是 mock）
 
 ---
 
 ## 闸门 5：上线前
 
 启动 **Phase 2.3 集成验证 → 上线** 之前：
-- [ ] 后端 20 模块全 PR merge
-- [ ] 前端继承 Prism + M20 新增页面 PR merge
-- [ ] CI 全跑通（lint + test + build + migrate）
+- [x] 后端 20 模块全 PR merge（M01-M20 全交付 / M09 superseded by M18）
+- [x] 前端继承 Prism + M20 新增页面 PR merge（Phase 2.2 子片 0-5 全完成 2026-05-09）
+- [ ] CI 全跑通（lint + test + build + migrate）— Phase 2.3 §8.0 工程规约 minimal 补完时落
+- [ ] 工程规约 minimal 补完（03-cicd / 04-observability / 05-security）
+- [ ] cross-sprint pool C 类 12 项 perf sprint 评估（接受 / 立专门 sprint / 推上线后）
+- [ ] 集成 e2e（Playwright 跨 backend+frontend 真接通）
+- [ ] 真业务 path 启用（pgvector + cross-sprint A 类 #21-#24 占位期残留解锁）
 
 ---
 

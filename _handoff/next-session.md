@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-4-完成 / 子片 5 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-5-完成 / Phase 2.2 100% / 下一步 Phase 2.3**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,27 +11,40 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-4-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-5-完成 / Phase 2.2 100%）
 
-- **Phase 2.2 子片 4 完成**（M20 团队页新写 / Prism 无 / 全新写 / scope 自决 6→3 路由 + 9 actions + 1 projects-side / **errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修 client-side NEXT_REDIRECT 同根因新场景变体**）：
-  - **scope 自决收缩**（feedback_decision_layering 5 维矩阵 + feedback_self_decide_no_ask + feedback_problem_layered_analysis 失效信号 #7 / SR-P22-3 第 5 实证）：cold-start prompt「6 路由 + soft-delete restore」→ 实际可达 3 路由（/teams + /teams/new + /teams/[teamId] 合并 5 cards info/edit/members/transfer/danger）+ 9 actions + 1 projects-side moveProjectTeam / soft-delete restore = M20 design §3 Q8=B 字面已决 hard delete + RESTRICT FK / **prompt 字面错记 / 撤销不立项**
-  - 8 文件改：actions/teams.ts 全 rewrite（10 actions / 含 moveProjectTeam）+ validators/team.ts 全 rewrite（5 zod schemas）+ app/teams/page.tsx 全 rewrite + app/teams/new/page.tsx 新增 + app/teams/[teamId]/page.tsx 全 rewrite + app/projects/[projectId]/settings/page.tsx 改 migrateProjectToTeam → moveProjectTeam（仍 ignore）+ lib/errors.ts isNextRedirectError 加 export + app/projects/page.tsx 加 client `.catch` rethrow + design/02-modules/M20-team/02-frontend-design.md 新增轻量草案 + eslint.config.mjs 移 3 ignore（actions/teams + validators/team + app/teams/**）+ design/audit/p22-pilot-template-validation.md §3d + cross-sprint-punt-pool.md + p22-subslice-prompts.md
-  - 累计 vitest 20 PASS / eslint 0 errors 0 warnings / pytest 不动（仅前端改）
-  - **R1+R2 第 5 数据点**（全新写形态 ROI 验证）：R1 Sonnet reuse 0 P1 + 3 P2 punt（withAuthRedirect 11 处 trend persistent / header h-16 vs h-14 token / confirm-by-name Dialog 2 次未达临界）/ R2 Opus spec 2 P1 立修 + 1 降 P2 + 2 P2 punt
-  - **R 范式第 5 数据点 ROI 新维度**：R2 spec 抓到 client `.catch(() => set([]))` 吞 NEXT_REDIRECT 是子片 3b NEXT_REDIRECT 硬伤的 **client-side 同根因新场景变体**（root-cause 不限 server actionError / client useEffect catch 是同根因新场景）/ 子片 3a-ii 已合规 projects/page.tsx 同根因连带修 / **R2 真漏抓 root-cause**：errors.ts isNextRedirectError 加 export + 3 处 `.catch` 重写一改通修 N+ caller / SR-P22-4 全新写形态新场景变体实证支撑 / R1+R2 配比 1+1 ROI 持续高于 R1=3 + R2=1
-  - **scope 修订归档**：cold-start 6 路由 → 实际 3 路由 / R1+R2 第 5 数据点 / SR-P22-3 第 5 实证（M01 register + 3a-ii 26 broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 + 4 prompt 凭印象写 soft-delete restore = 五实证）/ M20 后端 4 项 endpoint gap 进 cross-sprint pool P22-4-backend-gap：(a) GET /api/teams/{tid}/members + (b) GET 候选用户检索 + (c) GET /me-role / (d) soft-delete restore = 字面已决不立项
-  - **SR-P22-5 立规候选新增**（关闸 sink 第 5 项）：handoff prompt 写 endpoint 字面前必 grep schema/router / 5 数据点 5 实证 / handoff prompt 写时 grep 一次省下游 sprint 反复识破成本
+- **Phase 2.2 子片 5 完成 / Phase 2.2 100% 关闸**（D 类 #3 IssueResponse + #15 DimensionResponse join 真装配 + Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + cross-sprint pool 41→39）：
+  - **D 类 #3 装配**：Issue model 加 `created_by_user` + `assigned_to_user` relationship（`lazy="raise"` 防 async 隐式 lazy load）+ IssueDAO `_JOINS = (selectinload(node), selectinload(created_by_user), selectinload(assigned_to_user))` 应用到 `list_by_project` + `get_by_id` + IssueService.create/update/transition 三处 mutation 后 `refetch via dao.get_by_id` 拿带 joins 的实例 + router `_resp` 显式装配 join 字段
+  - **D 类 #15 装配**：DimensionRecord model 加 `dimension_type` + `updated_by_user` relationship（同 lazy="raise"）+ DimensionDAO `_JOINS = (selectinload(dimension_type), selectinload(updated_by_user))` 应用到 `list_by_node` + `get_by_id` + `get_one` + DimensionService.create/update_with_lock 两处 mutation 后 refetch + router `_record_response` 显式装配
+  - **6 backend e2e**（SR-CLEANUP-3 防假覆盖 / 字面断言响应 JSON 含 join 字段真值）：
+    - M07: test_list_issues_join_fields_populated / test_get_issue_join_fields_populated / test_floating_issue_node_name_is_none
+    - M04: test_list_dimensions_join_fields_populated / test_get_dimension_join_fields_populated / test_update_dimension_join_fields_after_refetch
+  - **前端真用 join 字段**：当前 `app/src/app/projects/[projectId]/issues/page.tsx` + dimension 渲染均**未消费** join 字段 / OpenAPI types 已声明 optional / 任意 UI 增强自然激活 / DOM e2e 不触发本子片
+  - 累计 pytest 1623 → 1629 PASS / 5 skipped / 0 failed / eslint 0 errors / ruff 0 issues
+  - **Phase 2.2 关闸 audit 写完**：design/audit/p22-pilot-template-validation.md status: in_progress → completed / §3e 子片 5 findings + §6 关闸结论
+  - **SR-P22 立规 sink 4 项**：SR-P22-2/4 合并 sink → feedback_subagent_sprint.md §4 附录（前端继承 R1=1 Sonnet+R2=1 Opus + R2 跨子片同根因漂移检测）/ SR-P22-3 → feedback_decision_layering.md 反模式表 / SR-P22-5 → feedback_subagent_sprint.md §6 关闸沉淀
+  - **cross-sprint pool 41→39**：#3 + #15 标 ✅ DONE / 状态分布 STILL_PUNT 41→39 / DONE 30→32
 
-- **下一步推荐**：**子片 5 — D 类 #3+#15 join 真装配 + Phase 2.2 关闸 audit + handoff 同步 + 子片 4 长尾 cleanup**
-  - prompt：`_handoff/p22-subslice-prompts.md`「子片 5」段
-  - 估 cost $1-2 / 估时 0.5 天 / **可同会话续 or 新 session（视累计 cost）**
-  - 含：D 类 #3 IssueResponse + #15 DimensionResponse join 字段后端真装配 + 前端真用 + Phase 2.2 关闸 audit + 4 SR-P22 立规 sink + 子片 4 长尾 cleanup（withAuthRedirect 抽 helper / consumer 漂移修复 / cross-sprint pool 关闭项）
+- **下一步推荐**：**Phase 2.3 集成验证 + 工程规约 minimal 补完 + frontend-polish 子 sprint + cross-sprint pool C 类 12 项 perf sprint 评估**
+  - 四选其一开新 session（cost 估各异 / Phase 2.3 §8.0 + §8.1 + frontend-polish 一并 or 单跑）：
+    - **A. 工程规约 minimal 补完**（Phase 2.3 §8.0 / 上线前硬前置 / 03-cicd + 04-observability + 05-security 三 spec 补完 + GitHub Actions workflow 文件 + Prometheus + Sentry + .env.prod.example）
+    - **B. 集成 e2e**（Phase 2.3 §8.1 / Playwright 跨 backend+frontend 真接通 / 10 核心页面 golden + 关键 E2E 链路）
+    - **C. frontend-polish 子 sprint**（子片 5 关闸时 defer 的 10 items：P22-3b-1 抽 lib/server-action-helpers.ts + P22-3c-1~8 命名/dead code/兼容层清理 + P22-4-2 isTeamOwner 死代码 / 估 cost $2-3 / 0.5 天 / 单独跑可走完整 R1+R2 pipeline 出 6 数据点）
+    - **D. perf sprint 评估**（cross-sprint pool C 类 12 项 / 接受 / 立专门 sprint / 推上线后）
+  - 推荐顺序：A → B → C → D（工程规约不补不能上 prod / 集成 e2e 是上线 gate / frontend-polish 可与 A/B 并行 / perf 可推上线后）
+  - cold-start prompt 待写：进 _handoff/ 单独 phase23-prompts.md 文件 + frontend-polish-prompts.md
 
-- **Phase 2.2 全集进度**：6/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b + 3c + 4）/ 还需 1 子片（5 关闸）/ 总估 $1-2 + 0.5 天
+- **Phase 2.2 全集进度**：✅ 7/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii + 3b + 3c + 4 + 5）/ 累计 ~$15-20 cost / ~5-6 天工作量 / R 范式 5 数据点完整
 
 ---
 
-## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3c-完成）
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-4-完成）
+
+- **Phase 2.2 子片 4 完成**（M20 团队页新写 / Prism 无 / 全新写 / scope 自决 6→3 路由 + 9 actions + 1 projects-side / **errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修 client-side NEXT_REDIRECT 同根因新场景变体**）
+
+---
+
+## 0b. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3c-完成）
 
 - **Phase 2.2 子片 3c 完成**（actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错 root-cause**）：
   - **scope 自决收缩**（feedback_decision_transparency A 模式 / SR-P22-3 第 4 实证）：cold-start prompt「10 actions + 7 页面」→ 实际可达 6 actions 完整 + 2 端点重写 + 2 全 punt（templates/feed/openclaw/admin 用户管理/项目级 ZIP 导出 5 个域 OpenAPI 无对应路径）/ 7 页面解锁全留子片 5 集中处理

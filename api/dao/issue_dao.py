@@ -16,8 +16,18 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.models.issue import Issue
+
+# Phase 2.2 子片 5（D 类 #3 join 装配 / SR-CLEANUP-3 防假覆盖）：
+# IssueResponse.node_name / created_by_name / assigned_to_name 装配的统一 selectinload tuple；
+# read 路径强制 eager load，与 model 层 lazy="raise" 配合杜绝 async lazy-load 静默失败。
+_JOINS = (
+    selectinload(Issue.node),
+    selectinload(Issue.created_by_user),
+    selectinload(Issue.assigned_to_user),
+)
 
 
 class IssueDAO:
@@ -39,7 +49,7 @@ class IssueDAO:
         - category / status / node_id：等值过滤
         - tag：JSONB 数组包含查询 ``tags @> [tag]``（PG `@>` 操作符）
         """
-        stmt = select(Issue).where(Issue.project_id == project_id)
+        stmt = select(Issue).options(*_JOINS).where(Issue.project_id == project_id)
         if category is not None:
             stmt = stmt.where(Issue.category == category)
         if status is not None:
@@ -56,7 +66,9 @@ class IssueDAO:
 
     async def get_by_id(self, db: AsyncSession, issue_id: UUID, project_id: UUID) -> Issue | None:
         result = await db.execute(
-            select(Issue).where(
+            select(Issue)
+            .options(*_JOINS)
+            .where(
                 Issue.id == issue_id,
                 Issue.project_id == project_id,
             )

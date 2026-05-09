@@ -84,3 +84,5 @@ class DimensionRecord(Base, TimestampMixin):
     )
 
     node = relationship("Node", back_populates="dimension_records")
+    dimension_type = relationship("DimensionType", lazy="raise")
+    updated_by_user = relationship("User", foreign_keys=[updated_by], lazy="raise")

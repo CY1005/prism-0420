@@ -377,3 +377,78 @@ async def test_list_dimensions_excludes_disabled_types(auth_client, make_user, m
     assert "disabled_t" not in keys, "禁用的 pdc 配置不应出现在 enabled_dimension_types 中"
     # 同时验证返回的 type 全部 enabled=True
     assert all(t["enabled"] is True for t in r.json()["enabled_dimension_types"])
+
+
+# ─────────────── G6: Phase 2.2 子片 5 — D 类 #15 join 字段装配 ───────────────
+# SR-CLEANUP-3 防假覆盖：字面断言响应 JSON 含 dimension_type_key / updated_by_name 真值。
+
+
+async def test_list_dimensions_join_fields_populated(auth_client, make_user, make_dim_type):
+    """D 类 #15 装配实证：list 返回 dimension_type_key / updated_by_name 真值。"""
+    user = await make_user(email="m04-join-list@example.com", name="Dora Joiner")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="A")
+    type_id = await make_dim_type(project_id=pid, key="join_key_1")
+    await auth_client.post(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions",
+        json={"dimension_type_id": type_id, "content": {"x": 1}},
+        headers=_bearer(user.id),
+    )
+
+    r = await auth_client.get(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions", headers=_bearer(user.id)
+    )
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["dimension_type_key"] == "join_key_1"
+    assert items[0]["updated_by_name"] == "Dora Joiner"
+
+
+async def test_get_dimension_join_fields_populated(auth_client, make_user, make_dim_type):
+    user = await make_user(email="m04-join-get@example.com", name="Eve")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="A")
+    type_id = await make_dim_type(project_id=pid, key="join_key_2")
+    await auth_client.post(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions",
+        json={"dimension_type_id": type_id, "content": {"a": 1}},
+        headers=_bearer(user.id),
+    )
+
+    r = await auth_client.get(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions/{type_id}", headers=_bearer(user.id)
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["dimension_type_key"] == "join_key_2"
+    assert body["updated_by_name"] == "Eve"
+
+
+async def test_update_dimension_join_fields_after_refetch(auth_client, make_user, make_dim_type):
+    """update 路径 refetch with joins 真通：version 自增后 key/name 仍真，验证
+    relationship 缓存失效后重装配链路（service.update_with_lock get_by_id 二次拉取）。"""
+    user = await make_user(email="m04-join-upd@example.com", name="Origin")
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="A")
+    type_id = await make_dim_type(project_id=pid, key="join_key_upd")
+    cr = await auth_client.post(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions",
+        json={"dimension_type_id": type_id, "content": {"v": 1}},
+        headers=_bearer(user.id),
+    )
+    assert cr.status_code == 201
+    v0 = cr.json()["version"]
+    assert cr.json()["dimension_type_key"] == "join_key_upd"
+    assert cr.json()["updated_by_name"] == "Origin"
+
+    ur = await auth_client.put(
+        f"/api/projects/{pid}/nodes/{nid}/dimensions/{type_id}",
+        json={"content": {"v": 2}, "expected_version": v0},
+        headers=_bearer(user.id),
+    )
+    assert ur.status_code == 200
+    body = ur.json()
+    assert body["version"] == v0 + 1
+    assert body["dimension_type_key"] == "join_key_upd"
+    assert body["updated_by_name"] == "Origin"
