@@ -398,7 +398,7 @@ R1+R2 试运行（第 5 数据点 / 全新写形态）：
 
 ## 子片 5 — D 类 join 装配 + Phase 2.2 关闸 ✅ 完成
 
-> **estimated cost**: $1-2 / **estimated time**: 0.5 天 / **依赖**: 子片 4 / status: completed 2026-05-09 / **commit**: `<本 commit>` / D 类 #3+#15 join 装配 + 6 backend e2e + Phase 2.2 关闸 audit + 4 SR-P22 立规 sink + cross-sprint pool 41→39 + 1623→1629 PASS
+> **estimated cost**: $1-2 / **estimated time**: 0.5 天 / **依赖**: 子片 4 / status: completed 2026-05-09 / **commit**: `597b885` / D 类 #3+#15 join 装配 + 6 backend e2e + Phase 2.2 关闸 audit + 4 SR-P22 立规 sink + cross-sprint pool 41→39 + 1623→1629 PASS
 
 ```
 继续 prism-0420 Phase 2.2 子片 5：D 类 #3+#15 join 真装配 + 关闸。

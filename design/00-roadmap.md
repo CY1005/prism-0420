@@ -2,7 +2,7 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.2 子片 5 关闸 / Phase 2.2 100% 完成**：7/7 子片完成 / cumulative 10 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add+<子片 5> / D 类 #3+#15 IssueResponse + DimensionResponse join 装配 / cross-sprint pool 41→39 / SR-P22-2/3/4/5 立规已 sink / 1623→1629 PASS）
+last_updated: 2026-05-09（**Phase 2.2 子片 5 关闸 / Phase 2.2 100% 完成**：7/7 子片完成 / cumulative 10 commits aa6dbd0+12cc62c+3b9bbc1+e521656+ee3a2ad+1a5e3d6+490ad23+bccb225+0626add+597b885 / D 类 #3+#15 IssueResponse + DimensionResponse join 装配 / cross-sprint pool 41→39 / SR-P22-2/3/4/5 立规已 sink / 1623→1629 PASS）
 current_phase: **Phase 2.2 前端继承 100%**（子片 0+1+2+3a-i+3a-ii+3b+3c+4+5 全完成 / 下一步 Phase 2.3 集成验证）
 ---
 
@@ -223,7 +223,7 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 - [x] 子片 3b `490ad23` — actions/{nodes,relations,panorama} + analyze getAffectedNodes + import/import-ai 全 punt + errors.ts isRedirectError 立修
 - [x] 子片 3c `bccb225` — actions/{competitors,competitor-references,issues,search,admin,activity-log} + export/project-stats-proxy 端点重写 + templates/feed 全 punt + errors.ts UnauthenticatedError → redirect root-cause 立修
 - [x] 子片 4 `0626add` — M20 团队页全新写（actions/teams.ts 10 actions + 3 路由 + errors.ts isNextRedirectError export + 3 处 client `.catch` rethrow root-cause 立修）
-- [x] 子片 5 `<本 commit>` — D 类 #3+#15 IssueResponse + DimensionResponse join 装配 + Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + cross-sprint pool 41→39 + 6 backend e2e（1623→1629 PASS）
+- [x] 子片 5 `597b885` — D 类 #3+#15 IssueResponse + DimensionResponse join 装配 + Phase 2.2 关闸 audit + SR-P22-2/3/4/5 立规 sink + cross-sprint pool 41→39 + 6 backend e2e（1623→1629 PASS）
 
 ### 7.3 M20 团队页面（前端唯一新增）✅
 
