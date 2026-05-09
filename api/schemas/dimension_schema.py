@@ -41,6 +41,10 @@ class DimensionResponse(BaseModel):
     updated_by: UUID
     created_at: datetime
     updated_at: datetime
+    # M-CLEANUP（cross-sprint #15 立修 / M04 R2 A1 / Phase 2.2 前端真用时立刻触发）：
+    # 与 IssueResponse #3 同款契约缺口；前端不需要 N+1 拼接 dim_type_key / updated_by 名
+    dimension_type_key: str | None = None
+    updated_by_name: str | None = None
 
 
 class DimensionTypeRef(BaseModel):
