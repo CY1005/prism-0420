@@ -1,0 +1,52 @@
+export const adminUsers = [
+  {
+    name: "陈琦",
+    initials: "陈",
+    email: "cy@example.com",
+    date: "2026-04-03",
+    status: "正常",
+    statusColor: "green" as const,
+  },
+  {
+    name: "Mentor",
+    initials: "M",
+    email: "mentor@example.com",
+    date: "2026-04-03",
+    status: "正常",
+    statusColor: "green" as const,
+  },
+  {
+    name: "杨子老师",
+    initials: "杨",
+    email: "yang@example.com",
+    date: "2026-04-04",
+    status: "正常",
+    statusColor: "green" as const,
+  },
+  {
+    name: "测试用户",
+    initials: "测",
+    email: "test@example.com",
+    date: "2026-04-05",
+    status: "已禁用",
+    statusColor: "red" as const,
+  },
+];
+
+export const adminStrings = {
+  title: "Prism 管理后台",
+  userManagement: "用户管理",
+  platformStats: "平台统计",
+  globalConfig: "全局配置",
+  totalUsers: "共 12 名用户",
+  avatar: "头像",
+  username: "用户名",
+  email: "邮箱",
+  registerTime: "注册时间",
+  status: "状态",
+  action: "操作",
+  normal: "正常",
+  disabled: "已禁用",
+  disable: "禁用",
+  enable: "启用",
+};
