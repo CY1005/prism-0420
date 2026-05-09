@@ -212,6 +212,8 @@ F. 关闸：
 
 ## 子片 3a-ii — projects 列表 + 详情 + dimension 档案 5 页面改造
 
+> **status: completed** (2026-05-09 / commit 待填) — scope 修订：cold-start 6 页面 → 实际 2 页面真接 backend（list + new）+ 4 页面留 3b/3c（深耦合 actions/{nodes,panorama,feed,competitors,teams,export,activity-log,project-stats-proxy,project-role-context}）/ broken imports 26 处关闭 4 处余 22 / R1+R2 第 2 数据点 / R2 真漏抓 ai_api_key + 401 静默吞错 / 见 design/audit/p22-pilot-template-validation.md §3a + §3b
+>
 > **estimated cost**: $4-5 / **estimated time**: 1-1.5 天 / **依赖**: 子片 3a-i ✅
 >
 > 注：原计划子片 3a 总估 $4-6 / 已用 $1-2 在 3a-i 沉淀 spec + helpers / 剩 $4-5 真用于页面改造 + R1+R2

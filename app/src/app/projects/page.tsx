@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Plus, LogOut, Shield, Users } from "lucide-react";
 import { GlobalSearchBar } from "@/components/global-search-bar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { projectsData, projectsStrings } from "@/lib/projects-data";
+import { projectsStrings } from "@/lib/projects-data";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { getProjects } from "@/actions/projects";
-import { logout, getSessionUser } from "@/actions/auth";
-import { getTeams, getTeamProjects } from "@/actions/teams";
+import { useAuth } from "@/contexts/auth-context";
+import type { components } from "@/types/api";
+
+type ProjectResponse = components["schemas"]["ProjectResponse"];
 
 const typeColorMap: Record<string, string> = {
   blue: "border-blue-200 text-blue-700 bg-blue-50",
@@ -37,76 +40,45 @@ const templateColor: Record<string, string> = {
 
 type ProjectTab = "personal" | "team";
 
-type TeamGroup = {
-  teamId: string;
-  teamName: string;
-  projects: {
-    id: string;
-    name: string;
-    description: string | null;
-    templateType: string;
-    createdAt: Date;
-  }[];
-};
-
 export default function ProjectsPage() {
-  const [apiProjects, setApiProjects] = useState<Awaited<ReturnType<typeof getProjects>> | null>(
-    null,
-  );
-  const [userName, setUserName] = useState("");
-  const [userInitials, setUserInitials] = useState("");
+  const router = useRouter();
+  const { user, isLoading, logout } = useAuth();
+  const [apiProjects, setApiProjects] = useState<ProjectResponse[] | null>(null);
   const [activeTab, setActiveTab] = useState<ProjectTab>("personal");
-  const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([]);
 
   useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
     getProjects()
-      .then((projects) => {
-        setApiProjects(projects);
-      })
+      .then((projects) => setApiProjects(projects))
       .catch(() => setApiProjects([]));
-    getSessionUser().then((user) => {
-      if (user) {
-        setUserName(user.name);
-        setUserInitials(user.name.charAt(0));
-      }
-    });
-    // Load team projects
-    getTeams().then(async (teams) => {
-      const groups: TeamGroup[] = await Promise.all(
-        teams.map(async (t) => {
-          const projs = await getTeamProjects(t.id);
-          return {
-            teamId: t.id,
-            teamName: t.name,
-            projects: projs as TeamGroup["projects"],
-          };
-        }),
-      );
-      setTeamGroups(groups.filter((g) => g.projects.length > 0));
-    });
-  }, []);
+  }, [user, isLoading, router]);
 
   const handleLogout = async () => {
     await logout();
+    router.replace("/login");
   };
 
-  // Use API data if available, otherwise mock
-  const displayProjects = apiProjects
-    ? apiProjects.map((p) => ({
-        id: p.id,
-        title: p.name,
-        type: templateLabel[p.templateType] || p.templateType,
-        typeColor: templateColor[p.templateType] || "blue",
-        description: p.description || "",
-        stats: [
-          { value: p.nodeCount, label: "模块" },
-          { value: 0, label: "功能项" },
-          { value: "0%", label: "完善度" },
-        ],
-        lastUpdated: p.createdAt ? new Date(p.createdAt).toLocaleDateString("zh-CN") : "",
-        members: ["CY"],
-      }))
-    : [];
+  const userName = user?.name ?? "";
+  const userInitials = user?.name?.charAt(0) ?? "?";
+
+  const displayProjects = (apiProjects ?? []).map((p) => ({
+    id: p.id,
+    title: p.name,
+    type: templateLabel[p.template_type] || p.template_type,
+    typeColor: templateColor[p.template_type] || "blue",
+    description: p.description || "",
+    stats: [
+      { value: 0, label: "模块" },
+      { value: 0, label: "功能项" },
+      { value: "0%", label: "完善度" },
+    ],
+    lastUpdated: new Date(p.created_at).toLocaleDateString("zh-CN"),
+    members: [userInitials],
+  }));
 
   return (
     <div className="bg-background flex min-h-screen flex-col">
@@ -129,7 +101,7 @@ export default function ProjectsPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials}</AvatarFallback>
             </Avatar>
             <span className="text-foreground text-sm">{userName}</span>
           </div>
@@ -239,65 +211,19 @@ export default function ProjectsPage() {
 
       {activeTab === "team" && (
         <div className="space-y-6 px-6">
-          {teamGroups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Users className="text-muted-foreground/40 mb-4 h-12 w-12" />
-              <h3 className="mb-2 text-lg font-semibold">暂无团队项目</h3>
-              <p className="text-muted-foreground mb-4 text-sm">
-                在项目设置中将项目迁移到团队，或前往团队空间创建团队
-              </p>
-              <Link href="/teams">
-                <Button variant="outline">
-                  <Users className="mr-2 h-4 w-4" />
-                  前往团队空间
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            teamGroups.map((group) => (
-              <div key={group.teamId}>
-                <div className="mb-3 flex items-center gap-2">
-                  <Users className="text-muted-foreground h-4 w-4" />
-                  <h2 className="text-base font-semibold">{group.teamName}</h2>
-                  <Badge variant="secondary" className="text-xs">
-                    {group.projects.length} 个项目
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {group.projects.map((project) => (
-                    <Link key={project.id} href={`/projects/${project.id}`}>
-                      <Card className="border-border/60 hover:border-primary/40 cursor-pointer p-5 shadow-sm transition-all hover:shadow-md">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "mb-2 text-xs",
-                                typeColorMap[templateColor[project.templateType] || "blue"],
-                              )}
-                            >
-                              {templateLabel[project.templateType] || project.templateType}
-                            </Badge>
-                            <h3 className="text-foreground font-semibold">{project.name}</h3>
-                          </div>
-                        </div>
-                        {project.description && (
-                          <p className="text-muted-foreground mt-1 text-sm">
-                            {project.description}
-                          </p>
-                        )}
-                        <div className="mt-4">
-                          <span className="text-muted-foreground text-xs">
-                            创建于 {new Date(project.createdAt).toLocaleDateString("zh-CN")}
-                          </span>
-                        </div>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+          <div className="flex flex-col items-center justify-center py-16">
+            <Users className="text-muted-foreground/40 mb-4 h-12 w-12" />
+            <h3 className="mb-2 text-lg font-semibold">团队项目（subslice 4 启用）</h3>
+            <p className="text-muted-foreground mb-4 text-sm">
+              M20 团队页前端在 Phase 2.2 子片 4 接通。当前显示个人项目。
+            </p>
+            <Link href="/teams">
+              <Button variant="outline">
+                <Users className="mr-2 h-4 w-4" />
+                前往团队空间
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
     </div>

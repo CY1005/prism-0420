@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-3a-i-完成 / 子片 3a-ii 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-3a-ii-完成 / 子片 3b 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,26 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-i-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-ii-完成）
+
+- **Phase 2.2 子片 3a-ii 完成**（actions/{projects,project-settings,versions} + lib/server-auth.getServerUser + /projects 列表 + /projects/new 真接 backend）：
+  - 决策路径：CY 询"按架构决策原则应该选哪个" → 选 (a) 小 scope（2 页面真接 + 4 页面 ignore 留 3b/3c / 不超 subslice 边界 / 单会话 cost 在档）
+  - 8 文件改：lib/server-auth.ts +getServerUser / actions/projects.ts 全改 + withAuthRedirect helper / actions/project-settings.ts 全改 + getAllDimensionTypes punt / actions/versions.ts 全改 + 签名加 projectId / app/projects/page.tsx 重写 + useAuth + snake_case + team tab 占位 / app/projects/[projectId]/page.tsx 删 unused import / app/projects/[projectId]/workspace.tsx createVersion 调用同步 / eslint.config.mjs 渐进还债 + glob workaround
+  - 累计 vitest 20 PASS / pytest 不动（仅前端改）/ eslint 0 errors 0 warnings
+  - **R1+R2 第 2 数据点**（首次真用 endpoint 验契约）：R1=1 Sonnet reuse + R2=1 Opus spec / R1 标 5 P1 候选 / R2 标 4 P1+8 P2 / 复审立修 3 项（ai_api_key schema 字段名 + 401 → redirect("/login") spec §3 字面合规 + projectsData mock dead 删）+ punt 8 项进 cross-sprint pool
+  - **R2 真漏抓硬伤**：`api_key` → `ai_api_key`（密钥写不进 / 后端忽略未知键 / 无 TS 守卫）+ 401 静默吞错（spec 06 §3 字面违反 / page.tsx `.catch(()=>[])` 退化为空列表 / 不跳登录）— SR-P22-2 立规精神第 2 数据点实证
+  - **scope 修订归档**：cold-start prompt 6 页面 → 实际可达 2 页面真接 + 4 页面 ignore（深耦合 3b/3c actions）/ broken imports 26 处中关闭 4 处 / 余 22 处随 3b/3c 关闭 / SR-P22-3 立规第二实证（M01 register 第一 + 3a-ii broken imports 第二）
+
+- **下一步推荐**：**子片 3b — node + 模块树 + relation-graph + comparison + import**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 3b」段
+  - 前置：actions/nodes 全改 server-http-client（drizzle 解锁 [projectId]/page.tsx + features/[fid]/page.tsx 详情页运行）
+  - 估 cost $4-6 / 估时 1.5 天 / **建议开新 session**（context 已积累 R1+R2 spec subagent 报告 / 新 session ROI 高）
+
+- **Phase 2.2 全集进度**：3/7 子片完成（子片 0 prep + 1 + 2 + 3a-i + 3a-ii）/ 还需 4 子片（3b + 3c + 4 + 5）/ 总估 $13-19 + 4-5 天
+
+---
+
+## 0a. 上一版本快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-i-完成）
 
 - **Phase 2.2 子片 3a-i 完成**（spec 06 §3 SSR auth 通道沉淀 + 服务端 fetch helpers）：
   - 决策路径：CY 询"按架构决策原则应该选哪个" → 选 α-P1（cookies → /auth/refresh → access_token → Bearer / 走 ADR-004 P1 / 不修订 spec 06 §2 + ADR-004 任何字面）

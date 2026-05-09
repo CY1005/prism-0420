@@ -12,9 +12,12 @@
 
 import { cookies } from "next/headers";
 import { cache } from "react";
+import type { components } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const REFRESH_COOKIE_NAME = "refresh_token";
+
+export type ServerUser = components["schemas"]["UserProfile"];
 
 /**
  * 获取当前请求的 access_token。
@@ -35,4 +38,20 @@ export const getServerAccessToken = cache(async (): Promise<string | null> => {
   if (!resp.ok) return null;
   const data = (await resp.json()) as { access_token?: string };
   return typeof data.access_token === "string" ? data.access_token : null;
+});
+
+/**
+ * 获取当前请求的 UserProfile（含 id / role / email / name）。
+ * - 同请求 React.cache 单次 memo（与 getServerAccessToken 互不污染）
+ * - access token 拿不到 / /auth/me 失败 → 返 null（调用方 redirect /login）
+ */
+export const getServerUser = cache(async (): Promise<ServerUser | null> => {
+  const token = await getServerAccessToken();
+  if (!token) return null;
+  const resp = await fetch(`${BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!resp.ok) return null;
+  return (await resp.json()) as ServerUser;
 });

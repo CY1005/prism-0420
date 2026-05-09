@@ -1,4 +1,4 @@
-import { getProject, getProjects } from "@/actions/projects";
+import { getProject } from "@/actions/projects";
 import { getProjectTree, getNodeWithDimensions, getProjectDimensions } from "@/actions/nodes";
 import { notFound } from "next/navigation";
 import { ProjectWorkspace } from "./workspace";

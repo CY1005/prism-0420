@@ -727,6 +727,7 @@ export function ProjectWorkspace({
     if (!nodeData) return;
     startTransition(async () => {
       await createVersion(
+        project.id,
         nodeData.node.id,
         data.versionLabel,
         data.summary,

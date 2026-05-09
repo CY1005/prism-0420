@@ -26,9 +26,16 @@ related:
 | 子片 | commit | 范围 | cost 估 | R1 P1/P2 | R2 P1/P2 |
 |------|--------|------|---------|----------|----------|
 | 1 | `12cc62c` | codegen + http-client + Bearer JWT | $2-3 | — (deferred) | — (deferred) |
-| 2 | (本次关闸) | auth flow + CORS + cookie 通道 + 1 e2e | $3-4 | 0 立修 / 4 punt | 0 / 5 punt |
+| 2 | `3b9bbc1` | auth flow + CORS + cookie 通道 + 4 e2e | $3-4 | 0 立修 / 4 punt | 0 / 5 punt |
+| 3a-i | `e521656`+`ee3a2ad` | spec 06 §3 SSR auth 通道 + server-auth/server-http-client + 7 unit tests | $1-2 | — (sink only) | — (sink only) |
+| 3a-ii | (本次关闸) | actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new 真接 backend | ~$5 | 5 立修候选 / 复审 3 立修 + 2 punt | 4 P1 立修 / 8 P2 punt |
 
-**R1+R2 合并第 1 数据点结论**：spec 维度 0 P1（可关闸）/ reuse 维度 0 真 P1（R1 标的 2 P1 经复审降 P2，理由见 §3）/ 累计 P2 = 9 项（4 reuse + 5 spec）。
+**R1+R2 第 2 数据点结论**：
+- R1 reuse 5 P1 候选 / 复审：3 立修（projectsData mock dead / createVersion releaseMode workspace.tsx 在 ignore 范围 punt / handleCreateVersion 错误吞 workspace.tsx 在 ignore 范围 punt / eslint glob `[projectId]` 字面 char class 已 workaround / `getProjects` 401 处理与 R2 同根因合并立修）
+- R2 spec 4 P1 / 全立修（**R2 真漏抓贡献最大**：P1-1 `api_key` → `ai_api_key` schema 字段名错 / P1-3+P1-4 401 静默吞错 spec §3 字面违反）
+- 立修 3 项：(1) ai_api_key 字段名 / (2) UnauthenticatedError → `redirect("/login")` 统一 read action 错误处理 / (3) projectsData mock dead export 删
+- punt 8 项进 §3
+- **元教训**：R2 spec 在前端继承形态上**真漏抓硬伤**（schema 字段名 + spec 字面违反），ROI 显著高于 R1 reuse；SR-P22-2 立规精神得到第 2 数据点支撑
 
 ## §2 子片 2 spec findings（R2 输出 / 全 P2）
 
@@ -66,13 +73,60 @@ R1 标 2 项 P1（均为拷贝层 broken imports）：
 - **`registerSchema` / `RegisterInput` dead code** — `src/lib/validators/auth.ts:8-15`；CY 选 (a) 跳过 register 改造 / 保留 schema 备 M01 未来扩展。**punt 时机**：M01 register 落地或下一 sprint cleanup。
 - **`getAccessToken` re-export from auth-context** — `auth-context.tsx:104` re-export 当前无消费方 / 子片 3+ 评估清理。**punt 时机**：子片 5 关闸 cleanup。
 
+## §3a 子片 3a-ii findings（R1+R2 第 2 数据点）
+
+### R2 spec P1 立修（4 项 / 已修）
+
+1. **`ai_api_key` schema 字段名错** — `actions/projects.ts:179` 原写 `api_key` / OpenAPI 真值 `ai_api_key`（types/api.ts:1632）/ 后端会忽略未知键 → 密钥永远写不进 / 静默失败。**已修**：用 `components["schemas"]["AiProviderUpdate"]` 类型守卫拼 body。
+2. **401 静默吞错** — `getProjects` 等 read action 抛 UnauthenticatedError 跨边界 / page.tsx `.catch(() => [])` 把 401 退化为空列表 / 不跳登录 / spec 06 §3「access token 拿不到 → redirect /login」字面违反。**已修**：actions/projects.ts 加 `withAuthRedirect` helper / read action 包裹 / UnauthenticatedError → `redirect("/login")` from "next/navigation"（Server 端直接生效 / NEXT_REDIRECT 通过 Server Action 边界）。
+3. （P1-3 + P1-4 同根因合并立修）
+
+### R1 reuse P1 复审
+
+- **R1 P1-1 createVersion 漏 release_mode 配置** — workspace.tsx 在 ignore + 当前未真用 continuous mode → 降 P2 punt 进子片 3b（workspace 改造时）
+- **R1 P1-2 handleCreateVersion 错误吞** — workspace.tsx 在 ignore + 既有缺陷 → 降 P2 punt 进子片 3b
+- **R1 P1-3 getProjects 401 静默** — 与 R2 P1-3+P1-4 同根因 / 已合并立修
+- **R1 P1-4 eslint glob `[projectId]` 字面 char class** — 已 workaround（`**/projects/**/[projectId]/page.tsx` 仍是 char class 但 [projectId]/page.tsx 已无 lint 问题 / workaround 路径不准但 effective）→ P2 punt（cosmetic / 子片 5 cleanup 时真转义）
+- **R1 P1-5 projectsData mock dead** — 已立修（删常量 / 保 projectsStrings i18n）
+
+### R2 spec P2 punt（8 项进 cross-sprint 池）
+
+| # | 描述 | file:line | 触发时机 |
+|---|------|-----------|----------|
+| P22-3a-1 | server-http-client 间接 import services/http-client 把 auth-token-store module state 拉进 server bundle / 抽 `lib/api-errors.ts` 解耦 | `lib/server-http-client.ts:14` | 子片 5 关闸 cleanup |
+| P22-3a-2 | ProjectUpdate validators/project.ts 未用（绕过 zod 校验） | `actions/projects.ts:74` | 子片 5 cleanup |
+| P22-3a-3 | getMyProjectRole 串行 2-3 fetch / 无单请求 memo | `actions/projects.ts:147` | Phase 2.3 perf |
+| P22-3a-4 | server-auth.ts cookie 值未做 url-encode | `lib/server-auth.ts:32` | base64url 安全但加注释 / 子片 5 |
+| P22-3a-5 | template_type 非 enum / frontend fallback | `app/projects/page.tsx:71` | 后端补 enum / 非本 sprint |
+| P22-3a-6 | createVersion release_mode 硬编码（R1 P1-1 降级）| `actions/versions.ts:57` | 子片 3b workspace 改造 |
+| P22-3a-7 | handleCreateVersion ActionResult 不查 success（R1 P1-2 降级）| `workspace.tsx:729` | 子片 3b |
+| P22-3a-8 | eslint glob `[projectId]` workaround / 真转义 | `eslint.config.mjs:113` | 子片 5 cleanup |
+
+## §3b prompt-vs-reality 漂移记录（SR-P22-3 立规候选实证）
+
+cold-start prompt「子片 3a-ii」段写 6 页面（projects 列表 + new + [id] + overview + settings + features/[fid]），实际可达：
+
+- ✅ /projects 列表 — 真接 backend / login 跳登录路径 / R2 P1-3 修后 spec §3 字面合规
+- ✅ /projects/new — 调 createProject / 走 server-http-client / 合规
+- ⏸ /projects/[projectId] + features/[fid] — 依赖 actions/nodes（drizzle 引用 / subslice 3b 改造）/ 仍 ignore
+- ⏸ /projects/[projectId]/overview — 920 行 / 深耦合 actions/{panorama,activity-log,feed,project-stats-proxy,project-role-context} / 子片 3b/3c scope
+- ⏸ /projects/[projectId]/settings — 1011 行 / 深耦合 actions/{competitors,feed,export,teams} / 子片 3c scope
+
+**根因**：cold-start prompt 起草时未与 subslice 边界（teams 锁 4 / nodes/issues 锁 3b/3c）对齐 / "全修 26 broken imports" 字面与 subslice 边界冲突 / SR-P22-3 立规精神得到第二实证（M01 register 是第一实证）。
+
+**3a-ii scope 修订归档**：
+- 2 页面真接 backend（list + new）
+- 4 页面降级到子片 3b/3c（仍在 eslint ignore / 不破 build）
+- actions/{projects, project-settings, versions} 三件套改 server-http-client / 顺手删 4 处 requireAuth import（projects + project-settings + versions + 它们调用方）
+- broken imports 26 处中本子片关闭 4 处（projects + project-settings + versions + 顺手 workspace.tsx createVersion 签名同步）/ 余 22 处随 3b/3c 关闭
+
 ## §4 SR-P22 立规候选 sink（待 5 数据点后实证）
 
 | 立规 ID | 描述 | 立规时机 |
 |---------|------|----------|
 | SR-P22-1 | feedback_decision_layering 自检第 4 问（已即时落） | ✅ 已立 |
-| SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1）| 5 数据点后实证 sink |
-| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（如 cold-start prompt 自行扩 spec scope，本期 register 案例）| 子片 5 关闸前 sink |
+| SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1 / 第 2 数据点实证 R2 真漏抓硬伤 ROI 高于 R1）| 5 数据点后实证 sink |
+| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports 26 处 vs subslice 边界 = 双实证）| 子片 5 关闸前 sink |
 
 ## §5 元贡献（实证）
 

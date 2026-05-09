@@ -18,7 +18,24 @@ const eslintConfig = defineConfig([
     // 子片 2：actions/auth.ts + lib/auth-client.ts（auth flow）→ 移除
     // 子片 3：actions/* + services/* + app/{各业务路由}（API client 改造）→ 逐文件移除
     // 子片 4：app/teams/* + components/teams/*（M20 新写）→ 移除
-    "src/actions/**",
+    // 子片 3a-ii: actions/{projects,project-settings,versions} 已改 server-http-client / 不 ignore
+    "src/actions/activity-log.ts",
+    "src/actions/admin.ts",
+    "src/actions/analyze.ts",
+    "src/actions/competitor-references.ts",
+    "src/actions/competitors.ts",
+    "src/actions/export.ts",
+    "src/actions/feed.ts",
+    "src/actions/import-ai.ts",
+    "src/actions/import.ts",
+    "src/actions/issues.ts",
+    "src/actions/nodes.ts",
+    "src/actions/panorama.ts",
+    "src/actions/project-stats-proxy.ts",
+    "src/actions/relations.ts",
+    "src/actions/search.ts",
+    "src/actions/teams.ts",
+    "src/actions/templates.ts",
     // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
     // 子片 2-3 改造逐文件移除剩余条目
     "src/services/analyzer.ts",
@@ -79,7 +96,21 @@ const eslintConfig = defineConfig([
     "src/app/feature/**",
     // src/app/login + register 子片 2 改造 / 已合规 / 不 ignore
     "src/app/openclaw/**",
-    "src/app/projects/**",
+    // 子片 3a-ii: projects/page.tsx + projects/new 已改 / 其他 [projectId] 子页深耦合 3b/3c actions 仍 ignore
+    // [projectId] 在 glob 里是 char class / 用 **/projects/** 模式或在条目里加路径段
+    "src/app/projects/**/overview/**",
+    "src/app/projects/**/settings/**",
+    "src/app/projects/**/features/**",
+    "src/app/projects/**/modules/**",
+    "src/app/projects/**/issues/**",
+    "src/app/projects/**/relation-graph/**",
+    "src/app/projects/**/comparison/**",
+    "src/app/projects/**/import/**",
+    "src/app/projects/**/analysis/**",
+    "src/app/projects/**/templates/**",
+    "src/app/projects/**/product-lines/**",
+    "src/app/projects/**/workspace.tsx",
+    "src/app/projects/**/[projectId]/page.tsx",
     "src/app/search/**",
     "src/app/teams/**",
     "src/app/layout.tsx",
