@@ -17,7 +17,7 @@
 #    按 design §6.X A5 主标准 Q1 否 + Q2 caller → enqueue B 推迟；
 #    get_for_embedding 是 M04 own 被动接口（A 现在建）
 # ③ 由 M18 sprint 扩齐：DimensionService 三处 commit 后尾调
-#    embedding_service.enqueue(target_type="dimension_record", target_id, project_id, user_id,
+#    embedding_service.enqueue(target_type=TARGET_DIMENSION_RECORD, target_id, project_id, user_id,
 #    enqueued_by="incremental")；delete commit 后异步 enqueue_delete + SilentFailure +
 #    embedding_failures EMBEDDING_DELETE_FAILED + cleanup cron 兜底
 # ④ 触发回写动作：M18 sprint add 调用 + 回归测试 + 回写 M04 §6.X 实施期处理段 status
@@ -50,6 +50,10 @@ from api.errors.exceptions import (
 from api.models.dimension_record import DimensionRecord
 from api.models.project import DimensionType, ProjectDimensionConfig
 from api.services.activity_log_service import write_event
+
+# M-CLEANUP（cross-sprint #12 立修）：target_type 5 处 hard-code 提常量
+# 防 #1+#2 同根因（命名规约一致性 / R14 ci-lint 字面对账）
+TARGET_DIMENSION_RECORD = "dimension_record"
 
 
 class DimensionService:
@@ -324,7 +328,7 @@ class DimensionService:
             actor_user_id=user_id,
             project_id=project_id,
             action_type="dimension_record_created",
-            target_type="dimension_record",
+            target_type=TARGET_DIMENSION_RECORD,
             target_id=str(rec.id),
             summary=f"Created dimension '{dt.key}'",
             metadata=merged_metadata,
@@ -346,7 +350,7 @@ class DimensionService:
         await self._check_node_belongs_to_project(db, node_id, project_id)
 
         # type 存在校验
-        dt = await db.get(DimensionType, dimension_type_id)
+        dt = await self.dao.get_type_by_id(db, dimension_type_id)
         if dt is None:
             raise DimensionTypeNotFoundError(dimension_type_id=dimension_type_id)
 
@@ -375,7 +379,7 @@ class DimensionService:
             actor_user_id=actor_user_id,
             project_id=project_id,
             action_type="dimension_record_created",
-            target_type="dimension_record",
+            target_type=TARGET_DIMENSION_RECORD,
             target_id=str(rec.id),
             summary=f"Created dimension '{dt.key}'",
             metadata={
@@ -425,7 +429,7 @@ class DimensionService:
         await db.refresh(existing, attribute_names=["version", "content", "updated_at"])
 
         # type 名（写 summary 用，不阻断主流程）
-        dt = await db.get(DimensionType, dimension_type_id)
+        dt = await self.dao.get_type_by_id(db, dimension_type_id)
         type_key = dt.key if dt else f"type#{dimension_type_id}"
 
         await write_event(
@@ -433,7 +437,7 @@ class DimensionService:
             actor_user_id=actor_user_id,
             project_id=project_id,
             action_type="dimension_record_updated",
-            target_type="dimension_record",
+            target_type=TARGET_DIMENSION_RECORD,
             target_id=str(existing.id),
             summary=f"Updated dimension '{type_key}'",
             metadata={
@@ -471,7 +475,7 @@ class DimensionService:
             # 极少见竞态：get_one 后被并发删；视为不存在
             raise DimensionNotFoundError(node_id=str(node_id), dimension_type_id=dimension_type_id)
 
-        dt = await db.get(DimensionType, dimension_type_id)
+        dt = await self.dao.get_type_by_id(db, dimension_type_id)
         type_key = dt.key if dt else f"type#{dimension_type_id}"
 
         await write_event(
@@ -479,7 +483,7 @@ class DimensionService:
             actor_user_id=actor_user_id,
             project_id=project_id,
             action_type="dimension_record_deleted",
-            target_type="dimension_record",
+            target_type=TARGET_DIMENSION_RECORD,
             target_id=str(rec_id),
             summary=f"Deleted dimension '{type_key}'",
             metadata={
@@ -513,7 +517,7 @@ class DimensionService:
                 actor_user_id=actor_user_id,
                 project_id=project_id,
                 action_type="dimension_record_deleted",
-                target_type="dimension_record",
+                target_type=TARGET_DIMENSION_RECORD,
                 target_id=str(rec.id),
                 summary="Deleted dimension (cascade from node delete)",
                 metadata={

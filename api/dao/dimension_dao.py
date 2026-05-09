@@ -16,10 +16,25 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.dimension_record import DimensionRecord
+from api.models.project import DimensionType
 
 
 class DimensionDAO:
     # ─────────── 读 ───────────
+
+    async def get_type_by_id(
+        self, db: AsyncSession, dimension_type_id: int
+    ) -> DimensionType | None:
+        """M-CLEANUP（cross-sprint #14 立修）：DimensionType lookup 走 DAO 层 / 替换
+        service 层 3 处 db.get(DimensionType, id) 风格统一。
+
+        DimensionType 是全局表（不带 project_id 过滤）/ caller 已通过 project_dimension_configs
+        校验 enabled 状态。
+        """
+        result = await db.execute(
+            select(DimensionType).where(DimensionType.id == dimension_type_id)
+        )
+        return result.scalar_one_or_none()
 
     async def list_by_node(
         self, db: AsyncSession, node_id: UUID, project_id: UUID

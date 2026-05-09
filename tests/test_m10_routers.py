@@ -129,3 +129,24 @@ async def test_overview_unauthenticated_returns_401(auth_client, make_user):
     pid = await _create_project(auth_client, user.id)
     r = await auth_client.get(f"/api/projects/{pid}/overview")
     assert r.status_code == 401
+
+
+# ─────────────── M-CLEANUP（cross-sprint punt #10 立修）：viewer /overview/stats 测试补全 ───────────────
+
+
+async def test_overview_stats_unauthorized_returns_401(auth_client, make_user):
+    """M10-5 立修：/overview/stats 401 无 token 拒绝（与 /overview 同款覆盖度）。"""
+    user = await make_user(email="m10-stats-401@example.com")
+    pid = await _create_project(auth_client, user.id)
+    r = await auth_client.get(f"/api/projects/{pid}/overview/stats")
+    assert r.status_code in (401, 403)
+
+
+async def test_overview_stats_cross_tenant_returns_404(auth_client, make_user):
+    """M10-5 立修：/overview/stats cross-tenant → 404（不 leak 存在性 / M02 范式）。"""
+    userA = await make_user(email="m10-stats-xtA@example.com")
+    userB = await make_user(email="m10-stats-xtB@example.com")
+    pidA = await _create_project(auth_client, userA.id)
+    r = await auth_client.get(f"/api/projects/{pidA}/overview/stats", headers=_bearer(userB.id))
+    assert r.status_code == 404
+    assert r.json()["code"] == "project_not_found"

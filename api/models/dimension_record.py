@@ -50,6 +50,9 @@ class DimensionRecord(Base, TimestampMixin):
         CheckConstraint("project_id IS NOT NULL", name="ck_dim_project_id_not_null"),
         Index("ix_dim_node_type", "node_id", "dimension_type_id"),
         Index("ix_dim_project_updated", "project_id", "updated_at"),
+        # M-CLEANUP（cross-sprint #13 立修 / M04 R1-A A2）：(updated_by, updated_at) 联合索引
+        # activity_stream 时间线按 user 视角查询性能基线（M13/M14 写大量行的源表）
+        Index("ix_dim_updated_by_updated_at", "updated_by", "updated_at"),
     )
 
     id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
