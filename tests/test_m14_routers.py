@@ -535,3 +535,70 @@ async def test_list_news_by_node(auth_client, make_user):
     assert r.status_code == 200
     titles = [item["title"] for item in r.json()["items"]]
     assert titles == ["linked-news"]
+
+
+# ─── M-CLEANUP（cross-sprint #8 立修 / M14-B12 punt 关闭） ───
+# 补 update / delete / unlink 三条写路径 write_event 异常传播 e2e（M16 范式延续）
+
+
+async def test_update_news_propagates_write_event_failure_e2e(auth_client, make_user, monkeypatch):
+    """M-CLEANUP #8 立修：update 端点 write_event raise → 500（M14-B12 punt 关闭 / 写路径 #3）。"""
+    user = await make_user()
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    import api.services.industry_news_service as mod
+
+    async def boom(**kwargs):
+        if kwargs.get("action_type") == "news_updated":
+            raise RuntimeError("activity log failed")
+
+    monkeypatch.setattr(mod, "write_event", boom)
+    r = await auth_client.put(
+        f"/api/news/{news_id}",
+        json={"title": "new title"},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 500
+
+
+async def test_delete_news_propagates_write_event_failure_e2e(auth_client, make_user, monkeypatch):
+    """M-CLEANUP #8 立修：delete 端点 write_event raise → 500（M14-B12 punt 关闭 / 写路径 #4）。"""
+    user = await make_user()
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    import api.services.industry_news_service as mod
+
+    async def boom(**kwargs):
+        if kwargs.get("action_type") == "news_deleted":
+            raise RuntimeError("activity log failed")
+
+    monkeypatch.setattr(mod, "write_event", boom)
+    r = await auth_client.delete(f"/api/news/{news_id}", headers=_bearer(user.id))
+    assert r.status_code == 500
+
+
+async def test_unlink_node_propagates_write_event_failure_e2e(auth_client, make_user, monkeypatch):
+    """M-CLEANUP #8 立修：unlink 端点 write_event raise → 500（M14-B12 punt 关闭 / 写路径 #5）。"""
+    user = await make_user()
+    pid = await _create_project(auth_client, user.id)
+    nid = await _create_node(auth_client, user.id, pid, name="u")
+    r = await auth_client.post("/api/news", json={"title": "t"}, headers=_bearer(user.id))
+    news_id = r.json()["id"]
+    # 先 link 再 unlink
+    await auth_client.post(
+        f"/api/news/{news_id}/links",
+        json={"node_id": nid},
+        headers=_bearer(user.id),
+    )
+    import api.services.industry_news_service as mod
+
+    async def boom(**kwargs):
+        if kwargs.get("action_type") == "news_unlinked":
+            raise RuntimeError("activity log failed")
+
+    monkeypatch.setattr(mod, "write_event", boom)
+    r = await auth_client.delete(
+        f"/api/news/{news_id}/links/{nid}",
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 500
