@@ -13,13 +13,16 @@ export const createIssueSchema = z.object({
   projectId: z.string().uuid("无效的项目 ID"),
   nodeId: z.string().uuid().nullable(),
   category: categorySchema,
+  title: z.string().min(1, "问题标题不能为空").max(200, "标题最多 200 个字符").trim(),
   description: z.string().min(1, "问题描述不能为空").max(5000, "问题描述最多 5000 个字符").trim(),
   tags: tagsSchema,
+  assignedTo: z.string().uuid().optional(),
 });
 
 export const updateIssueSchema = z.object({
   issueId: z.string().uuid("无效的问题 ID"),
-  category: categorySchema.optional(),
+  projectId: z.string().uuid("无效的项目 ID"),
+  title: z.string().min(1).max(200).trim().optional(),
   description: z
     .string()
     .min(1, "问题描述不能为空")
@@ -27,6 +30,8 @@ export const updateIssueSchema = z.object({
     .trim()
     .optional(),
   tags: tagsSchema,
+  nodeId: z.string().uuid().nullable().optional(),
+  assignedTo: z.string().uuid().nullable().optional(),
 });
 
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;

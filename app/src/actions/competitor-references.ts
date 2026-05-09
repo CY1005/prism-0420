@@ -1,16 +1,35 @@
 "use server";
 
-import { db } from "@/db";
-import { competitorReferences, competitors, nodes } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
+import { redirect } from "next/navigation";
+import {
+  serverApiGet,
+  serverApiPost,
+  serverApiPut,
+  serverApiDelete,
+  UnauthenticatedError,
+} from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
-import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
-import { ErrorCode } from "@/lib/error-codes";
+import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import { defineAction } from "@/lib/define-action";
 import { createCompetitorReferenceSchema } from "@/lib/validators/competitor";
+import type { components } from "@/types/api";
+
+type CompetitorRefResponse = components["schemas"]["CompetitorRefResponse"];
+type CompetitorRefListResponse = components["schemas"]["CompetitorRefListResponse"];
+type CompetitorRefCreate = components["schemas"]["CompetitorRefCreate"];
+type CompetitorRefUpdate = components["schemas"]["CompetitorRefUpdate"];
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
 
 export const createReference = defineAction(
   createCompetitorReferenceSchema,
@@ -23,50 +42,28 @@ export const createReference = defineAction(
     technicalApproach,
     prosAndCons,
   }): Promise<ActionResult<{ id: string }>> => {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
+    const body: CompetitorRefCreate = {
+      competitor_id: competitorId,
+      competitor_version: version || null,
+      feature_coverage: featureCoverage || null,
+      tech_approach: technicalApproach || null,
+      pros_and_cons: prosAndCons ?? null,
+    };
+    const ref = await serverApiPost<CompetitorRefResponse>(
+      `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs`,
+      body,
+    );
 
-    // Verify node belongs to project
-    const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
-    if (!node || node.projectId !== projectId) {
-      return actionError(
-        new AppError("节点不存在或不属于该项目", "blocking", ErrorCode.NOT_FOUND, 404),
-      );
-    }
-
-    // Verify competitor belongs to same project
-    const [competitor] = await db
-      .select()
-      .from(competitors)
-      .where(eq(competitors.id, competitorId));
-    if (!competitor || competitor.projectId !== projectId) {
-      return actionError(
-        new AppError("竞品不存在或不属于该项目", "blocking", ErrorCode.NOT_FOUND, 404),
-      );
-    }
-
-    const [ref] = await db
-      .insert(competitorReferences)
-      .values({
-        nodeId,
-        competitorId,
-        version: version || null,
-        featureCoverage: featureCoverage || null,
-        technicalApproach: technicalApproach || null,
-        prosAndCons: prosAndCons || null,
-      })
-      .returning();
-
-    logger.action("competitor_reference.create", user.id, { projectId, refId: ref.id, nodeId });
+    logger.action("competitor_reference.create", "self", { projectId, refId: ref.id, nodeId });
     revalidatePath(`/projects/${projectId}`);
-
     return actionSuccess({ id: ref.id });
   },
 );
 
 export async function updateReference(
-  referenceId: string,
   projectId: string,
+  nodeId: string,
+  referenceId: string,
   data: {
     version?: string;
     featureCoverage?: string;
@@ -75,35 +72,23 @@ export async function updateReference(
   },
 ): Promise<ActionResult> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
+    const body: CompetitorRefUpdate = {
+      ...(data.version !== undefined && { competitor_version: data.version.trim() || null }),
+      ...(data.featureCoverage !== undefined && {
+        feature_coverage: data.featureCoverage.trim() || null,
+      }),
+      ...(data.technicalApproach !== undefined && {
+        tech_approach: data.technicalApproach.trim() || null,
+      }),
+      ...(data.prosAndCons !== undefined && { pros_and_cons: data.prosAndCons }),
+    };
+    await serverApiPut<CompetitorRefResponse>(
+      `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs/${referenceId}`,
+      body,
+    );
 
-    const [ref] = await db
-      .select()
-      .from(competitorReferences)
-      .where(eq(competitorReferences.id, referenceId));
-    if (!ref) {
-      return actionError(new AppError("竞品参考不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await db
-      .update(competitorReferences)
-      .set({
-        ...(data.version !== undefined && { version: data.version.trim() || null }),
-        ...(data.featureCoverage !== undefined && {
-          featureCoverage: data.featureCoverage.trim() || null,
-        }),
-        ...(data.technicalApproach !== undefined && {
-          technicalApproach: data.technicalApproach.trim() || null,
-        }),
-        ...(data.prosAndCons !== undefined && { prosAndCons: data.prosAndCons }),
-        updatedAt: new Date(),
-      })
-      .where(eq(competitorReferences.id, referenceId));
-
-    logger.action("competitor_reference.update", user.id, { referenceId, projectId });
+    logger.action("competitor_reference.update", "self", { referenceId, projectId });
     revalidatePath(`/projects/${projectId}`);
-
     return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
@@ -111,42 +96,31 @@ export async function updateReference(
 }
 
 export async function deleteReference(
-  referenceId: string,
   projectId: string,
+  nodeId: string,
+  referenceId: string,
 ): Promise<ActionResult> {
   try {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
+    await serverApiDelete(
+      `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs/${referenceId}`,
+    );
 
-    const [ref] = await db
-      .select()
-      .from(competitorReferences)
-      .where(eq(competitorReferences.id, referenceId));
-    if (!ref) {
-      return actionError(new AppError("竞品参考不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await db.delete(competitorReferences).where(eq(competitorReferences.id, referenceId));
-
-    logger.action("competitor_reference.delete", user.id, { referenceId, projectId });
+    logger.action("competitor_reference.delete", "self", { referenceId, projectId });
     revalidatePath(`/projects/${projectId}`);
-
     return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function getReferencesByNode(projectId: string, nodeId: string) {
-  const user = await requireAuth();
-  await checkProjectAccess(user.id, projectId, "viewer");
-
-  return db
-    .select({
-      reference: competitorReferences,
-      competitor: competitors,
-    })
-    .from(competitorReferences)
-    .innerJoin(competitors, eq(competitorReferences.competitorId, competitors.id))
-    .where(eq(competitorReferences.nodeId, nodeId));
+export async function getReferencesByNode(
+  projectId: string,
+  nodeId: string,
+): Promise<CompetitorRefResponse[]> {
+  return withAuthRedirect(async () => {
+    const data = await serverApiGet<CompetitorRefListResponse>(
+      `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs`,
+    );
+    return data.items;
+  });
 }

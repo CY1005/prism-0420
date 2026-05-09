@@ -30,6 +30,7 @@ related:
 | 3a-i | `e521656`+`ee3a2ad` | spec 06 §3 SSR auth 通道 + server-auth/server-http-client + 7 unit tests | $1-2 | — (sink only) | — (sink only) |
 | 3a-ii | `1a5e3d6` | actions/{projects,project-settings,versions} + lib/server-auth getServerUser + /projects 列表 + /projects/new 真接 backend | ~$5 | 5 立修候选 / 复审 3 立修 + 2 punt | 4 P1 立修 / 8 P2 punt |
 | 3b | `490ad23` | actions/{nodes,relations,panorama} 完整改造 + actions/{import,import-ai} 全 punt + actions/analyze getAffectedNodes 实装 / 6 stub punt + errors.ts isRedirectError 豁免 | ~$5 | 2 P1 候选 / 复审 1 立修 + 1 降 P2 punt | 1 P1 立修 / 2 P2 punt |
+| 3c | `<commit-hash>` | actions/{competitors,competitor-references,issues,search,admin,activity-log} 完整接 + actions/{export,project-stats-proxy} 端点重写 + actions/{templates,feed} 全 punt + validators/issue.ts 加 title + **errors.ts.actionError 立修 UnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错** | ~$6 | 4 P1 候选 / 复审 1 立修 + 3 降 P2 punt | 2 P1 立修（mutation 401 root-cause + admin NOT_IMPLEMENTED 类型） / 3 P2 punt |
 
 **R1+R2 第 2 数据点结论**：
 - R1 reuse 5 P1 候选 / 复审：3 立修（projectsData mock dead / createVersion releaseMode workspace.tsx 在 ignore 范围 punt / handleCreateVersion 错误吞 workspace.tsx 在 ignore 范围 punt / eslint glob `[projectId]` 字面 char class 已 workaround / `getProjects` 401 处理与 R2 同根因合并立修）
@@ -163,19 +164,67 @@ cold-start prompt「子片 3a-ii」段写 6 页面（projects 列表 + new + [id
 - actions/{projects, project-settings, versions} 三件套改 server-http-client / 顺手删 4 处 requireAuth import（projects + project-settings + versions + 它们调用方）
 - broken imports 26 处中本子片关闭 4 处（projects + project-settings + versions + 顺手 workspace.tsx createVersion 签名同步）/ 余 22 处随 3b/3c 关闭
 
+## §3c 子片 3c findings（R1+R2 第 4 数据点）
+
+### R2 spec P1 立修（2 项 / 已修）
+
+1. **mutation 路径全栈 401 静默吞错（root-cause）** — `lib/errors.ts.actionError` 仅豁免 NEXT_REDIRECT 未豁免 UnauthenticatedError / defineAction 顶层 catch 把 UnauthenticatedError 吞为 actionError fallback / 影响 3a/3b/3c 全栈所有 mutation（updateCompetitor / deleteCompetitor / updateReference / deleteReference / deleteIssue / transitionIssue / triggerBackfill / triggerModelUpgrade / globalSearch / exportNodes / exportSingleNode + defineAction 包的 createCompetitor / createReference / createIssue / updateIssue 等）/ 用户停留原页继续点表单 / 与 read 路径 withAuthRedirect 行为不一致 / 是 3a-ii 第 2 数据点 read 路径 401 静默吞错的同型 mutation 路径再发 / 3a/3b R2 漏抓 / **R2 真漏抓贡献第 4 数据点最大**。**已修**：errors.ts 加 `isUnauthenticatedError` 按 name 字面识别（防 UnauthenticatedError 类 import 把 client-only auth-token-store 漏入 server bundle / P22-3a-1 已 pool）+ actionError 内 `if (isUnauthenticatedError(e)) redirect("/login")` 一改通修 N+ caller。
+2. **admin.ts NOT_IMPLEMENTED 声明类型不一致** — admin.ts:70 是 string 后续用 `new Error(NOT_IMPLEMENTED)` 包；templates.ts:54 / feed.ts:13 直接 `const NOT_IMPLEMENTED = new Error(...)`。**已修**：admin.ts 改为 Error 类型 / 三个 stub 文件统一声明模式。
+
+### R1 reuse P1 复审（4 P1 候选）
+
+- **R1 P1-1 withAuthRedirect helper 5→10 文件重复** — 是 P22-3b-1（cross-sprint pool 已立）的 trend update / 3c 新增 5 处（competitors+competitor-references+issues+admin+activity-log）/ 现状 10 处全栈重复 / **不重新立 P1 / 趋势继续累计 / 抽 lib/server-action-helpers.ts 时机已成熟（子片 5 cleanup 抽）**
+- **R1 P1-2 search.ts / project-stats-proxy.ts 内联 redirect 不复用 withAuthRedirect** — 是 P1-1 子集 / **降 P2 punt 进子片 5 cleanup**（与 P22-3b-1 抽 helper 同批处理 / search.ts catch 内 if instanceof + project-stats-proxy.ts fetchOverview 包裹器都收敛进 helper）
+- **R1 P1-3 admin.ts NOT_IMPLEMENTED string vs Error 不一致** — 立修同 R2 P1-2 合并
+- **R1 P1-4 project-stats-proxy.ts StatsResult vs ActionResult 双 result 类型** — **降 P2 punt 进子片 5 cleanup**（兼容层意图保留 consumer 残留 import / 子片 5 切换到 panorama.getProjectStats 时同时迁 result 格式）
+
+### R1 reuse P2 punt（5 项进 cross-sprint 池）
+
+| # | 描述 | file:line | 触发时机 |
+|---|------|-----------|----------|
+| P22-3c-1 | search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect / 是 P22-3b-1 子集 | search.ts:41 + project-stats-proxy.ts:24 | 子片 5 cleanup（与 P22-3b-1 同批抽 lib/server-action-helpers.ts）|
+| P22-3c-2 | StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行 | project-stats-proxy.ts:13 | 子片 5 cleanup（consumer 迁到 panorama 时同时迁 result 格式）|
+| P22-3c-3 | issues.ts 命名前缀混用 list/get（listIssues vs getIssue / getIssuesByNode / getIssuesByCategory）| issues.ts:138 | 子片 5 命名规约统一 |
+| P22-3c-4 | competitor-references 命名过于通用（createReference vs createCompetitor / createNode 资源名前缀缺）| competitor-references.ts:34 | 子片 5 重命名 createCompetitorRef 等 |
+| P22-3c-5 | findInTree 三处重复 / nodes.ts module-level + panorama.ts inline + relations.ts inline | nodes.ts:283 + panorama.ts inline + relations.ts inline | 子片 5 抽 lib/tree-utils.ts（P22-3b-2 同源 / trend update）|
+
+### R2 spec P2 punt（3 项进 pool）
+
+| # | 描述 | file:line | 触发时机 |
+|---|------|-----------|----------|
+| P22-3c-6 | export.ts ExportPayload = unknown / OpenAPI 真不约束 200 响应 schema / consumer UI 解析 旧 `{filename, content}` 字段不再保证 | export.ts:30+53 | 子片 5 cleanup CY 拍补 ExportResponse schema or 显式删 consumer |
+| P22-3c-7 | activity-log.logActivity / logActivityAuto no-op 兼容层 / 残留 caller 未审计 | activity-log.ts:38 | 子片 5 grep caller 全删 + 删函数 |
+| P22-3c-8 | project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor | project-stats-proxy.ts:17 | 子片 5 cleanup（删本文件时一并）|
+
+### 子片 3c prompt-vs-reality 漂移（SR-P22-3 第 4 实证）
+
+cold-start prompt「子片 3c」段写「10 actions + 7 页面 + R1+R2」/ 实际可达：
+
+- ✅ 6 actions 完整改造接真后端（competitors / competitor-references / issues / search / admin embedding / activity-log）
+- 🟡 1 action 端点 shape 重写（export / 旧 port 8001 INTERNAL_TOKEN /api/export/nodes → /api/projects/{pid}/exports + /nodes/{nid}/export）
+- 🟡 1 action 端点真接 + 兼容层（project-stats-proxy / 旧 /api/projects/{pid}/stats 微服务 → /api/projects/{pid}/overview）
+- ⏸ 2 actions 显式全函数 NOT_IMPLEMENTED stub（templates 无 prism-0420 OpenAPI 对应路径 + feed 工作流不一一对应 prism-0420 /api/news 域）
+- ⏸ 7 页面 unlock 全 punt 子片 5（消费方签名漂移 + admin 页面深耦合 用户管理 stub + openclaw 页面 OpenAPI 无对应路径需 CY 拍删）
+
+**根因**：cold-start prompt 假设 10 actions 全有真后端 / 实际 OpenAPI grep 出 4 个域无对应路径（templates / openclaw / feed 工作流 / admin 用户管理 / 项目级 ZIP 导出）/ 启动期 30min ls 穷举 + types/api.ts grep 是 SR-P22-3 真值（M01 register + 3a-ii broken imports + 3b SSE/WS + 3c OpenAPI 域不对应 = 四实证 / 子片 5 关闸前 sink 立规候选已成熟）。
+
+**3c scope 修订归档**：6 actions 完整接 / 2 actions 端点重写 / 2 actions 全 punt / 0 页面真接（ignore 留子片 5）/ R1+R2 第 4 数据点 + 立修 root cause。
+
 ## §4 SR-P22 立规候选 sink（待 5 数据点后实证）
 
 | 立规 ID | 描述 | 立规时机 |
 |---------|------|----------|
 | SR-P22-1 | feedback_decision_layering 自检第 4 问（已即时落） | ✅ 已立 |
 | SR-P22-2 | feedback_subagent_sprint §4 — 前端继承形态 R 范式适配（R1=1 Sonnet + R2=1 Opus 而非 R1=3 + R2=1 / 第 2 数据点实证 R2 真漏抓硬伤 ROI 高于 R1）| 5 数据点后实证 sink |
-| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports + 3b SSE/WS 路径完全不在 OpenAPI = 三实证）| 子片 5 关闸前 sink |
+| SR-P22-3 | feedback_decision_layering 反模式表 — prompt 块本身分层错误识破（M01 register + 3a-ii broken imports + 3b SSE/WS 路径完全不在 OpenAPI + 3c OpenAPI 域不对应 4 个 actions = 四实证 / 已成熟）| 子片 5 关闸前 sink |
+| SR-P22-4 | feedback_subagent_sprint §4 — R2 spec subagent **跨子片同根因漂移检测**是核心 ROI 维度（mutation 路径 401 静默吞错是 3a-ii read 路径硬伤的 mutation 同型 / 3a/3b R2 漏抓 / 3c R2 闭环 / 抓 root-cause 修一处通修 N+ caller）| 第 4 数据点支撑 / 子片 5 关闸前 sink |
 
 ## §5 元贡献（实证）
 
 - **前端继承形态首次走通**：拷贝 130 文件 → 选择性删 next-auth/drizzle → 渐进改造 → 子片 1 codegen + 子片 2 auth flow 接通；为子片 3a-3c 业务页面改造范式提供模板。
 - **eslint ignore 渐进还债范式**：子片 1 移 `services/http-client.ts` + `auth-token-store.ts` + `types/**`；子片 2 移 `services/auth.ts`（删）+ `contexts/auth-context.{tsx,test.tsx}`（新写）+ `lib/validators/auth.ts` + `app/login/**` + `app/register/**`。每改一文件 → 移除 ignore → eslint ✓ 才 commit；累计移除 N=11 项。
 - **R 范式合并数据点 ROI**：子片 1 仅工具链（http-client mock 充分）/ 子片 2 真用 endpoint（cookie + CORS + e2e）；合并跑使 R2 spec 验证有真锚点（schema 同步 / cookie 通道 / CORS 配置全字面对照），ROI 显著高于子片 1 单独跑。
+- **R2 spec 跨子片同根因检测 ROI**（第 4 数据点新发现）：3c R2 抓到 mutation 路径 401 静默吞错是 3a-ii read 路径硬伤的同型再发 / root-cause 在 errors.ts.actionError 一改通修 11 mutation + 4 defineAction caller / 3a/3b R2 漏抓但 3c R2 闭环 / 验证 R2 spec subagent 不只是「本子片字面合规」检查器，更是「跨子片同根因漂移检测」机制 — 是 SR-P22-4 立规候选基础。
 
 ---
 

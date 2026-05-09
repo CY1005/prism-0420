@@ -21,17 +21,9 @@ const eslintConfig = defineConfig([
     // 子片 3a-ii: actions/{projects,project-settings,versions} 已改 server-http-client / 不 ignore
     // 子片 3b: actions/{nodes,relations,panorama,import,import-ai,analyze} 已改 / 不 ignore
     //   - import / import-ai / analyze SSE+WS 流程显式 actionError(NOT_IMPLEMENTED) → 子片 3c 接 M11/M13/M17/M14 真端点
-    "src/actions/activity-log.ts",
-    "src/actions/admin.ts",
-    "src/actions/competitor-references.ts",
-    "src/actions/competitors.ts",
-    "src/actions/export.ts",
-    "src/actions/feed.ts",
-    "src/actions/issues.ts",
-    "src/actions/project-stats-proxy.ts",
-    "src/actions/search.ts",
+    // 子片 3c: actions/{competitors,competitor-references,issues,search,admin,activity-log,export,project-stats-proxy} 改 server-http-client / 已合规 / 不 ignore
+    //   - templates / feed 全函数 NOT_IMPLEMENTED stub（OpenAPI 无对应域 / 子片 5 后或 Phase 2.3 评估）
     "src/actions/teams.ts",
-    "src/actions/templates.ts",
     // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
     // 子片 2-3 改造逐文件移除剩余条目
     "src/services/analyzer.ts",
@@ -64,8 +56,8 @@ const eslintConfig = defineConfig([
     "src/lib/tree-data.ts",
     "src/lib/use-page-context.ts",
     // src/lib/validators/auth.ts 子片 2 zod schema / 已合规 / 不 ignore
+    // 子片 3c: validators/issue.ts 加 title + projectId / 不 ignore
     "src/lib/validators/competitor.ts",
-    "src/lib/validators/issue.ts",
     "src/lib/validators/node.ts",
     "src/lib/validators/project.ts",
     "src/lib/validators/team.ts",

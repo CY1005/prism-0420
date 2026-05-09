@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { ErrorCode } from "./error-codes";
 
 /**
@@ -8,6 +9,15 @@ function isNextRedirectError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const digest = (error as Error & { digest?: unknown }).digest;
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
+
+/**
+ * spec 06 §3：服务端 access token 拿不到 → redirect("/login")。
+ * 不直接 import services/http-client.UnauthenticatedError 防 client-only auth-token-store 漏入 server bundle
+ * （cross-sprint pool P22-3a-1 / lib/api-errors.ts 抽出待子片 5 cleanup）→ 按 name 字面识别。
+ */
+function isUnauthenticatedError(error: unknown): boolean {
+  return error instanceof Error && error.name === "UnauthenticatedError";
 }
 
 // 错误严重程度
@@ -73,10 +83,16 @@ export type ActionResult<T = void> =
   | { success: false; error: string; code: ErrorCode; severity: ErrorSeverity };
 
 // 包装 Server Action 的错误处理
-// spec 06 §3：UnauthenticatedError → redirect("/login") 通过 NEXT_REDIRECT 抛出 / 必须透出不能吞。
+// spec 06 §3：
+// - NEXT_REDIRECT 必须透出不能吞（read 路径 withAuthRedirect 已立 / mutation 路径同样适用）
+// - UnauthenticatedError → redirect("/login")（throws NEXT_REDIRECT / mutation 路径 401 不能静默退化为
+//   "操作失败" / 一改通修 N+ caller / 子片 3c R2 第 4 数据点立修同根因）
 export function actionError(error: unknown): ActionResult<never> {
   if (isNextRedirectError(error)) {
     throw error;
+  }
+  if (isUnauthenticatedError(error)) {
+    redirect("/login");
   }
   if (error instanceof AppError) {
     return { success: false, error: error.message, code: error.code, severity: error.severity };

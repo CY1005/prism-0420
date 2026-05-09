@@ -1,25 +1,37 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
-import type { ProjectStats, TreeNodeOverview } from "@/services/project-stats";
+import { redirect } from "next/navigation";
+import { serverApiGet, UnauthenticatedError } from "@/lib/server-http-client";
+import type { components } from "@/types/api";
 
-const API_BASE = process.env.API_URL ?? "http://localhost:8001";
-const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "";
+type OverviewResponse = components["schemas"]["OverviewResponse"];
+type OverviewStats = components["schemas"]["OverviewStats"];
+type NodeOverview = components["schemas"]["NodeOverview"];
 
-type StatsResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export type ProjectStats = OverviewStats & { project_id: string };
+export type TreeNodeOverview = NodeOverview;
+export type StatsResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+/**
+ * 子片 3c — 旧实装走 port 8001 + INTERNAL_TOKEN 微服务（prism-0420 OpenAPI 不存在该路径）。
+ * 重写走 /api/projects/{pid}/overview（actions/panorama.ts.getProjectStats 已实装同源 endpoint）。
+ * 函数签名保留以兼容 overview/page.tsx 残留 import（在 eslint ignore / 子片 5 cleanup 替换为 panorama）。
+ */
+async function fetchOverview(projectId: string): Promise<OverviewResponse> {
+  try {
+    return await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
 
 export async function getProjectStatsAction(projectId: string): Promise<StatsResult<ProjectStats>> {
   try {
-    const user = await requireAuth();
-    const resp = await fetch(`${API_BASE}/api/projects/${projectId}/stats`, {
-      headers: {
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-    });
-    if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
-    const data = (await resp.json()) as ProjectStats;
-    return { ok: true, data };
+    const overview = await fetchOverview(projectId);
+    return { ok: true, data: { ...overview.stats, project_id: overview.project_id } };
   } catch (e) {
     return { ok: false, error: `服务不可用: ${(e as Error).message}` };
   }
@@ -29,16 +41,8 @@ export async function getProjectTreeOverviewAction(
   projectId: string,
 ): Promise<StatsResult<{ tree: TreeNodeOverview[] }>> {
   try {
-    const user = await requireAuth();
-    const resp = await fetch(`${API_BASE}/api/projects/${projectId}/tree-overview`, {
-      headers: {
-        "X-Internal-Token": INTERNAL_TOKEN,
-        "X-User-Id": user.id,
-      },
-    });
-    if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
-    const data = (await resp.json()) as { tree: TreeNodeOverview[] };
-    return { ok: true, data };
+    const overview = await fetchOverview(projectId);
+    return { ok: true, data: { tree: overview.tree } };
   } catch (e) {
     return { ok: false, error: `服务不可用: ${(e as Error).message}` };
   }

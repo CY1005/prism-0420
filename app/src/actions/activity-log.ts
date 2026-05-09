@@ -1,14 +1,29 @@
 "use server";
 
-import { db } from "@/db";
-import { activityLogs } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：logActivity / logActivityAuto 是 no-op 兼容层（参数保留作 M16 service 层 write_event 调用契约的锚点 / 子片 5 移除残留 caller 后删函数） */
+import { redirect } from "next/navigation";
+import { serverApiGet, UnauthenticatedError } from "@/lib/server-http-client";
+import type { components } from "@/types/api";
 
-// ─── Log Activity (fire-and-forget, no await needed) ─────
+type ActivityStreamResponse = components["schemas"]["ActivityStreamResponse"];
+type ActivityLogItem = components["schemas"]["ActivityLogItem"];
 
-export async function logActivity(params: {
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
+
+/**
+ * 后端 activity_log 写由 service 层 write_event 触发（design §10）/ 前端不再客户端写。
+ * 旧 logActivity / logActivityAuto 仅返回 void，实现替换为 no-op 以兼容残留 caller / 子片 5 移除调用点。
+ */
+export async function logActivity(_params: {
   projectId: string;
   userId: string;
   actionType: string;
@@ -17,25 +32,10 @@ export async function logActivity(params: {
   summary: string;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  try {
-    await db.insert(activityLogs).values({
-      projectId: params.projectId,
-      userId: params.userId,
-      actionType: params.actionType,
-      targetType: params.targetType,
-      targetId: params.targetId,
-      summary: params.summary,
-      metadata: params.metadata ?? null,
-    });
-  } catch (err) {
-    // Fire-and-forget: log but don't throw to avoid affecting main flow
-    console.error("Failed to log activity:", err);
-  }
+  // no-op: prism-0420 activity_log 由 backend service 层写
 }
 
-// ─── Log Activity with auto-auth (for client components) ─
-
-export async function logActivityAuto(params: {
+export async function logActivityAuto(_params: {
   projectId: string;
   actionType: string;
   targetType: string;
@@ -43,29 +43,19 @@ export async function logActivityAuto(params: {
   summary: string;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
-  try {
-    const user = await requireAuth();
-    await logActivity({ ...params, userId: user.id });
-  } catch (err) {
-    console.error("Failed to log activity (auto):", err);
-  }
+  // no-op: 同上
 }
 
-// ─── Get Activity Logs (paginated) ──────────────────────
-
-export async function getActivityLogs(projectId: string, page: number = 1, pageSize: number = 20) {
-  const user = await requireAuth();
-  await checkProjectAccess(user.id, projectId, "viewer");
-
-  const offset = (page - 1) * pageSize;
-
-  const logs = await db
-    .select()
-    .from(activityLogs)
-    .where(eq(activityLogs.projectId, projectId))
-    .orderBy(desc(activityLogs.createdAt))
-    .limit(pageSize)
-    .offset(offset);
-
-  return { logs, page, pageSize };
+export async function getActivityLogs(
+  projectId: string,
+  page: number = 1,
+  pageSize: number = 20,
+): Promise<{ logs: ActivityLogItem[]; page: number; pageSize: number; total: number }> {
+  return withAuthRedirect(async () => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    const data = await serverApiGet<ActivityStreamResponse>(
+      `/api/projects/${projectId}/activity-stream?${params}`,
+    );
+    return { logs: data.items, page: data.page, pageSize: data.page_size, total: data.total };
+  });
 }

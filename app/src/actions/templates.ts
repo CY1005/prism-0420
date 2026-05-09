@@ -1,12 +1,14 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
-import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
-import { ErrorCode } from "@/lib/error-codes";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：templates CRUD 全函数 NOT_IMPLEMENTED stub（参数保留作子片 5+ 接 templates 后端域时的契约锚点 / 子片 5 cleanup 时由 CY 决定补端点 or 删页面） */
+import { type ActionResult, actionError } from "@/lib/errors";
 
-const API_BASE = process.env.API_URL ?? "http://localhost:8001";
-
-// ─── Types ──────────────────────────────────────────
+/**
+ * 子片 3c — prism-0420 OpenAPI 暂未提供 templates CRUD endpoint
+ * （仅 /api/projects/{pid}/cold-start/template singular 在 M11 域 / 不是 templates 库）。
+ * 全函数 NOT_IMPLEMENTED stub，签名+类型保留以兼容 templates 页 / template-save-dialog 残留 import
+ * （consumer 全在 eslint ignore / 子片 5 cleanup 时由 CY 决定补端点 or 删页面）。
+ */
 
 export interface TemplateContent {
   trigger_conditions: string[];
@@ -49,163 +51,57 @@ export interface TemplateMatchResult {
   usage_count: number;
 }
 
-// ─── Helper ─────────────────────────────────────────
-
-async function fetchAPI(path: string, options: RequestInit = {}) {
-  const user = await requireAuth();
-  const token = process.env.INTERNAL_TOKEN ?? "";
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Internal-Token": token,
-      "X-User-Id": user.id,
-      ...options.headers,
-    },
-  });
-}
-
-// ─── Actions ────────────────────────────────────────
+const NOT_IMPLEMENTED = new Error(
+  "templates CRUD 在 prism-0420 OpenAPI 暂未提供（子片 5 后或 Phase 2.3 评估补端点）",
+);
 
 export async function listTemplates(
-  projectId: string,
-  category?: string,
-): Promise<ActionResult<{ templates: Template[]; total: number }>> {
-  try {
-    const params = new URLSearchParams({ project_id: projectId });
-    if (category) params.set("category", category);
-    const res = await fetchAPI(`/api/templates/?${params.toString()}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "获取模板列表失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("获取模板列表失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+  _projectId: string,
+  _category?: string,
+): Promise<ActionResult<Template[]>> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
-export async function getTemplate(templateId: string): Promise<ActionResult<Template>> {
-  try {
-    const res = await fetchAPI(`/api/templates/${templateId}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "获取模板失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("获取模板失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+export async function getTemplate(_templateId: string): Promise<ActionResult<Template>> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
-export async function createTemplate(data: {
-  project_id: string;
+export async function createTemplate(_data: {
+  projectId: string;
   name: string;
   description?: string;
-  category?: string;
+  category: string;
   content: TemplateContent;
-}): Promise<ActionResult<Template>> {
-  try {
-    const res = await fetchAPI("/api/templates/", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "创建模板失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("创建模板失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+}): Promise<ActionResult<{ id: string }>> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
 export async function updateTemplate(
-  templateId: string,
-  data: {
+  _templateId: string,
+  _data: {
     name?: string;
     description?: string;
     category?: string;
     content?: TemplateContent;
-    change_summary?: string;
+    changeSummary?: string;
   },
-): Promise<ActionResult<Template>> {
-  try {
-    const res = await fetchAPI(`/api/templates/${templateId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "更新模板失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("更新模板失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+): Promise<ActionResult> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
-export async function deleteTemplate(
-  templateId: string,
-): Promise<ActionResult<{ success: boolean }>> {
-  try {
-    const res = await fetchAPI(`/api/templates/${templateId}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "删除模板失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("删除模板失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+export async function deleteTemplate(_templateId: string): Promise<ActionResult> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
 export async function getTemplateHistory(
-  templateId: string,
+  _templateId: string,
 ): Promise<ActionResult<TemplateVersion[]>> {
-  try {
-    const res = await fetchAPI(`/api/templates/${templateId}/history`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "获取版本历史失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("获取版本历史失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+  return actionError(NOT_IMPLEMENTED);
 }
 
 export async function revertTemplate(
-  templateId: string,
-  targetVersion: number,
-): Promise<ActionResult<Template>> {
-  try {
-    const params = new URLSearchParams({ target_version: String(targetVersion) });
-    const res = await fetchAPI(`/api/templates/${templateId}/revert?${params.toString()}`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return actionError(
-        new AppError(body.detail || "回滚模板失败", "blocking", ErrorCode.INTERNAL_ERROR),
-      );
-    }
-    return actionSuccess(await res.json());
-  } catch (e) {
-    return actionError(new AppError("回滚模板失败", "blocking", ErrorCode.INTERNAL_ERROR));
-  }
+  _templateId: string,
+  _versionId: string,
+): Promise<ActionResult> {
+  return actionError(NOT_IMPLEMENTED);
 }

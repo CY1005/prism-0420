@@ -1,111 +1,104 @@
 "use server";
 
-import { db } from "@/db";
-import { competitors } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
-import { checkProjectAccess } from "@/services/permission.service";
+import { redirect } from "next/navigation";
+import {
+  serverApiGet,
+  serverApiPost,
+  serverApiPut,
+  serverApiDelete,
+  UnauthenticatedError,
+} from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
-import { ErrorCode } from "@/lib/error-codes";
 import { defineAction } from "@/lib/define-action";
 import { createCompetitorSchema } from "@/lib/validators/competitor";
+import type { components } from "@/types/api";
+
+type CompetitorResponse = components["schemas"]["CompetitorResponse"];
+type CompetitorListResponse = components["schemas"]["CompetitorListResponse"];
+type CompetitorCreate = components["schemas"]["CompetitorCreate"];
+type CompetitorUpdate = components["schemas"]["CompetitorUpdate"];
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
+  }
+}
 
 export const createCompetitor = defineAction(
   createCompetitorSchema,
   async ({ projectId, name, website, description }): Promise<ActionResult<{ id: string }>> => {
-    const user = await requireAuth();
-    await checkProjectAccess(user.id, projectId, "editor");
+    const body: CompetitorCreate = {
+      display_name: name,
+      website_url: website || null,
+      description: description || null,
+    };
+    const competitor = await serverApiPost<CompetitorResponse>(
+      `/api/projects/${projectId}/competitors`,
+      body,
+    );
 
-    const [competitor] = await db
-      .insert(competitors)
-      .values({
-        projectId,
-        name,
-        website: website || null,
-        description: description || null,
-      })
-      .returning();
-
-    logger.action("competitor.create", user.id, { projectId, competitorId: competitor.id });
+    logger.action("competitor.create", "self", { projectId, competitorId: competitor.id });
     revalidatePath(`/projects/${projectId}`);
-
     return actionSuccess({ id: competitor.id });
   },
 );
 
 export async function updateCompetitor(
+  projectId: string,
   competitorId: string,
-  data: {
-    name?: string;
-    website?: string;
-    description?: string;
-  },
+  data: { name?: string; website?: string; description?: string },
 ): Promise<ActionResult> {
   try {
-    const user = await requireAuth();
-
-    const [competitor] = await db
-      .select()
-      .from(competitors)
-      .where(eq(competitors.id, competitorId));
-    if (!competitor) {
-      return actionError(new AppError("竞品不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await checkProjectAccess(user.id, competitor.projectId, "editor");
-
     if (data.name !== undefined && data.name.trim() === "") {
       return actionError(new AppError("竞品名称不能为空", "blocking", "VALIDATION_ERROR"));
     }
 
-    await db
-      .update(competitors)
-      .set({
-        ...(data.name !== undefined && { name: data.name.trim() }),
-        ...(data.website !== undefined && { website: data.website.trim() || null }),
-        ...(data.description !== undefined && { description: data.description.trim() || null }),
-      })
-      .where(eq(competitors.id, competitorId));
+    const body: CompetitorUpdate = {
+      ...(data.name !== undefined && { display_name: data.name.trim() }),
+      ...(data.website !== undefined && { website_url: data.website.trim() || null }),
+      ...(data.description !== undefined && { description: data.description.trim() || null }),
+    };
 
-    logger.action("competitor.update", user.id, { competitorId, projectId: competitor.projectId });
-    revalidatePath(`/projects/${competitor.projectId}`);
+    await serverApiPut<CompetitorResponse>(
+      `/api/projects/${projectId}/competitors/${competitorId}`,
+      body,
+    );
 
+    logger.action("competitor.update", "self", { competitorId, projectId });
+    revalidatePath(`/projects/${projectId}`);
     return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function deleteCompetitor(competitorId: string): Promise<ActionResult> {
+export async function deleteCompetitor(
+  projectId: string,
+  competitorId: string,
+): Promise<ActionResult> {
   try {
-    const user = await requireAuth();
+    await serverApiDelete(`/api/projects/${projectId}/competitors/${competitorId}`);
 
-    const [competitor] = await db
-      .select()
-      .from(competitors)
-      .where(eq(competitors.id, competitorId));
-    if (!competitor) {
-      return actionError(new AppError("竞品不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    await checkProjectAccess(user.id, competitor.projectId, "editor");
-
-    await db.delete(competitors).where(eq(competitors.id, competitorId));
-
-    logger.action("competitor.delete", user.id, { competitorId, projectId: competitor.projectId });
-    revalidatePath(`/projects/${competitor.projectId}`);
-
+    logger.action("competitor.delete", "self", { competitorId, projectId });
+    revalidatePath(`/projects/${projectId}`);
     return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function getCompetitorsByProject(projectId: string) {
-  const user = await requireAuth();
-  await checkProjectAccess(user.id, projectId, "viewer");
-
-  return db.select().from(competitors).where(eq(competitors.projectId, projectId));
+export async function getCompetitorsByProject(projectId: string): Promise<CompetitorResponse[]> {
+  return withAuthRedirect(async () => {
+    const data = await serverApiGet<CompetitorListResponse>(
+      `/api/projects/${projectId}/competitors`,
+    );
+    return data.items;
+  });
 }

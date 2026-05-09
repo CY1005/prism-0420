@@ -351,6 +351,24 @@ UNVERIFIABLE 8 项
 | B2 | M03-M08 service 裸 CRUD action_type | STILL_PUNT — **真漏洞 #2 / B1 联动** |
 | B3 | OpenAPI schema 一致性自动校验 | UNVERIFIABLE |
 
+### Phase 2.2 子片 3c punt 池（8 项 / 详 design/audit/p22-pilot-template-validation.md §3c）
+
+| # | 项 | 状态 / 触发时机 |
+|---|---|---|
+| P22-3c-1 | search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect / 是 P22-3b-1 子集 | 子片 5 cleanup（与 P22-3b-1 同批抽 lib/server-action-helpers.ts）|
+| P22-3c-2 | StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行 | 子片 5 cleanup（consumer 迁 panorama 时同时迁 result 格式）|
+| P22-3c-3 | issues.ts 命名前缀混用 list/get | 子片 5 命名规约统一 |
+| P22-3c-4 | competitor-references 命名缺资源前缀 | 子片 5 重命名 createCompetitorRef 等 |
+| P22-3c-5 | findInTree 三处重复（trend update of P22-3b-2）| 子片 5 抽 lib/tree-utils.ts |
+| P22-3c-6 | export.ts ExportPayload = unknown / OpenAPI 真不约束 / consumer UI 解析旧字段不再保证 | 子片 5 cleanup CY 拍补 ExportResponse schema or 删 consumer |
+| P22-3c-7 | activity-log.logActivity / logActivityAuto no-op 兼容层 / 残留 caller 未审计 | 子片 5 grep caller 全删 + 删函数 |
+| P22-3c-8 | project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor | 子片 5 cleanup（删本文件时一并）|
+
+**3c trend update**：
+- P22-3b-1 helper 重复从 5 文件扩散到 10 文件（superset）/ 抽 lib/server-action-helpers.ts 时机已成熟
+- P22-3b-2 findInTree 重复持续 3 处 / 与 P22-3c-5 同源
+- **3c 立修 root-cause**：`errors.ts.actionError` 加 isUnauthenticatedError → redirect 一改通修 mutation 路径 401 静默吞错（影响 3a/3b 全栈，但 3c 关闸时立修 / 无残留 punt）
+
 ---
 
 ## 维护规约

@@ -1,122 +1,88 @@
 "use server";
 
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
-import { requireAuth } from "@/lib/auth";
+/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：用户管理 4 函数 NOT_IMPLEMENTED stub（prism-0420 OpenAPI 暂未提供 admin 用户管理域 / 子片 5 后或 Phase 2.3 评估接入） */
+import { redirect } from "next/navigation";
+import { serverApiGet, serverApiPost, UnauthenticatedError } from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
-import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
+import type { components } from "@/types/api";
 
-async function requirePlatformAdmin() {
-  const user = await requireAuth();
-  if (user.role !== "platform_admin") {
-    throw new AppError("无权限执行此操作", "blocking", "FORBIDDEN", 403);
+type EmbeddingStatsResponse = components["schemas"]["EmbeddingStatsResponse"];
+type BackfillRequest = components["schemas"]["BackfillRequest"];
+type BackfillResponse = components["schemas"]["BackfillResponse"];
+type ModelUpgradeRequest = components["schemas"]["ModelUpgradeRequest"];
+type ModelUpgradeResponse = components["schemas"]["ModelUpgradeResponse"];
+
+async function withAuthRedirect<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      redirect("/login");
+    }
+    throw error;
   }
-  return user;
 }
 
-export async function getUsers() {
-  await requirePlatformAdmin();
+/**
+ * prism-0420 admin endpoint：embedding 域（M18 / platform_admin only）。
+ * 用户管理（旧 getUsers / createUser / toggleUserStatus / updateUserRole）在 prism-0420 OpenAPI 无对应路径，
+ * 子片 3c punt：保留为 NOT_IMPLEMENTED stub，等后端补 admin 用户管理域 / 子片 5+ 或 Phase 2.3。
+ */
 
-  const userList = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      status: users.status,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .orderBy(users.createdAt);
+export async function getEmbeddingStats(): Promise<EmbeddingStatsResponse> {
+  return withAuthRedirect(async () => {
+    return await serverApiGet<EmbeddingStatsResponse>("/api/admin/embedding/stats");
+  });
+}
 
-  return userList;
+export async function triggerBackfill(
+  payload: BackfillRequest,
+): Promise<ActionResult<BackfillResponse>> {
+  try {
+    const data = await serverApiPost<BackfillResponse>("/api/admin/embedding/backfill", payload);
+    logger.action("admin.embeddingBackfill", "self", { projectId: payload.project_id });
+    return actionSuccess(data);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function triggerModelUpgrade(
+  payload: ModelUpgradeRequest,
+): Promise<ActionResult<ModelUpgradeResponse>> {
+  try {
+    const data = await serverApiPost<ModelUpgradeResponse>(
+      "/api/admin/embedding/model-upgrade",
+      payload,
+    );
+    logger.action("admin.embeddingModelUpgrade", "self", { projectId: payload.project_id });
+    return actionSuccess(data);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+const NOT_IMPLEMENTED = new Error(
+  "admin 用户管理 endpoint 在 prism-0420 OpenAPI 暂未提供（子片 5 后或 Phase 2.3）",
+);
+
+export async function getUsers(): Promise<never[]> {
+  return [];
 }
 
 export async function createUser(
-  name: string,
-  email: string,
-  password: string,
+  _name: string,
+  _email: string,
+  _password: string,
 ): Promise<ActionResult<{ id: string }>> {
-  try {
-    const admin = await requirePlatformAdmin();
-
-    if (!name.trim() || !email.trim() || !password) {
-      return actionError(new AppError("所有字段必填", "blocking", "VALIDATION_ERROR"));
-    }
-
-    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-
-    if (existing) {
-      return actionError(new AppError("该邮箱已注册", "blocking", "DUPLICATE_ENTRY", 409));
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const [newUser] = await db
-      .insert(users)
-      .values({ name: name.trim(), email: email.trim(), passwordHash })
-      .returning({ id: users.id });
-
-    logger.action("admin.createUser", admin.id, { targetUserId: newUser.id, email });
-    return actionSuccess({ id: newUser.id });
-  } catch (error) {
-    return actionError(error);
-  }
+  return actionError(NOT_IMPLEMENTED);
 }
 
-export async function toggleUserStatus(userId: string): Promise<ActionResult> {
-  try {
-    const admin = await requirePlatformAdmin();
-
-    const [user] = await db
-      .select({ id: users.id, status: users.status })
-      .from(users)
-      .where(eq(users.id, userId));
-
-    if (!user) {
-      return actionError(new AppError("用户不存在", "blocking", "NOT_FOUND", 404));
-    }
-
-    if (userId === admin.id) {
-      return actionError(new AppError("不能禁用自己", "blocking", "VALIDATION_ERROR"));
-    }
-
-    const newStatus = user.status === "active" ? "disabled" : "active";
-    await db
-      .update(users)
-      .set({
-        status: newStatus,
-        tokenInvalidatedAt: newStatus === "disabled" ? new Date() : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
-
-    logger.action("admin.toggleUserStatus", admin.id, { targetUserId: userId, newStatus });
-    return actionSuccess(undefined);
-  } catch (error) {
-    return actionError(error);
-  }
+export async function toggleUserStatus(_userId: string): Promise<ActionResult> {
+  return actionError(NOT_IMPLEMENTED);
 }
 
-export async function updateUserRole(userId: string, role: string): Promise<ActionResult> {
-  try {
-    const admin = await requirePlatformAdmin();
-
-    const validRoles = ["user", "platform_admin"];
-    if (!validRoles.includes(role)) {
-      return actionError(new AppError("无效的角色", "blocking", "VALIDATION_ERROR"));
-    }
-
-    if (userId === admin.id) {
-      return actionError(new AppError("不能修改自己的角色", "blocking", "VALIDATION_ERROR"));
-    }
-
-    await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, userId));
-
-    logger.action("admin.updateUserRole", admin.id, { targetUserId: userId, role });
-    return actionSuccess(undefined);
-  } catch (error) {
-    return actionError(error);
-  }
+export async function updateUserRole(_userId: string, _role: string): Promise<ActionResult> {
+  return actionError(NOT_IMPLEMENTED);
 }

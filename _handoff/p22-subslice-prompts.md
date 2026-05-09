@@ -307,9 +307,10 @@ R1+R2、ignore 移除、关闸 同 3a 模式。
 
 ---
 
-## 子片 3c — competitor + issue + search + admin + openclaw 长尾
+## 子片 3c — competitor + issue + search + admin + openclaw 长尾 ✅
 
-> **estimated cost**: $3-5 / **estimated time**: 1 天 / **依赖**: 子片 3b
+> **commit**: `<commit-hash>` / **estimated cost**: $3-5（实际 ~$6 / SR-P22-3 第 4 实证）/ **依赖**: 子片 3b / **status**: completed
+> **scope 修订（SR-P22-3 第 4 实证）**：6 actions 完整改 + 2 actions 端点重写（export schema 对齐 + project-stats-proxy 端点切到 /overview）+ 2 actions 全函数 NOT_IMPLEMENTED stub（templates 无 OpenAPI 对应域 + feed 工作流不一一对应 /api/news 域）+ validators/issue.ts 加 title + projectId + **errors.ts.actionError 立修 UnauthenticatedError → redirect("/login") root-cause 一改通修 mutation 路径 401 静默吞错**；7 页面解锁全 punt 子片 5（admin 用户管理页 / openclaw 页面 OpenAPI 无对应路径需 CY 拍删 / 长尾 issue+template+search 页面消费方深耦合）。R1+R2 第 4 数据点：R2 真漏抓 mutation 路径 401 root-cause（3a-ii read 路径 401 同型 mutation 再发 / 3a/3b R2 漏抓 / 3c R2 闭环）+ admin NOT_IMPLEMENTED 类型 / R1 4 P1 候选复审：1 立修（admin 类型）+ 3 降 P2 punt（withAuthRedirect helper 5→10 文件 trend / search+stats-proxy 内联 redirect / StatsResult vs ActionResult 双类型）+ 5 P2 punt + 3 R2 P2 punt → 共 8 punt 进 cross-sprint pool。详见 `design/audit/p22-pilot-template-validation.md` §3c。
 
 ```
 继续 prism-0420 Phase 2.2 子片 3c：competitor + issue + search + admin + openclaw 长尾。
