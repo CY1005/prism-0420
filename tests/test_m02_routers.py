@@ -279,10 +279,12 @@ async def test_ai_provider_update_returns_200_no_key_in_response(auth_client, ma
 # ─────────────── B 路径子选项实证: move-team OpenAPI 不含 ───────────────
 
 
-async def test_b_path_move_team_endpoint_not_registered(auth_client, make_user):
-    """B 路径子选项实证 (5 步法决): move-team router 不实装 → 404 (FastAPI route 不存在).
+async def test_b_path_move_team_endpoint_registered_after_m20(auth_client, make_user):
+    """B 路径子选项实证升级（M20 sprint 子片 4 启用 / 2026-05-09）：
 
-    OpenAPI schema 也不含 — M20 sprint 启用时一并实装 + 前端 codegen 自然同步.
+    M02 sprint 期：move-team router 不实装 → 404（FastAPI route 不存在）。
+    M20 sprint 启用后：route 存在；旧字段名 'team_id' 被 schema rejected
+    （schema 用 target_team_id + extra='forbid' / Pydantic 422）。
     """
     owner = await make_user(email="b-path@example.com")
     cr = await auth_client.post(
@@ -294,4 +296,4 @@ async def test_b_path_move_team_endpoint_not_registered(auth_client, make_user):
         json={"team_id": str(uuid4())},
         headers=_bearer(owner.id),
     )
-    assert r.status_code == 404  # FastAPI: route not found
+    assert r.status_code == 422  # M20: schema field is target_team_id + extra='forbid'

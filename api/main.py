@@ -134,6 +134,10 @@ app.include_router(import_router_mod.import_router)
 app.include_router(search_router.router)
 app.include_router(embedding_admin_router.router)
 app.include_router(export_router.export_router)
+from api.routers import teams_router as teams_router_mod  # noqa: E402
+
+app.include_router(teams_router_mod.teams_router)
+app.include_router(teams_router_mod.project_team_router)
 
 
 @app.get("/health")
