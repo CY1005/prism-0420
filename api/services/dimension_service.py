@@ -36,6 +36,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dao.dimension_dao import DimensionDAO
@@ -311,7 +312,15 @@ class DimensionService:
             created_by=user_id,
             updated_by=user_id,
         )
-        await self.dao.insert(db, rec)
+        # M-CLEANUP（cross-sprint #11 立修 / M04 R1-C C7.1）：IntegrityError → 500 修
+        # M13 R-X3 入口同款 race window 守护（与 create 主入口一致）
+        try:
+            await self.dao.insert(db, rec)
+        except IntegrityError as e:
+            err_text = str(e.orig) if e.orig else str(e)
+            if "uq_dim_node_type" in err_text:
+                raise DimensionDuplicateError(node_id=str(node_id), dimension_type_id=dt.id) from e
+            raise
         await db.refresh(rec, attribute_names=["created_at", "updated_at"])
 
         merged_metadata: dict[str, Any] = {
@@ -371,7 +380,19 @@ class DimensionService:
             created_by=actor_user_id,
             updated_by=actor_user_id,
         )
-        await self.dao.insert(db, rec)
+        # M-CLEANUP（cross-sprint #11 立修 / M04 R1-A B3 + R1-C C7.1）：IntegrityError → 500 修
+        # 既有 SELECT existing + 业务码 DimensionDuplicateError 已覆盖正常路径；race window
+        # 两并发都过了 SELECT 但只有一个 INSERT 成功 → catch IntegrityError 区分约束名转业务码
+        # （清单 6 R15 ci-lint 守护立规对齐 / 与 M05/M06/M11 范式一致）
+        try:
+            await self.dao.insert(db, rec)
+        except IntegrityError as e:
+            err_text = str(e.orig) if e.orig else str(e)
+            if "uq_dim_node_type" in err_text:
+                raise DimensionDuplicateError(
+                    node_id=str(node_id), dimension_type_id=dimension_type_id
+                ) from e
+            raise
         await db.refresh(rec, attribute_names=["created_at", "updated_at"])
 
         await write_event(

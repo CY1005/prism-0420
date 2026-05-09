@@ -813,3 +813,60 @@ async def test_svc_get_latest_returns_newest_or_none(db_session, svc, make_proje
         dimension_type_key="requirement_analysis_x2",
     )
     assert cross is None
+
+
+# ─────────────── M-CLEANUP（cross-sprint #11 立修）：IntegrityError race window 守护 ───────────────
+
+
+async def test_svc_create_integrity_error_race_window(
+    db_session, make_project_with_member, make_node, make_dim_type
+):
+    """cross-sprint #11 立修回归：M04 dimension_service.create race window IntegrityError
+    catch → DimensionDuplicateError(409) 而非裸 IntegrityError 500。
+
+    Race 模拟：手动 INSERT DimensionRecord 后再调 service.create 同 (node_id, dimension_type_id)
+    → DB UNIQUE uq_dim_node_type 拦 → IntegrityError → service catch 转业务码。
+    """
+    from uuid import uuid4
+
+    from api.models.dimension_record import DimensionRecord
+    from api.services.dimension_service import DimensionService
+
+    user, proj = await make_project_with_member()
+    node = await make_node(proj.id)
+    dt_id = await make_dim_type(key="race-test", project_id=proj.id, enabled=True)
+
+    # 手动 INSERT 模拟 race window 第一个并发已 INSERT
+    existing = DimensionRecord(
+        id=uuid4(),
+        node_id=node.id,
+        project_id=proj.id,
+        dimension_type_id=dt_id,
+        content={"k": "v1"},
+        created_by=user.id,
+        updated_by=user.id,
+    )
+    db_session.add(existing)
+    await db_session.flush()
+
+    # 第二并发：service.create 必走 race window（其 SELECT existing 路径已被 monkeypatch 模拟过 None）
+    # 直接 monkeypatch dao.get_one 返回 None 让 service 进入 INSERT 路径触发 IntegrityError
+    svc = DimensionService()
+    original_get_one = svc.dao.get_one
+
+    async def _fake_get_none(*args, **kwargs):
+        return None
+
+    svc.dao.get_one = _fake_get_none  # type: ignore[method-assign]
+    try:
+        with pytest.raises(DimensionDuplicateError):
+            await svc.create(
+                db_session,
+                project_id=proj.id,
+                node_id=node.id,
+                dimension_type_id=dt_id,
+                content={"k": "v2"},
+                actor_user_id=user.id,
+            )
+    finally:
+        svc.dao.get_one = original_get_one  # type: ignore[method-assign]
