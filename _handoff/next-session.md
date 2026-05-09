@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.2-子片-2-完成 / 子片 3a 待启动**)
+last_updated: 2026-05-09 (**post-Phase-2.2-子片-3a-i-完成 / 子片 3a-ii 待启动**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,21 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-2-完成）
+## 0. 状态快照（更新于 2026-05-09 post-Phase-2.2-子片-3a-i-完成）
+
+- **Phase 2.2 子片 3a-i 完成**（spec 06 §3 SSR auth 通道沉淀 + 服务端 fetch helpers）：
+  - 决策路径：CY 询"按架构决策原则应该选哪个" → 选 α-P1（cookies → /auth/refresh → access_token → Bearer / 走 ADR-004 P1 / 不修订 spec 06 §2 + ADR-004 任何字面）
+  - commit `e521656`：spec 06 §3 SSR auth 通道（α-P1 决策 / 安全模型 / API 契约 / 引用方分类 / 实施清单）+ ADR-004 §3.5.1 备注（getServerSession 已删 / Server Action 当前走 α-P1 / P2 演进保留 / Phase 2.3 评估）+ p22-subslice-prompts 跨 session 共用纪律 + 子片 3a 实施模式细化（actions 走 serverApiPost / lib/*-data.ts 走 serverApiGet / 防层级混淆 lint 准则）
+  - commit `ee3a2ad`：app/src/lib/server-auth.ts（getServerAccessToken / React.cache 单请求 memo）+ server-http-client.ts（serverApiGet/Post/Patch/Put/Delete + 401 不自动 retry / 复用 ApiError 类型）+ 7 unit tests
+  - 累计 vitest 20 PASS（http-client 6 + auth-context 5 + smoke 2 + server-http-client 7）
+  - 模块影响评估：M01-M20 模块设计 §8 字面"鉴权走 ADR-004 P1+P2"仍正确 / 不需修订（避免过度修订 / R-X5 反模式）
+
+- **决策落盘价值**：
+  - 子片 2 决策（access 内存 / refresh cookie）字面零修订 / 完整保留
+  - ADR-004 P1+P3 字面零修订
+  - 客户端 + 服务端 access 通道独立 / 各层故障域隔离
+  - Phase 2.3 性能优化空间充足（per-request access cache / cookie burst / P2 HMAC 升级 / 多档可选）
+  - 子片 3a-ii / 3b / 3c / 4 改造范式锁定：actions/* 走 server-http-client / lib/*-data.ts 走 serverApiGet / Client 组件走 services/http-client
 
 - **Phase 2.2 子片 2 完成**：✅ auth flow 改造（access 内存 React context + refresh httpOnly cookie + CORS）+ login/register 页面 + 13 vitest + 4 backend cookie e2e + R1+R2 第 1 数据点
   - 后端 4 项（spec 06 §2 字面）：
@@ -32,10 +46,11 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
   - **新建 audit**：`design/audit/p22-pilot-template-validation.md`（§0 方法论 / §1 子片汇总 / §2 R2 spec P2 / §3 R1 reuse P1 复审降 P2 + P2 + 已修 / §4 SR-P22 立规候选 / §5 元贡献）
   - **拷贝层 broken imports 累计 26 处**（`@/lib/auth` 20 + `@/actions/auth` 6）— 自子片 0 prep 起就坏 / 子片 3a-3c 改造时一并修
 
-- **下一步推荐**：**子片 3a — projects 列表 + 详情 + dimension 档案 5 页面**
-  - prompt：`_handoff/p22-subslice-prompts.md`「子片 3a」段
-  - 前置：后端 alive（同子片 2）/ 已可跑 pnpm dev 验真路径
-  - 估 cost $4-6 / 估时 1.5 天 / 触发拷贝层 broken imports 一并修
+- **下一步推荐**：**子片 3a-ii — projects 列表 + 详情 + dimension 档案 5 页面改造**
+  - prompt：`_handoff/p22-subslice-prompts.md`「子片 3a-ii」段
+  - 前置：后端 alive（同子片 2）/ spec 06 §3 helpers 已 ready / R1+R2 第 2 数据点会真用
+  - 估 cost $4-5 / 估时 1-1.5 天 / 触发拷贝层 broken imports 一并修
+  - **建议开新 session**（context 已积累 spec 06 §3 设计讨论 + R1+R2 sub-agent 报告 / 新 session ROI 高 / feedback_usage_budget v3 「>150k 强制建议 /clear」）
 
 - **Phase 2.2 全集进度**：2/7 子片完成 / 还需 5 sessions / 总估 $14-22 + 5-6.5 天
 

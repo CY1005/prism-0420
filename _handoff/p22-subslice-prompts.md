@@ -195,9 +195,26 @@ F. 关闸：
 
 ---
 
-## 子片 3a — projects 列表 + 详情 + dimension 档案
+## 子片 3a-i — SSR auth 通道沉淀 + 服务端 fetch helpers ✅
 
-> **estimated cost**: $4-6 / **estimated time**: 1.5 天 / **依赖**: 子片 2
+> **status: completed** (2026-05-09 / commit `e521656` + `ee3a2ad`)
+>
+> 成果：
+> - spec 06 §3 SSR auth 通道沉淀（α-P1 链路 / 安全模型 / API 契约 / 引用方分类）
+> - ADR-004 §3.5.1 备注（getServerSession 已删 / cross-ref / P2 演进保留 / 字面零修订核心 P2 设计）
+> - `app/src/lib/server-auth.ts`（cookies → /auth/refresh → access_token / React.cache 单请求 memo）
+> - `app/src/lib/server-http-client.ts`（serverApiGet/Post/Patch/Put/Delete + 401 不自动 retry / 复用 ApiError 类型）
+> - vitest 7 unit tests（cumulated 20 PASS）
+>
+> SR-P22-2 立规候选实证扩展：spec 沉淀路径在子片 2 (auth) + 3a-i (SSR auth) 重复验证 / 范式可复用到子片 4 (M20) 团队页新写。
+
+---
+
+## 子片 3a-ii — projects 列表 + 详情 + dimension 档案 5 页面改造
+
+> **estimated cost**: $4-5 / **estimated time**: 1-1.5 天 / **依赖**: 子片 3a-i ✅
+>
+> 注：原计划子片 3a 总估 $4-6 / 已用 $1-2 在 3a-i 沉淀 spec + helpers / 剩 $4-5 真用于页面改造 + R1+R2
 
 ```
 继续 prism-0420 Phase 2.2 子片 3a：projects 列表 + 详情 + dimension 档案。
