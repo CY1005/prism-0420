@@ -1,6 +1,5 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3b 显式 punt stub：参数保留作为 M17 子片 3c 接入时的契约锚点 */
 import { type ActionResult, actionError, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";
 

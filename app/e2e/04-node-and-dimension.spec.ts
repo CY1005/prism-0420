@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON / 待 DB seed + node 树 fixture
 
 test.describe.skip("node + dimension flow / SKELETON", () => {
-  test("create node + fill dimension record + verify join fields render", async ({ page }) => {
+  test("create node + fill dimension record + verify join fields render", async () => {
     // TODO
     expect(true).toBe(true);
   });

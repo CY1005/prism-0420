@@ -5,6 +5,20 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // Sprint 1 Task 1.8：放开 _ 前缀参数 unused warning（e2e skeletons / NOT_IMPLEMENTED stub
+  // 通用范式 / 跟 TS 自带 noUnusedParameters 行为对齐）
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -26,56 +40,20 @@ const eslintConfig = defineConfig([
     // 子片 4: actions/teams.ts 全 rewrite / app/teams/** 全新写 / validators/team.ts 全 rewrite / 不 ignore
     // services/* — http-client.ts + auth-token-store.ts 已是子片 1 新写 / 不 ignore
     // 子片 2-3 改造逐文件移除剩余条目
-    "src/services/analyzer.ts",
-    // src/services/auth.ts 子片 2 已删除（next-auth 客户端 / spec 06 §2 改 cookie 通道）
-    "src/services/comparison.ts",
-    "src/services/permission.service.ts",
-    "src/services/project-stats.ts",
-    "src/services/projects.ts",
-    "src/services/relations.ts",
-    "src/services/search.ts",
-    "src/services/settings.ts",
-    // src/contexts/auth-context.{tsx,test.tsx} 子片 2 新写 / 不 ignore
-    "src/contexts/project-role-context.tsx",
-    // codegen 输出 / 不 lint 是常规
-    "src/types/**",
-    "src/lib/admin-data.ts",
-    "src/lib/comparison-data.ts",
-    "src/lib/crypto.ts",
+    // Sprint 1 Task 1.8 渐进还债：所有 0-issue 文件已从 ignore 移出（25 项）
+    // 保留：仍有真实 lint issue 的文件 + codegen 输出 + 第三方 ui
     "src/lib/define-action.ts",
     "src/lib/error-codes.ts",
     "src/lib/errors.ts",
     "src/lib/logger.ts",
-    "src/lib/module-data.ts",
-    "src/lib/openclaw-data.ts",
-    "src/lib/product-line-data.ts",
-    "src/lib/project-detail-data.ts",
-    "src/lib/projects-data.ts",
-    "src/lib/settings-data.ts",
-    "src/lib/test-analysis-data.ts",
-    "src/lib/tree-data.ts",
-    "src/lib/use-page-context.ts",
-    // src/lib/validators/auth.ts 子片 2 zod schema / 已合规 / 不 ignore
-    // 子片 3c: validators/issue.ts 加 title + projectId / 不 ignore
-    "src/lib/validators/competitor.ts",
-    "src/lib/validators/node.ts",
-    "src/lib/validators/project.ts",
+    "src/types/**",
     "src/components/ai-import-wizard.tsx",
     "src/components/ai-mapping-table.tsx",
-    "src/components/analysis-result.tsx",
     "src/components/competitor-reference-card.tsx",
     "src/components/dimension-card.tsx",
-    "src/components/feature-tree.tsx",
-    "src/components/feed-card.tsx",
-    "src/components/global-search-bar.tsx",
-    "src/components/import-csv-modal.tsx",
     "src/components/issue-card.tsx",
     "src/components/proto/**",
     "src/components/relation-graph.tsx",
-    "src/components/snapshot-result.tsx",
-    "src/components/template-save-dialog.tsx",
-    "src/components/template-selector.tsx",
-    "src/components/treemap-view.tsx",
     "src/components/ui/**",
     "src/components/version-timeline.tsx",
     "src/app/admin/**",

@@ -1,6 +1,5 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3b 部分 punt：SSE/test-points/comparison 6 个 stub 参数保留作为子片 3c 接 M13/M14 真端点的契约锚点 */
 import { serverApiGet } from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import { ErrorCode } from "@/lib/error-codes";

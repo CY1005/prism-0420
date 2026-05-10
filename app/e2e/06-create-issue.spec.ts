@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON
 
 test.describe.skip("create issue + join fields / SKELETON", () => {
-  test("create issue with assignee + verify join fields render", async ({ page }) => {
+  test("create issue with assignee + verify join fields render", async () => {
     // TODO
     expect(true).toBe(true);
   });

@@ -1,6 +1,5 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：用户管理 4 函数 NOT_IMPLEMENTED stub（prism-0420 OpenAPI 暂未提供 admin 用户管理域 / 子片 5 后或 Phase 2.3 评估接入） */
 import { serverApiGet, serverApiPost } from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";

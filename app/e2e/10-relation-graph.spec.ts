@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON / XYFlow 交互复杂需深度探索
 
 test.describe.skip("relation graph / SKELETON", () => {
-  test("relation graph renders + create new relation", async ({ page }) => {
+  test("relation graph renders + create new relation", async () => {
     // TODO
     expect(true).toBe(true);
   });

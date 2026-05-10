@@ -1,6 +1,5 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：templates CRUD 全函数 NOT_IMPLEMENTED stub（参数保留作子片 5+ 接 templates 后端域时的契约锚点 / 子片 5 cleanup 时由 CY 决定补端点 or 删页面） */
 import { type ActionResult, actionError } from "@/lib/errors";
 
 /**

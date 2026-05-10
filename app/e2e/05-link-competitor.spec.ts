@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON
 
 test.describe.skip("link competitor / SKELETON", () => {
-  test("create competitor + link to project", async ({ page }) => {
+  test("create competitor + link to project", async () => {
     // TODO
     expect(true).toBe(true);
   });

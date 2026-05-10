@@ -6,12 +6,12 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON / 需 multipart fixture + WS 客户端
 
 test.describe.skip("import + export / SKELETON", () => {
-  test("export project data + verify download", async ({ page }) => {
+  test("export project data + verify download", async () => {
     // TODO
     expect(true).toBe(true);
   });
 
-  test("import zip via multipart + WS progress", async ({ page }) => {
+  test("import zip via multipart + WS progress", async () => {
     // TODO
     expect(true).toBe(true);
   });

@@ -66,9 +66,7 @@ export async function exportSingleNode(
  * （ZIP 导出 / product_line scope 不在 design §7）。Phase 2.3 评估补充。
  */
 export async function exportProject(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- NOT_IMPLEMENTED stub 签名保留待 Phase 2.3 接通
   _projectId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- NOT_IMPLEMENTED stub 签名保留待 Phase 2.3 接通
   _productLineId?: string,
 ): Promise<ActionResult<{ filename: string; content: string }>> {
   return actionError(

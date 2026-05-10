@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // 当前状态：SKELETON / 需 mock AI provider 或 dev key
 
 test.describe.skip("AI snapshot flow / SKELETON", () => {
-  test("trigger AI snapshot + poll until succeeded", async ({ page }) => {
+  test("trigger AI snapshot + poll until succeeded", async () => {
     // TODO
     expect(true).toBe(true);
   });
