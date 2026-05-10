@@ -37,14 +37,18 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     `cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Sprint 3 — ci.yml workflow file" && git push`
   - 然后接通 e2e job + 关闸门 5
 
-- ▶️ **Sprint 4（模块真漏洞 high/medium 9 项）**：启动中（不依赖 server）
-  - 4A M04 dimension 集中（IntegrityError 存量 + target_type enum + 联合索引 + db.get→DAO）
-  - 4B M18 worker 真接 + cron PCT + batch INSERT FROM unnest
-  - 4C 跨模块 race + write_event e2e + M07 detach（**M07 detach 需 CY 拍 A/B**）
+- ✅ **Sprint 4（模块真漏洞 high/medium 9 项）**：实质已完成（plan 撰写时 fresh_verification 失败误判待做）
+  - **4A 全 4 项 ✅**（2026-05-09 M-CLEANUP sprint commits 33b5759+aabde04 已做完 / 池 §"M-CLEANUP 关闸 8 punt 关闭" 字面）
+  - **4B 三项 ⏸ 触发条件未到**：#21 worker source_text 真接（待 pgvector 真接通+真业务 path）/ #23 cron PCT（待 task_dao.count_completed_in_window）/ #24 batch INSERT（5 万条规模触发）
+  - **4C.1 + 4C.2 ✅**（M-CLEANUP 子片 3 commit 5c7783d / race 复审 + write_event e2e）
+  - **4C.3 #6 M07 detach** ⏸ 等 CY 拍 A 允许 detach / B 不允许（产品决策属性）
 
-**下一步推荐**：
-- CY 在线时优先做 **Sprint 3** 5min 人工（PAT scope）+ 启 servers（Sprint 2）
-- 不在线时 Claude 继续推 Sprint 4
+**下一步推荐**（CY 在线时任选）：
+- A. 启 backend (uv run uvicorn api.main:app --port 8000) + frontend (cd app && pnpm dev) → 跑 Sprint 2 集成 e2e 基础设施（cost ~$5-8 / 1.5 天 / prompt 见 cleanup-plan §Sprint 2）
+- B. 加 PAT workflow scope → push 本地 .github/workflows/ci.yml + 接通 e2e job → Sprint 3 关闸（5 min 人工 + cost ~$1-2）
+- C. 拍 4C.3 M07 detach A/B → 极小独立 task
+
+注：Sprint 1 + Sprint 4 实质完成 → cross-sprint pool 真漏洞 high/medium 已清完（仅剩 A 类占位期残留触发等 + #6 待拍 + DEFER_TO_POST_LAUNCH 12 项）
 
 
 ## 0. 状态快照（更新于 2026-05-09 post-Phase-2.3-4-子-sprint-完成 / 闸门 5 PARTIAL）
