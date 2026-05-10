@@ -5,6 +5,7 @@ import { serverApiGet, serverApiPost, serverApiDelete } from "@/lib/server-http-
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import type { components } from "@/types/api";
 import { withAuthRedirect } from "@/lib/server-action-helpers";
+import { findInTree } from "@/lib/tree-utils";
 
 type RelationResponse = components["schemas"]["RelationResponse"];
 type RelationListResponse = components["schemas"]["RelationListResponse"];
@@ -203,14 +204,6 @@ export async function getModuleRelationDetail(
   try {
     return await withAuthRedirect(async () => {
       const overview = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
-      const findInTree = (tree: NodeOverview[], id: string): NodeOverview | null => {
-        for (const n of tree) {
-          if (n.id === id) return n;
-          const sub = findInTree(n.children, id);
-          if (sub) return sub;
-        }
-        return null;
-      };
       const moduleNode = findInTree(overview.tree, moduleNodeId);
       if (!moduleNode) {
         return actionError(new AppError("模块不存在", "blocking", "NOT_FOUND", 404));

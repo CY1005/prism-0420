@@ -4,6 +4,7 @@ import { serverApiGet } from "@/lib/server-http-client";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import type { components } from "@/types/api";
 import { withAuthRedirect } from "@/lib/server-action-helpers";
+import { findInTree } from "@/lib/tree-utils";
 
 type OverviewResponse = components["schemas"]["OverviewResponse"];
 type OverviewStatsResponse = components["schemas"]["OverviewStatsResponse"];
@@ -29,15 +30,6 @@ export async function getPanoramaData(
   try {
     return await withAuthRedirect(async () => {
       const overview = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
-
-      const findInTree = (tree: NodeOverview[], id: string): NodeOverview | null => {
-        for (const n of tree) {
-          if (n.id === id) return n;
-          const sub = findInTree(n.children, id);
-          if (sub) return sub;
-        }
-        return null;
-      };
 
       const children: NodeOverview[] = parentId
         ? (findInTree(overview.tree, parentId)?.children ?? [])

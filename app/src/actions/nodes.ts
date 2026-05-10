@@ -21,6 +21,7 @@ import {
 import { defineAction } from "@/lib/define-action";
 import type { components } from "@/types/api";
 import { withAuthRedirect } from "@/lib/server-action-helpers";
+import { findInTree } from "@/lib/tree-utils";
 
 type NodeResponse = components["schemas"]["NodeResponse"];
 type NodeWithChildren = components["schemas"]["NodeWithChildrenResponse"];
@@ -267,14 +268,7 @@ export async function getFolderOverview(folderNodeId: string, projectId: string)
   });
 }
 
-function findInTree(tree: NodeOverview[], id: string): NodeOverview | null {
-  for (const n of tree) {
-    if (n.id === id) return n;
-    const sub = findInTree(n.children, id);
-    if (sub) return sub;
-  }
-  return null;
-}
+// findInTree 抽到 lib/tree-utils.ts（Sprint 1 Task 1.3 / P22-3c-5）
 
 /**
  * 节点子孙数 / 维度记录数（删除前确认）。后端无单端点；从 /overview 派生 + dimensions 列表。
