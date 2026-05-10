@@ -5,3 +5,7 @@ public
 # Phase 2.2 子片 1 — codegen 输入/输出（不格式化）
 openapi.json
 src/types/api.ts
+# Sprint 2 Task 2.2 — playwright runtime artifacts（已 gitignore，prettier 也跳过）
+e2e/.auth/
+test-results/
+playwright-report/

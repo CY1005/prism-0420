@@ -33,6 +33,12 @@ npm-debug.log*
 coverage/
 .pytest_cache/
 
+# Playwright
+app/e2e/.auth/
+app/test-results/
+app/playwright-report/
+app/playwright/.cache/
+
 # Temporary
 tmp/
 temp/

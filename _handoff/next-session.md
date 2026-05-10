@@ -11,6 +11,20 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
+---
+
+## 🔴 等 CY 解锁的硬阻塞（每会话开始必读 / 不要替 CY 拍）
+
+**T3 Sprint 3.1 push ci.yml — 等 CY 加 GH PAT workflow scope**
+- 2026-05-10 CY 反馈"暂时加不了"。原因待 CY 补（可能在外/没在 GH 控制台/账户原因）
+- 不能替 CY 操作（token 权限只 token 所有者能改）
+- 解锁动作：GH Settings → Developer settings → PAT → Edit → 勾 `workflow` → Update token
+- 解锁后命令：`cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Sprint 3 — ci.yml workflow file" && git push`
+- 解锁后 cost：$1-2 / 调 CI 全绿（首次 run 可能要 1-3 个 fix commit）
+- CY 状态变化时，每次开会话提一句"PAT scope 加好了吗？"再决定要不要等
+
+---
+
 ## 0. 状态快照（更新于 2026-05-10 post-Sprint-4C.3-SR-DETACH-1 跨模块立修完成）
 
 **Post-Phase-2.3 Cleanup 计划进度**（plan 在 `_handoff/post-phase23-cleanup-plan.md`）：
@@ -24,10 +38,20 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - **立规**：`design/00-architecture/06-design-principles.md` 附录 L1-α 原则 + ci-lint R16/R17 grep 候选 / cross-sprint pool §"2026-05-10 Sprint 4C.3 SR-DETACH-1" 段 / 真漏洞表 #6 + M02-A1 ✅ DONE
     - **方法论价值**：CY 教 "矛盾 = 原则未分上下层" 方法 / 上下层推导 + 跨模块循环验证 + 全得当则按原则执行 = 比"摆 A/B 让 CY 拍"更高效
 
-- ⏸ **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：暂缓
-  - 需 backend (FastAPI 8000) + frontend (Next.js 3000) 服务端运行才能验 Playwright e2e 真断言
-  - CY 在线时启动两端 server / Claude 即可起 prompt：`_handoff/post-phase23-cleanup-plan.md` "Sprint 2"
-  - DB seed fixture / storageState login share / e2e #2-#10 / pytest-benchmark 1000 seed / R 范式第 7 数据点
+- 🟡 **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：PARTIAL 2026-05-10
+  - **Task 2.1 + 2.2 ✅ 本会话完成**（CY 反馈"暂时加不了 PAT scope / 让 Claude 做别的"）：
+    - `scripts/seed_e2e_admin.py` 一次性创 e2e@example.com / role=platform_admin / 幂等
+    - `app/e2e/fixtures/seed.ts` `seedFullProject(api)` → login + POST /projects + /nodes + /issues 完整种子（API 路径 / 与生产路径一致）
+    - `app/e2e/global-setup.ts` 一次 login → 存 storageState.json（refresh cookie / Phase 2.2 子片 2 范式）
+    - `app/playwright.config.ts` 接 globalSetup + `use.storageState`
+    - `app/e2e/01-auth-flow.spec.ts` 显式 opt-out global storageState（unauth 测试隔离）
+    - `app/e2e/02-create-project.spec.ts` pilot 激活（seedFullProject 全栈 + storageState 自动登录验证）
+    - **守护**：e2e 4 PASS / pytest 1638 PASS / eslint 0/0 / ruff 0 / .gitignore 加 `app/e2e/.auth/`
+  - **Task 2.3 + 2.4 + 2.5 推下次新会话**（cost $4-6 / 1 天 / R 范式第 7 数据点）：
+    - Task 2.3：e2e #2-#10 完整断言（9 spec / DB seed fixture 已可直接用 / pilot 02 已示范激活套路）
+    - Task 2.4：pytest-benchmark + perf 1000 seed（独立 backend 工作）
+    - Task 2.5：R1+R2 关闸 + 闸门 5 §8.1 第 1+2 项打钩
+  - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 4 PASS 不破（含 02 pilot），然后改 spec 03-10 套 seedFullProject 范式。注：本机已有 backend (port 8000) + frontend (port 3000) 长期跑（pid 1694247 / docker prism0420-pg+redis healthy），Claude 启第二份会撞端口；下次会话直接复用即可。
 
 - ⏸ **Sprint 3（A 后置债 / CI 接通）**：阻塞 GH PAT workflow scope
   - 本地已写完 `.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift / deps-audit cron / **无 e2e job — 不会 push 后留红**）

@@ -5,6 +5,9 @@ import { test, expect } from "@playwright/test";
 // scope 限制：本 pilot 不依赖 DB 中的 admin 用户（避免 e2e 级 DB seeding 复杂度）；
 //   完整 happy path（登录 + 跳转 + 业务 endpoint）推 02+ skeleton 在 backend e2e seed fixture 落地后启用
 
+// Sprint 2 Task 2.2: 显式 opt-out global storageState（本 spec 测未登录路径）
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe("auth flow / 登录页基础", () => {
   test("login page renders + invalid credentials show error", async ({ page }) => {
     await page.goto("/login");
