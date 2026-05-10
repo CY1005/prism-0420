@@ -48,7 +48,7 @@ export const createReference = defineAction(
   },
 );
 
-export async function updateReference(
+export async function updateCompetitorReference(
   projectId: string,
   nodeId: string,
   referenceId: string,
@@ -83,7 +83,7 @@ export async function updateReference(
   }
 }
 
-export async function deleteReference(
+export async function deleteCompetitorReference(
   projectId: string,
   nodeId: string,
   referenceId: string,
@@ -101,7 +101,7 @@ export async function deleteReference(
   }
 }
 
-export async function getReferencesByNode(
+export async function listCompetitorReferencesByNode(
   projectId: string,
   nodeId: string,
 ): Promise<CompetitorRefResponse[]> {

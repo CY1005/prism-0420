@@ -146,7 +146,10 @@ export async function listIssues(
   });
 }
 
-export async function getIssuesByNode(projectId: string, nodeId: string): Promise<IssueResponse[]> {
+export async function listIssuesByNode(
+  projectId: string,
+  nodeId: string,
+): Promise<IssueResponse[]> {
   return withAuthRedirect(async () => {
     const data = await serverApiGet<IssueListResponse>(
       `/api/projects/${projectId}/nodes/${nodeId}/issues`,
@@ -155,7 +158,7 @@ export async function getIssuesByNode(projectId: string, nodeId: string): Promis
   });
 }
 
-export async function getIssuesByCategory(
+export async function listIssuesByCategory(
   projectId: string,
   category: string,
 ): Promise<IssueResponse[]> {

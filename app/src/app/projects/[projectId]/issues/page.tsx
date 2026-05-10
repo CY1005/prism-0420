@@ -35,7 +35,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { usePageContext } from "@/lib/use-page-context";
-import { createIssue, getIssuesByNode, getIssuesByCategory, deleteIssue } from "@/actions/issues";
+import { createIssue, listIssuesByNode, listIssuesByCategory, deleteIssue } from "@/actions/issues";
 import { useProjectRole } from "@/contexts/project-role-context";
 import {
   AddIssueDialog,
@@ -60,13 +60,13 @@ export default function IssuesPage() {
     setLoading(true);
     try {
       if (filterCategory !== "all") {
-        const data = await getIssuesByCategory(projectId, filterCategory);
+        const data = await listIssuesByCategory(projectId, filterCategory);
         setIssues(data as Issue[]);
       } else {
         // Load all categories
         const results = await Promise.all(
           (["bug", "tech_debt", "design_flaw", "performance"] as const).map((cat) =>
-            getIssuesByCategory(projectId, cat),
+            listIssuesByCategory(projectId, cat),
           ),
         );
         setIssues(results.flat() as Issue[]);

@@ -66,13 +66,13 @@ import {
   moveNode,
 } from "@/actions/nodes";
 import { createVersion } from "@/actions/versions";
-import { createIssue, getIssuesByNode, deleteIssue } from "@/actions/issues";
+import { createIssue, listIssuesByNode, deleteIssue } from "@/actions/issues";
 import { getCompetitorsByProject, createCompetitor } from "@/actions/competitors";
 import {
   createReference,
-  updateReference,
-  deleteReference,
-  getReferencesByNode,
+  updateCompetitorReference,
+  deleteCompetitorReference,
+  listCompetitorReferencesByNode,
 } from "@/actions/competitor-references";
 import { createRelation } from "@/actions/relations";
 import { getFeedItemsByNode } from "@/actions/feed";
@@ -531,8 +531,8 @@ export function ProjectWorkspace({
         setFolderChildren(null);
         const [data, issues, refs, comps, feedLinked] = await Promise.all([
           getNodeWithDimensions(id),
-          getIssuesByNode(project.id, id),
-          getReferencesByNode(project.id, id),
+          listIssuesByNode(project.id, id),
+          listCompetitorReferencesByNode(project.id, id),
           getCompetitorsByProject(project.id),
           getFeedItemsByNode(project.id, id),
         ]);
@@ -753,7 +753,7 @@ export function ProjectWorkspace({
         tags: data.tags,
       });
       if (result.success) {
-        const issues = await getIssuesByNode(project.id, nodeData.node.id);
+        const issues = await listIssuesByNode(project.id, nodeData.node.id);
         setNodeIssues(issues as Issue[]);
       }
     });
@@ -764,7 +764,7 @@ export function ProjectWorkspace({
     startTransition(async () => {
       const result = await deleteIssue(issueId);
       if (result.success && nodeData) {
-        const issues = await getIssuesByNode(project.id, nodeData.node.id);
+        const issues = await listIssuesByNode(project.id, nodeData.node.id);
         setNodeIssues(issues as Issue[]);
       }
     });
@@ -796,7 +796,7 @@ export function ProjectWorkspace({
     if (!nodeData) return;
     startTransition(async () => {
       if (editingRef) {
-        await updateReference(editingRef.reference.id, project.id, data);
+        await updateCompetitorReference(editingRef.reference.id, project.id, data);
       } else {
         await createReference({
           projectId: project.id,
@@ -804,7 +804,7 @@ export function ProjectWorkspace({
           ...data,
         });
       }
-      const refs = await getReferencesByNode(project.id, nodeData.node.id);
+      const refs = await listCompetitorReferencesByNode(project.id, nodeData.node.id);
       setNodeRefs(refs as CompetitorReference[]);
       setEditingRef(null);
     });
@@ -813,9 +813,9 @@ export function ProjectWorkspace({
   const handleDeleteRef = (refId: string) => {
     if (!confirm("确定删除此竞品参考？")) return;
     startTransition(async () => {
-      await deleteReference(refId, project.id);
+      await deleteCompetitorReference(refId, project.id);
       if (nodeData) {
-        const refs = await getReferencesByNode(project.id, nodeData.node.id);
+        const refs = await listCompetitorReferencesByNode(project.id, nodeData.node.id);
         setNodeRefs(refs as CompetitorReference[]);
       }
     });
