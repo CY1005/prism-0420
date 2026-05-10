@@ -224,7 +224,12 @@ class IssueService:
         if rows == 0:
             raise IssueNotFoundError(issue_id=str(issue_id))
         await db.refresh(existing, attribute_names=list(fields.keys()) + ["updated_at"])
-        # Phase 2.2 子片 5 D 类 #3：同 create — refetch with joins for response
+        # Phase 2.2 子片 5 D 类 #3：refetch with joins for response。
+        # Sprint 2 e2e #6 暴露问题：raw UPDATE 后 SQLAlchemy identity map 仍持 existing 旧
+        # selectinload 关系（node/created_by_user/assigned_to_user）；db.refresh 只刷 column
+        # 不触发 selectinload 重跑；db.get_by_id 走 identity map 命中也返回同一 instance。
+        # → expunge existing 让 dao.get_by_id 真重 SELECT + 触发 _JOINS selectinload。
+        db.expunge(existing)
         loaded = await self.dao.get_by_id(db, issue_id, project_id)
         assert loaded is not None
         await write_event(

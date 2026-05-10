@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-10 (**Post-Phase-2.3 Cleanup Sprint 1 + Sprint 4 ✅ 全完成（含 4C.3 SR-DETACH-1 跨模块 5 模块立规一并立修）/ Sprint 2+3 等 CY**)
+last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 PARTIAL 完成（基础设施 + spec 03/04/05/06 + 4C.3 expunge fix / 10 e2e PASS / 1638 pytest PASS）/ Sprint 3 等 CY PAT scope / Sprint 2 spec 07-10 + Task 2.4 + 2.5 punt 下次**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -39,19 +39,37 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - **方法论价值**：CY 教 "矛盾 = 原则未分上下层" 方法 / 上下层推导 + 跨模块循环验证 + 全得当则按原则执行 = 比"摆 A/B 让 CY 拍"更高效
 
 - 🟡 **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：PARTIAL 2026-05-10
-  - **Task 2.1 + 2.2 ✅ 本会话完成**（CY 反馈"暂时加不了 PAT scope / 让 Claude 做别的"）：
+  - **Task 2.1+2.2 基础设施 ✅**：
     - `scripts/seed_e2e_admin.py` 一次性创 e2e@example.com / role=platform_admin / 幂等
-    - `app/e2e/fixtures/seed.ts` `seedFullProject(api)` → login + POST /projects + /nodes + /issues 完整种子（API 路径 / 与生产路径一致）
-    - `app/e2e/global-setup.ts` 一次 login → 存 storageState.json（refresh cookie / Phase 2.2 子片 2 范式）
-    - `app/playwright.config.ts` 接 globalSetup + `use.storageState`
-    - `app/e2e/01-auth-flow.spec.ts` 显式 opt-out global storageState（unauth 测试隔离）
-    - `app/e2e/02-create-project.spec.ts` pilot 激活（seedFullProject 全栈 + storageState 自动登录验证）
-    - **守护**：e2e 4 PASS / pytest 1638 PASS / eslint 0/0 / ruff 0 / .gitignore 加 `app/e2e/.auth/`
-  - **Task 2.3 + 2.4 + 2.5 推下次新会话**（cost $4-6 / 1 天 / R 范式第 7 数据点）：
-    - Task 2.3：e2e #2-#10 完整断言（9 spec / DB seed fixture 已可直接用 / pilot 02 已示范激活套路）
-    - Task 2.4：pytest-benchmark + perf 1000 seed（独立 backend 工作）
-    - Task 2.5：R1+R2 关闸 + 闸门 5 §8.1 第 1+2 项打钩
-  - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 4 PASS 不破（含 02 pilot），然后改 spec 03-10 套 seedFullProject 范式。注：本机已有 backend (port 8000) + frontend (port 3000) 长期跑（pid 1694247 / docker prism0420-pg+redis healthy），Claude 启第二份会撞端口；下次会话直接复用即可。
+    - `app/e2e/fixtures/seed.ts` `seedFullProject(api)` → login + POST /projects + /nodes + /issues
+    - `app/e2e/global-setup.ts` 一次 login → 存 storageState.json
+    - `app/playwright.config.ts` globalSetup + `use.storageState`
+    - `app/e2e/01-auth-flow.spec.ts` 显式 opt-out global storageState
+  - **Task 2.3 spec 03+04+05+06 ✅ API 路径完整断言**：
+    - 02 pilot（seedFullProject 全栈 + storageState 验证）
+    - 03 M20 team 创建 + list + detail（API）
+    - 04 M03 node 树 CRUD（child create + L1-α description detach + delete）
+    - 05 M06 competitor + ref 创建 + L1-α pros_and_cons detach（API）
+    - 06 M07 issue D 类 #3 join 字段实证（node_name/created_by_name/assigned_to_name）+ L1-α assigned_to/node_id detach 双 case
+  - **🔴 4C.3 expunge fix（Sprint 2 e2e 暴露）**：M07 issue_service.update raw UPDATE 后
+    SQLAlchemy identity map 持 existing 旧 selectinload；db.refresh 只刷 column 不触发
+    selectinload 重跑；db.get_by_id 走 identity map 返回同一 stale instance →
+    `db.expunge(existing)` 让 dao.get_by_id 真重 SELECT + 触发 _JOINS。修 detach 后 join 字段 stale。
+    M02/M03 用 ORM mutate 范式无此 bug；M05/M06 用同 raw SQL 但响应不含 join 字段所以无暴露。
+    立规候选（cross-sprint pool）：raw SQL UPDATE + 响应含 selectinload join 字段 = 必须 expunge。
+  - **守护**：e2e 10 PASS / pytest 1638 PASS / eslint 0/0 / ruff 0
+  - **Task 2.3 spec 07-10 punt**（cost / 各自独立基础设施依赖）：
+    - 07 AI snapshot：mock AI provider + SSE/fire-and-forget 轮询
+    - 08 import-export：multipart fixture + WS 客户端
+    - 09 search：embedding seed + mock provider + pgvector
+    - 10 relation graph：XYFlow 交互 + 拖拽创建 relation
+    → 推荐立独立 sprint "Sprint 2-rest"（cost $3-4 / 各自 fixture + 一遍跑通），或推到上线后
+  - **Task 2.4 pytest-benchmark + 1000 seed punt**（cost $1-2 / 独立后端工作 / 不阻塞闸门 5 §8.1）：cleanup-plan §479 完整步骤；下次任意会话直接做
+  - **Task 2.5 R1+R2 第 7 数据点 punt**：等 Task 2.3 spec 07-10 + Task 2.4 完成后才有完整 R 范式 ROI；当前阶段 R 数据点不齐
+  - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 10 PASS 不破，然后视 cost 任选：
+    (a) Task 2.4 pytest-benchmark（独立 / 简单）
+    (b) Task 2.3 spec 07-10 选 1-2 个最实用先做（推荐 09 search 因 M18 是后端方向核心）
+    本机已 backend (port 8000) + frontend (port 3000) 长期跑（pid 1694247 / docker prism0420-pg+redis healthy）；Claude 启新进程会撞端口，直接复用即可。
 
 - ⏸ **Sprint 3（A 后置债 / CI 接通）**：阻塞 GH PAT workflow scope
   - 本地已写完 `.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift / deps-audit cron / **无 e2e job — 不会 push 后留红**）
