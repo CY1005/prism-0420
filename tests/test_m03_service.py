@@ -118,7 +118,7 @@ async def test_svc_update_changes_name(db_session, svc, make_project):
         project_id=proj.id,
         node_id=n.id,
         actor_user_id=user.id,
-        name="new",
+        fields={"name": "new"},
     )
     assert updated.name == "new"
 
@@ -138,8 +138,28 @@ async def test_svc_update_type_immutable_raises(db_session, svc, make_project):
             project_id=proj.id,
             node_id=n.id,
             actor_user_id=user.id,
-            type=NodeType.FILE.value,
+            fields={"type": NodeType.FILE.value},
         )
+
+
+async def test_svc_update_node_detach_description(db_session, svc, make_project):
+    """L1-α 4C.3: description 显式 None 视为清空."""
+    user, proj = await make_project()
+    n = await svc.create_node(
+        db_session,
+        project_id=proj.id,
+        actor_user_id=user.id,
+        name="x",
+        description="orig desc",
+    )
+    detached = await svc.update_node(
+        db_session,
+        project_id=proj.id,
+        node_id=n.id,
+        actor_user_id=user.id,
+        fields={"description": None},
+    )
+    assert detached.description is None
 
 
 async def test_svc_update_no_change_does_not_touch_updated_by(
@@ -163,7 +183,7 @@ async def test_svc_update_no_change_does_not_touch_updated_by(
         project_id=proj.id,
         node_id=n.id,
         actor_user_id=uuid4(),  # 故意传不同 actor，验证不被 setattr
-        name="x",  # 同 name
+        fields={"name": "x"},  # 同 name
     )
     assert result.updated_by == original_updated_by
     assert not [ev for ev in captured if ev.get("action_type") == "node_updated"]
@@ -177,7 +197,7 @@ async def test_svc_update_node_not_found(db_session, svc, make_project):
             project_id=proj.id,
             node_id=uuid4(),
             actor_user_id=user.id,
-            name="x",
+            fields={"name": "x"},
         )
 
 

@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-10 (**Sprint 1 C-FOLLOW-UP 8 项全 ✅ DONE / STILL_PUNT 39→31 / Sprint 2 待启动**)
+last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 跨模块立规一并立修 ✅ / 真漏洞 #6 + M02-A1 同根因关闭 / STILL_PUNT 31→29 / pytest 1629→1638**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -39,6 +39,26 @@ policy:
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-10 Sprint 4C.3 SR-DETACH-1 跨模块立规（5 模块同步立修 / 1629→1638 PASS）
+
+**关闭项 2 + 立规 1**：
+- #6 ✅ M07 update detach（node_id 游离 + assigned_to 取消责任人 2 字段）
+- M02-A1 ✅ update_project exclude_none → exclude_unset only（移除显式禁 detach）
+
+**SR-DETACH-1 立规**（design `00-architecture/06-design-principles.md` 附录 L1-α）：
+- 范式：router `model_dump(exclude_unset=True)` + service `fields: dict[str, Any]` 接收
+- 跨模块同步立修：M02 / M03 / M05 / M06 (×2) / M07 共 5 模块
+- M14 industry_news 已对范式（2026-05-08 R1-A 立修）—— 反向回扫确认 L1-α 一致
+- ci-lint R16+R17 grep 候选（待立规）：router 双排除 / service `if X is not None` 老模式 → 告警
+
+**层级分析过程**（CY 教方法）：
+- 矛盾根源：A 选项 vs B 选项原则未分上下层
+- A 背后：L1-α 用户合理业务动作必须有 API 入口（领域驱动）
+- B 背后：L1-β 业务态变化走 transition / 数据态变化走 update（状态机单一入口）
+- 推导：L1-β 在本职范围（状态合法转换）有效；超出范围（正交字段变化）应让位 L1-α
+- 跨模块循环验证：M02 / M03 / M05 / M06 / M07 全同根因 → 全应用 L1-α 都得当 → 原则成立
+- CY 选 A2 一并修（vs A1 仅 M07 / A3 立规先行）
 
 ### 2026-05-09 Phase 2.2 子片 5 关闸（D 类 #3+#15 装配 / 1623→1629 PASS）
 
@@ -79,7 +99,7 @@ policy:
 | 3 | ~~**IssueResponse 漏 join 字段（node_name/created_by_name/assigned_to_name）**~~ ✅ **DONE 2026-05-09 / Phase 2.2 子片 5 关闸**：Issue 模型加 created_by_user/assigned_to_user relationship（lazy="raise"）+ IssueDAO `_JOINS` selectinload 应用到 list_by_project + get_by_id + IssueService create/update/transition 三处 refetch + router `_resp` 显式装配 + 3 backend e2e（test_list_issues_join_fields_populated / test_get_issue_join_fields_populated / test_floating_issue_node_name_is_none） | M07 R2 P2-1 | ~~M13/M15 集成期补~~ → **Phase 2.2 关闸**| ~~high~~ | DONE / 与 #15 一并 |
 | 4 | ~~**SSE generator 占 AsyncSession 300s**~~ ✅ **RE-EVALUATE 2026-05-09 / M16 sprint 已用 BackgroundTasks + 自起 SessionLocal 替代长持 SSE 范式** | M13-B13 | M16/M17 立异步 SSE 策略 | ~~high~~ | **M16 §12B 后台 fire-and-forget 子模板 + 自起 SessionLocal 隔离请求级 Depends(get_db) 已沉淀**（commit 2273f90 + 043e3e2 / audit/m16 元贡献 #5）；M13 `analyze_service.py` SSE generator 仍存量未迁但**新模块（M16/M17）已不触发同款** → 标 STATUS_CHANGE：从"M17 必查"降为"M13 后续重构 sprint 顺手迁"low |
 | 5 | ~~**M02 Project.ai_model 字段未实装**~~ ✅ **DONE 2026-05-09 / 子片 3 验证字段已存在不需 alembic add**（M02 model 字面已含 ai_model 列；M13-B16 punt 误判） | M13-B16 | M14+ baseline-patch | ~~medium~~ | **M16 sprint 子片 3 验证关闭** |
-| 6 | **M07 update 不支持 detach (None→NULL)** | M07 R1-A P2-2 | design §3/§7 reconcile + 产品决策 | medium — issue 节点关联无法解除；M14 link/unlink 已支持但 M07 主表残缺 | M16 启动让 CY 拍是否补 |
+| 6 | ~~**M07 update 不支持 detach (None→NULL)**~~ ✅ **DONE 2026-05-10 / Post-Phase-2.3 Cleanup Sprint 4C.3 / SR-DETACH-1 立规 + 跨模块 5 模块同步立修**：CY 选 A2 一并修；L1-α 用户路径完整性原则压制 L1-β 状态机单一入口；M07 IssueService.update 改 fields dict 范式（router model_dump(exclude_unset=True)）；node_id 游离 + assigned_to 取消责任人 2 字段 detach 真支持；M02 update_project 移 exclude_none + update_ai_provider 走 fields dict（关闭 M02-A1）；M03 node description detach；M05 version details detach；M06 competitor + ref 6 字段 detach；M14 industry_news 已对范式（反向回扫确认）；6 detach unit tests 加 / pytest 1629→1638 PASS / 0 failed；design `06-design-principles.md` 附录立 L1-α 原则 + R16/R17 ci-lint grep 候选立规 | M07 R1-A P2-2 | ~~design §3/§7 reconcile + 产品决策~~ → **CY 拍 A2 / 跨模块一并修**| ~~medium~~ | DONE |
 | 7 | ~~**M11-B1 R-X1 失败补偿 commit boundary**~~ ✅ **DONE 2026-05-09 / M17 子片 0 prep**：cold_start_service._mark_failed 改用 compensation_session 独立 commit boundary（task 创建立即 commit / 失败补偿 comp_db 独立写 task=FAILED+activity_log）；router 失败分支只剩 db.rollback() / R2 P1-01 punt 关闭；conftest autouse fixture monkeypatch compensation_session yield db_session 兼容 savepoint；1079 PASS 不破 | M11 R2 P1-01 punt | M17 异步 zip 导入时 | ~~critical~~ | M17 子片 1+2+3 直接复用 helper（首个非 M11 caller） |
 | 8 | **M14-B12 update/delete/unlink write_event 异常传播 e2e** | M14 R2 punt | M14 baseline-patch | medium — M02+ 元教训纪律 3 写路径无 e2e 覆盖 | 与 #1+#2 同 sprint 做 |
 | 9 | **M05-2/14 + M06-1 + M07-7 + M08-1 多模块 `if rows == 0: continue` race window** | 多 sprint | M15 升级 INSERT 时复审 | medium — B1 落地后必须一并复审；不复审会 silently 改变行为 | 与 #1 同 sprint 联动复审 |
@@ -195,7 +215,7 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 
 | # | 项 | 状态 |
 |---|---|---|
-| M02-A1 | update_project exclude_none 让 null 无法清字段 | STILL_PUNT (DUPE _handoff §0a #4) |
+| M02-A1 | ~~update_project exclude_none 让 null 无法清字段~~ ✅ **DONE 2026-05-10 / Sprint 4C.3 SR-DETACH-1 跨模块同步立修**（与 #6 同根因 / L1-α 立规） | DONE |
 | M02-A2 | update_project hasattr setattr 无白名单 | STILL_PUNT (DUPE) |
 | M02-A3 | AiProviderUpdate 不强制 min_length | STILL_PUNT |
 | M02-A4 | in-method/in-loop import (style) | UNVERIFIABLE |

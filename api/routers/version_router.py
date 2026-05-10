@@ -115,16 +115,15 @@ async def update_version(
     db: AsyncSession = Depends(get_db),
 ) -> VersionResponse:
     svc = VersionService()
+    # L1-α detach: details 显式 None 视为清空；summary NOT NULL（schema min_length 拦）
+    fields = payload.model_dump(exclude_unset=True)
     rec = await svc.update_metadata(
         db,
         project_id=access.project.id,
         node_id=node_id,
         version_id=version_id,
-        summary=payload.summary,
-        details=payload.details,
-        change_type=payload.change_type,
-        release_mode=payload.release_mode,
         actor_user_id=access.user.id,
+        fields=fields,
     )
     await db.commit()
     return _record_response(rec)

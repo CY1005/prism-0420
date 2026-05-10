@@ -206,32 +206,17 @@ class IssueService:
         project_id: UUID,
         issue_id: UUID,
         actor_user_id: UUID,
-        title: str | None = None,
-        description: str | None = None,
-        tags: list[str] | None = None,
-        node_id: UUID | None = None,
-        assigned_to: UUID | None = None,
+        fields: dict[str, Any],
     ) -> Issue:
         """更新内容（**非状态**）。状态走 transition() 路径。
 
-        node_id 重新关联：design §3 IssueUpdate 已含此字段（CY 决策允许 reattach
-        游离 issue）。
+        L1-α 用户路径完整性（4C.3 detach / cross-module 立规）：fields 来自 router
+        ``model_dump(exclude_unset=True)``，显式传 ``None`` = detach（清 nullable FK），
+        未传字段不进 fields = keep。同 M14 industry_news 范式。
         """
         existing = await self._get_or_raise(db, issue_id, project_id)
-        if node_id is not None:
-            await self._check_node_in_project(db, node_id, project_id)
-
-        fields: dict[str, Any] = {}
-        if title is not None:
-            fields["title"] = title
-        if description is not None:
-            fields["description"] = description
-        if tags is not None:
-            fields["tags"] = tags
-        if node_id is not None:
-            fields["node_id"] = node_id
-        if assigned_to is not None:
-            fields["assigned_to"] = assigned_to
+        if "node_id" in fields and fields["node_id"] is not None:
+            await self._check_node_in_project(db, fields["node_id"], project_id)
         if not fields:
             return existing
 

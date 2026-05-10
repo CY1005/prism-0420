@@ -135,7 +135,10 @@ async def update_project(
     db: AsyncSession = Depends(get_db),
 ) -> ProjectResponse:
     svc = ProjectService()
-    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
+    # L1-α 用户路径完整性（4C.3 detach / cross-module 立规）：去掉 exclude_none，
+    # 显式 None 视为 detach（清 nullable 字段，如 description / ai_provider）；
+    # 未传字段不入 changes = keep。同 M14 industry_news 范式。
+    changes = payload.model_dump(exclude_unset=True)
     proj = await svc.update_project(
         db,
         project_id=access.project.id,
@@ -164,12 +167,14 @@ async def update_ai_provider(
     db: AsyncSession = Depends(get_db),
 ) -> ProjectResponse:
     svc = ProjectService()
+    # L1-α detach 立规：exclude_unset 区分 None vs not-provided。
+    # ai_provider/ai_api_key 显式 None = 清空（撤掉 AI 配置）；未传 = 保持。
+    fields = payload.model_dump(exclude_unset=True)
     proj = await svc.update_ai_provider(
         db,
         project_id=access.project.id,
         actor_user_id=access.user.id,
-        ai_provider=payload.ai_provider,
-        ai_api_key=payload.ai_api_key,
+        fields=fields,
     )
     await db.commit()
     return _project_response(proj)

@@ -140,12 +140,34 @@ async def test_update_ai_provider_encrypts_key(db_session, alice):
         db_session,
         project_id=p.id,
         actor_user_id=alice.id,
-        ai_provider="claude",
-        ai_api_key=secret,
+        fields={"ai_provider": "claude", "ai_api_key": secret},
     )
     assert p2.ai_provider == "claude"
     assert p2.ai_api_key_enc != secret
     assert decrypt(p2.ai_api_key_enc) == secret
+
+
+async def test_update_ai_provider_detach_key(db_session, alice):
+    """L1-α 4C.3: ai_api_key 显式 None 清空（撤掉 AI 配置）."""
+    from api.services.project_service import ProjectService
+
+    svc = ProjectService()
+    p = await svc.create_project(db_session, owner_id=alice.id, name="AiDetachP")
+    await svc.update_ai_provider(
+        db_session,
+        project_id=p.id,
+        actor_user_id=alice.id,
+        fields={"ai_provider": "claude", "ai_api_key": "sk-secret"},
+    )
+    cleared = await svc.update_ai_provider(
+        db_session,
+        project_id=p.id,
+        actor_user_id=alice.id,
+        fields={"ai_api_key": None},
+    )
+    assert cleared.ai_api_key_enc is None
+    # ai_provider 保留（未传 = keep）
+    assert cleared.ai_provider == "claude"
 
 
 async def test_get_search_config_returns_defaults(db_session, alice):

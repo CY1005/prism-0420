@@ -69,8 +69,8 @@ async def test_svc_update_competitor(db_session, svc, make_project):
         db_session,
         project_id=proj.id,
         competitor_id=c.id,
-        display_name="New",
         actor_user_id=user.id,
+        fields={"display_name": "New"},
     )
     assert updated.display_name == "New"
 
@@ -85,8 +85,27 @@ async def test_svc_update_competitor_no_op_returns_existing(db_session, svc, mak
         project_id=proj.id,
         competitor_id=c.id,
         actor_user_id=user.id,
+        fields={},
     )
     assert result.id == c.id
+
+
+async def test_svc_update_competitor_detach_website_url(db_session, svc, make_project):
+    """L1-α 4C.3: 显式 None 清空 nullable 字段."""
+    user, proj = await make_project()
+    c = await svc.create_competitor(
+        db_session, project_id=proj.id, display_name="X", actor_user_id=user.id
+    )
+    c.website_url = "https://before.com"
+    await db_session.flush()
+    detached = await svc.update_competitor(
+        db_session,
+        project_id=proj.id,
+        competitor_id=c.id,
+        actor_user_id=user.id,
+        fields={"website_url": None},
+    )
+    assert detached.website_url is None
 
 
 async def test_svc_delete_competitor(db_session, svc, make_project):
@@ -267,9 +286,35 @@ async def test_svc_update_ref(db_session, svc, make_project, make_node):
         node_id=node.id,
         ref_id=ref.id,
         actor_user_id=user.id,
-        feature_coverage="新",
+        fields={"feature_coverage": "新"},
     )
     assert updated.feature_coverage == "新"
+
+
+async def test_svc_update_ref_detach_pros_and_cons(db_session, svc, make_project, make_node):
+    """L1-α 4C.3: ref pros_and_cons 显式 None 清空."""
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    c = await svc.create_competitor(
+        db_session, project_id=proj.id, display_name="X", actor_user_id=user.id
+    )
+    ref = await svc.create_ref(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        competitor_id=c.id,
+        actor_user_id=user.id,
+        pros_and_cons={"pros": ["a"], "cons": ["b"]},
+    )
+    detached = await svc.update_ref(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        ref_id=ref.id,
+        actor_user_id=user.id,
+        fields={"pros_and_cons": None},
+    )
+    assert detached.pros_and_cons is None
 
 
 async def test_svc_delete_ref(db_session, svc, make_project, make_node):

@@ -124,9 +124,8 @@ async def test_svc_update_changes_fields(db_session, svc, make_project):
         db_session,
         project_id=proj.id,
         issue_id=i.id,
-        title="new",
-        tags=["p0"],
         actor_user_id=user.id,
+        fields={"title": "new", "tags": ["p0"]},
     )
     assert updated.title == "new"
     assert updated.tags == ["p0"]
@@ -149,10 +148,59 @@ async def test_svc_update_reattach_node(db_session, svc, make_project, make_node
         db_session,
         project_id=proj.id,
         issue_id=i.id,
-        node_id=node.id,
         actor_user_id=user.id,
+        fields={"node_id": node.id},
     )
     assert updated.node_id == node.id
+
+
+async def test_svc_update_detach_assigned_to(db_session, svc, make_project, make_user):
+    """L1-α 4C.3: assigned_to 显式 None 视为取消责任人（保持 status 不变）。"""
+    user, proj = await make_project()
+    assignee = await make_user()
+    i = await svc.create(
+        db_session,
+        project_id=proj.id,
+        category="bug",
+        title="x",
+        description="d",
+        assigned_to=assignee.id,
+        actor_user_id=user.id,
+    )
+    assert i.assigned_to == assignee.id
+    detached = await svc.update(
+        db_session,
+        project_id=proj.id,
+        issue_id=i.id,
+        actor_user_id=user.id,
+        fields={"assigned_to": None},
+    )
+    assert detached.assigned_to is None
+    assert detached.status == "open"  # 状态不变（不走 transition）
+
+
+async def test_svc_update_detach_node_to_floating(db_session, svc, make_project, make_node):
+    """L1-α 4C.3: node_id 显式 None 视为游离（解除节点关联）。"""
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    i = await svc.create(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        category="bug",
+        title="x",
+        description="d",
+        actor_user_id=user.id,
+    )
+    assert i.node_id == node.id
+    floating = await svc.update(
+        db_session,
+        project_id=proj.id,
+        issue_id=i.id,
+        actor_user_id=user.id,
+        fields={"node_id": None},
+    )
+    assert floating.node_id is None
 
 
 async def test_svc_update_not_found_raises(db_session, svc, make_project):
@@ -162,8 +210,8 @@ async def test_svc_update_not_found_raises(db_session, svc, make_project):
             db_session,
             project_id=proj.id,
             issue_id=uuid4(),
-            title="x",
             actor_user_id=user.id,
+            fields={"title": "x"},
         )
 
 

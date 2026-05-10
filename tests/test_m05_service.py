@@ -253,16 +253,39 @@ async def test_svc_update_metadata_changes_summary(db_session, svc, make_project
         project_id=proj.id,
         node_id=node.id,
         version_id=rec.id,
-        summary="new",
-        details="extra",
         actor_user_id=user.id,
+        fields={"summary": "new", "details": "extra"},
     )
     assert updated.summary == "new"
     assert updated.details == "extra"
 
 
+async def test_svc_update_metadata_detach_details(db_session, svc, make_project, make_node):
+    """L1-α 4C.3: details 显式 None 视为清空."""
+    user, proj = await make_project()
+    node = await make_node(proj.id, name="A")
+    rec = await svc.create(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        version_label="v1",
+        summary="x",
+        details="some details",
+        actor_user_id=user.id,
+    )
+    detached = await svc.update_metadata(
+        db_session,
+        project_id=proj.id,
+        node_id=node.id,
+        version_id=rec.id,
+        actor_user_id=user.id,
+        fields={"details": None},
+    )
+    assert detached.details is None
+
+
 async def test_svc_update_metadata_no_op_returns_existing(db_session, svc, make_project, make_node):
-    """全部 None → 不写 activity_log 也不报错；返回 existing。"""
+    """空 fields → 不写 activity_log 也不报错；返回 existing。"""
     user, proj = await make_project()
     node = await make_node(proj.id, name="A")
     rec = await svc.create(
@@ -280,6 +303,7 @@ async def test_svc_update_metadata_no_op_returns_existing(db_session, svc, make_
         node_id=node.id,
         version_id=rec.id,
         actor_user_id=user.id,
+        fields={},
     )
     assert result.id == rec.id
 
@@ -293,8 +317,8 @@ async def test_svc_update_metadata_not_found_raises(db_session, svc, make_projec
             project_id=proj.id,
             node_id=node.id,
             version_id=uuid4(),
-            summary="x",
             actor_user_id=user.id,
+            fields={"summary": "x"},
         )
 
 

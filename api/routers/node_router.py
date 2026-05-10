@@ -140,13 +140,14 @@ async def update_node(
     db: AsyncSession = Depends(get_db),
 ) -> NodeResponse:
     svc = NodeService()
+    # L1-α detach: description 显式 None 视为清空；name NOT NULL 不参与 detach
+    fields = payload.model_dump(exclude_unset=True)
     node = await svc.update_node(
         db,
         project_id=access.project.id,
         node_id=node_id,
         actor_user_id=access.user.id,
-        name=payload.name,
-        description=payload.description,
+        fields=fields,
     )
     await db.commit()
     return _node_response(node)

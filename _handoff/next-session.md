@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-10 (**Post-Phase-2.3 Cleanup Sprint 1 完成 / Sprint 4 启动中 / Sprint 2+3 等 CY**)
+last_updated: 2026-05-10 (**Post-Phase-2.3 Cleanup Sprint 1 + Sprint 4 ✅ 全完成（含 4C.3 SR-DETACH-1 跨模块 5 模块立规一并立修）/ Sprint 2+3 等 CY**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -11,7 +11,39 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
 
-## 0. 状态快照（更新于 2026-05-10 post-Sprint-1-完成）
+## 0. 状态快照（更新于 2026-05-10 post-Sprint-4C.3-SR-DETACH-1 跨模块立修完成）
+
+**Post-Phase-2.3 Cleanup 计划进度**（plan 在 `_handoff/post-phase23-cleanup-plan.md`）：
+- ✅ **Sprint 1（C-FOLLOW-UP 前端基础债 8 项）**：DONE 2026-05-10 / commits dae2760→2e21b63
+- ✅ **Sprint 4（模块真漏洞 high/medium）**：DONE 2026-05-10
+  - 4A + 4C.1 + 4C.2 在 2026-05-09 M-CLEANUP sprint 已做完
+  - **4C.3 SR-DETACH-1 跨模块 5 模块同步立修 ✅ 本会话完成**：CY 选 A2 / L1-α 用户路径完整性原则压制 L1-β 状态机单一入口
+    - **改造范围**：M02 project (router 移 exclude_none + update_ai_provider 走 fields dict) / M03 node (description detach) / M05 version (details detach) / M06 competitor + ref (6 字段 detach) / M07 issue (node_id 游离 + assigned_to 取消责任人) — 5 router + 5 service + 5 测试文件改
+    - **范式**：router `model_dump(exclude_unset=True)` + service `fields: dict[str, Any]`（M14 industry_news 已对范式 / 反向回扫确认 L1-α 一致）
+    - **测试**：pytest **1629 → 1638 PASS** / 6 新 detach unit tests / 0 failed
+    - **立规**：`design/00-architecture/06-design-principles.md` 附录 L1-α 原则 + ci-lint R16/R17 grep 候选 / cross-sprint pool §"2026-05-10 Sprint 4C.3 SR-DETACH-1" 段 / 真漏洞表 #6 + M02-A1 ✅ DONE
+    - **方法论价值**：CY 教 "矛盾 = 原则未分上下层" 方法 / 上下层推导 + 跨模块循环验证 + 全得当则按原则执行 = 比"摆 A/B 让 CY 拍"更高效
+
+- ⏸ **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：暂缓
+  - 需 backend (FastAPI 8000) + frontend (Next.js 3000) 服务端运行才能验 Playwright e2e 真断言
+  - CY 在线时启动两端 server / Claude 即可起 prompt：`_handoff/post-phase23-cleanup-plan.md` "Sprint 2"
+  - DB seed fixture / storageState login share / e2e #2-#10 / pytest-benchmark 1000 seed / R 范式第 7 数据点
+
+- ⏸ **Sprint 3（A 后置债 / CI 接通）**：阻塞 GH PAT workflow scope
+  - 本地已写完 `.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift / deps-audit cron / **无 e2e job — 不会 push 后留红**）
+  - **CY 加 PAT workflow scope 后跑**（5 min 人工）：
+    `cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Sprint 3 — ci.yml workflow file" && git push`
+  - Sprint 3.2 接通 e2e job 仍需 Sprint 2 完成的 e2e suite 才有意义
+
+**下一步推荐**（CY 在线时任选）：
+- A. Sprint 3.1 push ci.yml（CY 加 PAT scope / 5 min 人工 + Claude $1-2 调全绿）
+- B. Sprint 2 启动（CY 启 server / Claude $5-8 / 1.5 天 / 含 e2e #2-#10 + perf 1000 seed + R 范式第 7）
+
+注：cross-sprint pool 真漏洞 high/medium 已清完（仅剩 4B 三项 A 类占位期残留 + DEFER_TO_POST_LAUNCH 12 项）
+
+---
+
+## 0. 状态快照（上一版 / 更新于 2026-05-10 post-Sprint-1-完成）
 
 **Post-Phase-2.3 Cleanup 计划进度**（plan 在 `_handoff/post-phase23-cleanup-plan.md`）：
 - ✅ **Sprint 1（C-FOLLOW-UP 前端基础债 8 项）**：全 ✅ DONE 2026-05-10 / commits dae2760→2e21b63

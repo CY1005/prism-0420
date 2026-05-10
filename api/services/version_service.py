@@ -198,29 +198,19 @@ class VersionService:
         node_id: UUID,
         version_id: UUID,
         actor_user_id: UUID,
-        summary: str | None = None,
-        details: str | None = None,
-        change_type: str | None = None,
-        release_mode: str | None = None,
+        fields: dict[str, Any],
     ) -> VersionRecord:
         """事务：UPDATE 元数据 + activity_log。
 
+        L1-α 4C.3 detach：fields 来自 router model_dump(exclude_unset=True)。
+        details 显式 None 视为清空；summary NOT NULL 不参与 detach（schema min_length 已拦）；
+        change_type/release_mode enum 字段，None 视为清空（业务上极少使用，但语义统一）。
         snapshot_data 不接受 PUT 更新（design Q3，schema 层已拦）；
         is_current 切换走专用 set_current 路径。
         """
         existing = await self.get_by_id(
             db, project_id=project_id, node_id=node_id, version_id=version_id
         )
-
-        fields: dict[str, Any] = {}
-        if summary is not None:
-            fields["summary"] = summary
-        if details is not None:
-            fields["details"] = details
-        if change_type is not None:
-            fields["change_type"] = change_type
-        if release_mode is not None:
-            fields["release_mode"] = release_mode
 
         if not fields:
             # No-op update：直接返回现有；不写 activity_log

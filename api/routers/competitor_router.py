@@ -88,14 +88,14 @@ async def update_competitor(
     db: AsyncSession = Depends(get_db),
 ) -> CompetitorResponse:
     svc = CompetitorService()
+    # L1-α detach：exclude_unset 区分 None vs not-provided（website_url/description 可清空）
+    fields = payload.model_dump(exclude_unset=True)
     c = await svc.update_competitor(
         db,
         project_id=access.project.id,
         competitor_id=competitor_id,
-        display_name=payload.display_name,
-        website_url=payload.website_url,
-        description=payload.description,
         actor_user_id=access.user.id,
+        fields=fields,
     )
     await db.commit()
     return _competitor_response(c)
@@ -174,16 +174,20 @@ async def update_ref(
     db: AsyncSession = Depends(get_db),
 ) -> CompetitorRefResponse:
     svc = CompetitorService()
+    # L1-α detach：4 字段全可显式 None 清空
+    fields = payload.model_dump(exclude_unset=True)
+    # pros_and_cons 是 nested model，需要 dict-ify（保留 None 不破坏）
+    if "pros_and_cons" in fields and fields["pros_and_cons"] is not None:
+        fields["pros_and_cons"] = (
+            payload.pros_and_cons.model_dump() if payload.pros_and_cons else None
+        )
     ref = await svc.update_ref(
         db,
         project_id=access.project.id,
         node_id=node_id,
         ref_id=ref_id,
         actor_user_id=access.user.id,
-        competitor_version=payload.competitor_version,
-        feature_coverage=payload.feature_coverage,
-        tech_approach=payload.tech_approach,
-        pros_and_cons=(payload.pros_and_cons.model_dump() if payload.pros_and_cons else None),
+        fields=fields,
     )
     await db.commit()
     return _ref_response(ref)

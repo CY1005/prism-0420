@@ -162,18 +162,11 @@ class CompetitorService:
         project_id: UUID,
         competitor_id: UUID,
         actor_user_id: UUID,
-        display_name: str | None = None,
-        website_url: str | None = None,
-        description: str | None = None,
+        fields: dict[str, Any],
     ) -> Competitor:
+        """L1-α: fields 来自 router model_dump(exclude_unset=True)；显式 None
+        视为 detach（清 website_url / description）；display_name NOT NULL 不参与 detach。"""
         existing = await self._get_competitor_or_raise(db, competitor_id, project_id)
-        fields: dict[str, Any] = {}
-        if display_name is not None:
-            fields["display_name"] = display_name
-        if website_url is not None:
-            fields["website_url"] = website_url
-        if description is not None:
-            fields["description"] = description
         if not fields:
             return existing
         rows = await self.dao.update_competitor(db, competitor_id, project_id, fields=fields)
@@ -324,21 +317,11 @@ class CompetitorService:
         node_id: UUID,
         ref_id: UUID,
         actor_user_id: UUID,
-        competitor_version: str | None = None,
-        feature_coverage: str | None = None,
-        tech_approach: str | None = None,
-        pros_and_cons: dict[str, Any] | None = None,
+        fields: dict[str, Any],
     ) -> CompetitorRef:
+        """L1-α: fields 来自 router model_dump(exclude_unset=True)；4 字段全 nullable，
+        显式 None 视为 detach。"""
         existing = await self.get_ref(db, project_id=project_id, node_id=node_id, ref_id=ref_id)
-        fields: dict[str, Any] = {}
-        if competitor_version is not None:
-            fields["competitor_version"] = competitor_version
-        if feature_coverage is not None:
-            fields["feature_coverage"] = feature_coverage
-        if tech_approach is not None:
-            fields["tech_approach"] = tech_approach
-        if pros_and_cons is not None:
-            fields["pros_and_cons"] = pros_and_cons
         if not fields:
             return existing
         rows = await self.dao.update_ref(db, ref_id, project_id, fields=fields)

@@ -231,28 +231,28 @@ class NodeService:
         project_id: UUID,
         node_id: UUID,
         actor_user_id: UUID,
-        name: str | None = None,
-        description: str | None = None,
-        type: str | None = None,  # 仅用于校验拒绝（不允许修改）
+        fields: dict[str, Any],
     ) -> Node:
         """事务: UPDATE name/description + activity_log。
 
+        L1-α 4C.3 detach 立规：fields 来自 router model_dump(exclude_unset=True)。
+        name NOT NULL 不参与 detach；description nullable 显式 None 视为清空。
         type 不可变更（design §4 决策；R4-2 NodeTypeImmutableError）。
         """
         node = await self.get_node(db, node_id, project_id)
 
-        if type is not None and type != node.type:
+        if "type" in fields and fields["type"] != node.type:
             raise NodeTypeImmutableError(
-                node_id=str(node_id), current_type=node.type, requested_type=type
+                node_id=str(node_id), current_type=node.type, requested_type=fields["type"]
             )
 
         old_name = node.name
         changed = []
-        if name is not None and name != node.name:
-            node.name = name
+        if "name" in fields and fields["name"] is not None and fields["name"] != node.name:
+            node.name = fields["name"]
             changed.append("name")
-        if description is not None and description != node.description:
-            node.description = description
+        if "description" in fields and fields["description"] != node.description:
+            node.description = fields["description"]
             changed.append("description")
 
         # R1-A P-A-01 修：无字段变化时早返回不触 updated_by/updated_at（防"幽灵写"）

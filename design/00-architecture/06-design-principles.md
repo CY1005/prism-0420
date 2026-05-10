@@ -202,6 +202,54 @@
 
 ---
 
+## 附录：partial update 语义（L1-α / 4C.3 立规 2026-05-10）
+
+**含义**：所有 PUT/PATCH endpoint 的 partial update **必须区分**"未传字段（keep）"vs"显式 None（detach 清空 nullable 字段）"。
+
+**实现范式**（M14 industry_news 既有 / 2026-05-10 反向应用 5 模块）：
+
+```python
+# Router
+fields = payload.model_dump(exclude_unset=True)  # 只 exclude_unset，不 exclude_none
+result = await svc.update(db, ..., fields=fields)
+
+# Service
+async def update(self, db, *, ..., fields: dict[str, Any]) -> Entity:
+    if not fields:
+        return existing
+    # nullable FK 校验仅在非 None 时做（None 视为 detach）
+    if "node_id" in fields and fields["node_id"] is not None:
+        await self._check_node_exists(...)
+    rows = await self.dao.update(db, ..., fields=fields)
+    ...
+```
+
+**为什么是 L1-α 上位原则**：
+- "用户合理业务动作必须有 API 入口"是领域驱动的基础原则
+- 状态机原则（原则 4）的目的是约束**非法状态转换**，不是限制其他正交动作（如 detach assigned_to 但保持 status）
+- 当用户业务路径完整性 vs 状态机单一入口冲突时，前者上位
+
+**违反时怎么办**：
+- ci-lint R16 grep（候选 / 待立）：router 层 `model_dump(exclude_unset=True, exclude_none=True)` 双排除 → 告警（exclude_none 等于显式禁 detach，必须 design 字面豁免理由）
+- ci-lint R17 grep（候选 / 待立）：service 层 `if X is not None: fields["X"] = X` 老模式 → 告警（用 dict-based fields 范式替代）
+- code review 强制：新增 update endpoint 必须用 `model_dump(exclude_unset=True)` 范式
+
+**豁免条件**（必须 design 字面声明）：
+- 字段是 NOT NULL（physically 不能 detach；schema `min_length` 或 type annotation 已拦）
+- 该字段 detach 是非法业务动作（design 显式声明 + 422 守卫，不靠 service 静默忽略）
+
+**跨模块应用清单**（2026-05-10 SR-DETACH-1 一并落地）：
+- M02 project（router 移 exclude_none / update_ai_provider 走 fields dict）
+- M03 node（description detach）
+- M05 version（details detach）
+- M06 competitor + ref（website_url / description / pros_and_cons 等 6 字段 detach）
+- M07 issue（node_id 游离 + assigned_to 取消责任人）
+- M14 industry_news（已对范式 / 2026-05-08 R1-A 立修，本次反向回扫确认 L1-α 一致）
+
+**未来 update endpoint 必须遵守本原则**。如有特殊豁免必须在模块 design `00-design.md` §3 字面声明。
+
+---
+
 ## 原则间的优先级
 
 如果原则冲突，按序决策：

@@ -122,16 +122,13 @@ async def update_issue(
     db: AsyncSession = Depends(get_db),
 ) -> IssueResponse:
     svc = IssueService()
+    fields = payload.model_dump(exclude_unset=True)
     i = await svc.update(
         db,
         project_id=access.project.id,
         issue_id=issue_id,
-        title=payload.title,
-        description=payload.description,
-        tags=payload.tags,
-        node_id=payload.node_id,
-        assigned_to=payload.assigned_to,
         actor_user_id=access.user.id,
+        fields=fields,
     )
     await db.commit()
     return _resp(i)

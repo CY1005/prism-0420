@@ -134,9 +134,11 @@ class ProjectService:
         if proj.status == ProjectStatus.ARCHIVED.value:
             raise ProjectArchivedError(project_id=str(project_id), reason="cannot_update_archived")
 
+        # L1-α: changes 来自 router model_dump(exclude_unset=True)，含 None 视为 detach；
+        # hasattr 仍是字段白名单（Pydantic schema 已限定字段集）。
         changed_fields = []
         for key, val in changes.items():
-            if val is not None and hasattr(proj, key):
+            if hasattr(proj, key):
                 setattr(proj, key, val)
                 changed_fields.append(key)
         await db.flush()
@@ -183,16 +185,23 @@ class ProjectService:
         *,
         project_id: UUID,
         actor_user_id: UUID,
-        ai_provider: str | None,
-        ai_api_key: str | None,
+        fields: dict[str, Any],
     ) -> Project:
+        """L1-α detach 立规：fields 来自 router model_dump(exclude_unset=True)。
+        ai_provider 显式 None = 清供应商；ai_api_key 显式 None = 清密钥；
+        未传字段 = keep。
+        """
         proj, _m = await self.require_owner(db, project_id, actor_user_id)
-        proj.ai_provider = ai_provider
-        if ai_api_key is not None:
-            try:
-                proj.ai_api_key_enc = encrypt(ai_api_key)
-            except (CryptoKeyError, ValueError) as e:
-                raise AiKeyEncryptFailedError() from e
+        if "ai_provider" in fields:
+            proj.ai_provider = fields["ai_provider"]
+        if "ai_api_key" in fields:
+            if fields["ai_api_key"] is None:
+                proj.ai_api_key_enc = None
+            else:
+                try:
+                    proj.ai_api_key_enc = encrypt(fields["ai_api_key"])
+                except (CryptoKeyError, ValueError) as e:
+                    raise AiKeyEncryptFailedError() from e
         await db.flush()
         await db.refresh(proj, attribute_names=["updated_at"])
         await write_event(
@@ -202,8 +211,8 @@ class ProjectService:
             action_type="project_ai_provider_updated",
             target_type="project",
             target_id=str(project_id),
-            summary=f"Updated AI provider to '{ai_provider}'",
-            metadata={"new_provider": ai_provider},
+            summary=f"Updated AI provider to '{proj.ai_provider}'",
+            metadata={"new_provider": proj.ai_provider, "changed_fields": sorted(fields.keys())},
         )
         return proj
 
