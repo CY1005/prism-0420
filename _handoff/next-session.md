@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 PARTIAL（基础设施 + spec 03/04/05/06 + 4C.3 expunge fix + Task 2.4 简化版 5 benchmark / 10 e2e + 1643 pytest PASS）+ SR-EXPUNGE-1 立规到 design 06 ✅ / Sprint 3 等 CY PAT scope / Sprint 2 spec 07-10 + Task 2.4 完整版 + Task 2.5 punt 下次**)
+last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 NEAR-DONE（全 9 spec API smoke + Task 2.4 完整版 1000 seed / 19 e2e + 1643 pytest PASS）+ SR-DETACH-1 + SR-EXPUNGE-1 立规 ✅ / Sprint 3 仍等 CY PAT scope / M16+M17+M18 happy path full + WS golden 推专 sprint**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -38,7 +38,14 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - **立规**：`design/00-architecture/06-design-principles.md` 附录 L1-α 原则 + ci-lint R16/R17 grep 候选 / cross-sprint pool §"2026-05-10 Sprint 4C.3 SR-DETACH-1" 段 / 真漏洞表 #6 + M02-A1 ✅ DONE
     - **方法论价值**：CY 教 "矛盾 = 原则未分上下层" 方法 / 上下层推导 + 跨模块循环验证 + 全得当则按原则执行 = 比"摆 A/B 让 CY 拍"更高效
 
-- 🟡 **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：PARTIAL 2026-05-10
+- 🟢 **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：NEAR-DONE 2026-05-10（CY 出门期间无人值守串跑）
+
+  **本次会话进展（在前一会话 PARTIAL 基础上接续推到 NEAR-DONE）**：
+  - Task 2.4 简化版 → ✅ 完整版升级（1000 project / bulk_insert_mappings 单 SQL 批量 / setup ~6s）
+  - Task 2.3 spec 07-10（之前 punt） → ✅ 全 4 个 spec 改为 API smoke（M16/M17/M18/M08 各自基础路径 + 业务 422 码验证 / mock provider 全栈推下次）
+  - 19 e2e PASS（10 → 19 / 0 skipped）/ pytest 1638 → 1643 PASS
+
+  **完整 sprint 2 内容（汇总）**：
   - **Task 2.1+2.2 基础设施 ✅**：
     - `scripts/seed_e2e_admin.py` 一次性创 e2e@example.com / role=platform_admin / 幂等
     - `app/e2e/fixtures/seed.ts` `seedFullProject(api)` → login + POST /projects + /nodes + /issues
@@ -64,18 +71,19 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - 09 search：embedding seed + mock provider + pgvector
     - 10 relation graph：XYFlow 交互 + 拖拽创建 relation
     → 推荐立独立 sprint "Sprint 2-rest"（cost $3-4 / 各自 fixture + 一遍跑通），或推到上线后
-  - **Task 2.4 简化版 ✅ 本会话完成**（cost $1-1.5）：
-    - `tests/perf/conftest.py` perf_seeded_db fixture（100 project + 500 node + 1000 issue / 用 make_project_with_member 走 ProjectMember 校验路径）
-    - `tests/perf/test_baseline_p95.py` 5 endpoint smoke benchmark（list_by_user / get_by_id_for_user / list_issues / list_nodes / aggregate_seed_health）
-    - `tests/perf/baseline.json` benchmark 数据落字面（pytest-benchmark 5.2.3 + py-cpuinfo dep 加 `pyproject.toml`）
-    - `tests/perf/README.md` 文档 + 已知限制（pytest-benchmark fixture 用法占位 / 真测量在 samples_ms / 下次升 1000 时改 sync wrapper）+ 下次升级路径
-    - 守护：pytest 1638 → 1643 PASS（+5 perf benchmarks）
-  - **Task 2.4 完整版（1000 seed + CI 接通 + sync wrapper）punt** 下次会话（cost $1-2 / cleanup-plan §479 完整步骤 + tests/perf/README.md "下次升级路径" 字面）
-  - **Task 2.5 R1+R2 第 7 数据点 punt**：等 Task 2.3 spec 07-10 + Task 2.4 完成后才有完整 R 范式 ROI；当前阶段 R 数据点不齐
-  - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 10 PASS 不破，然后视 cost 任选：
-    (a) Task 2.4 pytest-benchmark（独立 / 简单）
-    (b) Task 2.3 spec 07-10 选 1-2 个最实用先做（推荐 09 search 因 M18 是后端方向核心）
-    本机已 backend (port 8000) + frontend (port 3000) 长期跑（pid 1694247 / docker prism0420-pg+redis healthy）；Claude 启新进程会撞端口，直接复用即可。
+  - **Task 2.4 完整版 ✅**（升级路径 1+3 已完成 / 2+4+5 punt）：
+    - `tests/perf/conftest.py`：1000 project / 10000 node / 5000 issue / bulk_insert_mappings 单 SQL 批量 / setup ~6s function scope
+    - `tests/perf/test_baseline_p95.py`：5 endpoint baseline（list_by_user 1500ms / get_by_id 50ms / list_issues 100ms / list_nodes 50ms / aggregate health）
+    - `tests/perf/baseline.json` 1000 scale 数据落字面
+    - `tests/perf/README.md` 限制段更新（pedantic sync wrapper / router 层真测 / session scope / CI 接通 4 项推下次）
+  - **Task 2.5 R1+R2 第 7 数据点 punt**（流程审计 / 不阻塞 sprint 功能完成 / cost）
+  - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 19 PASS 不破，然后视 cost / 阻塞解锁任选：
+    (a) **Sprint 3.1 push ci.yml**（CY 加 PAT scope 后 / cost $1-2）
+    (b) **M16/M17 happy path full**（mock provider 全栈 + 3+ versions seed + WS 客户端 / 推 mock-provider-sprint / cost $3-5）
+    (c) **M18 hybrid search full**（pgvector 真接通 + embedding worker 真跑 / 推 pgvector-sprint / cost $3-5）
+    (d) **Task 2.4 升级第 2+3 项**（pedantic sync wrapper + session scope fixture / cost $1-2）
+    (e) **Task 2.5 R1+R2 第 7 数据点**（审计完成 sprint / cost $1-2）
+    本机已 backend (port 8000) + frontend (port 3000) 长期跑（docker prism0420-pg+redis healthy）；frontend 会被 background killer 停过，下次会话一开始 curl 一下 :3000 不通就 `cd app && pnpm dev &` 重启。
 
 - ⏸ **Sprint 3（A 后置债 / CI 接通）**：阻塞 GH PAT workflow scope
   - 本地已写完 `.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift / deps-audit cron / **无 e2e job — 不会 push 后留红**）

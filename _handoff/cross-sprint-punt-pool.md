@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 ✅ + Sprint 2 PARTIAL（Task 2.1/2.2/2.3-part-1 + Task 2.4 简化版 ✅ / 10 e2e + 1643 pytest PASS）+ SR-EXPUNGE-1 ✅ 立规到 design 06**)
+last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4 ✅ + Sprint 2 NEAR-DONE（全 9 spec smoke + Task 2.4 完整版 ✅ / 19 e2e + 1643 pytest PASS）+ SR-DETACH-1 + SR-EXPUNGE-1 ✅ 立规到 design 06 / Sprint 3 仍等 PAT scope**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -39,6 +39,25 @@ policy:
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-10 Sprint 2 NEAR-DONE — Task 2.3 全 9 spec API smoke + Task 2.4 完整版（19 e2e + 1643 pytest PASS）
+
+**CY 出门期间无人值守串跑完成**：
+- Task 2.3 spec 07-10（之前 punt）→ 全改 API smoke：
+  - 07 M16 AI snapshot（trigger 422 业务码 / ai_provider 未配 + version<3 路径）
+  - 08 M19 export（multi-node + single-node markdown + include all-false 422）
+  - 09 M18 search（query 200 keyword_only + >200char 400 + empty 422）
+  - 10 M08 module_relation（create + self_loop 422 + overview 可达 + delete）
+- Task 2.4 完整版（升级路径 1+3）：1000 project + bulk_insert + module-aware function scope
+
+**真 mock 全栈 happy path 推下次专 sprint**（mock provider / pgvector / WS 各自独立基础设施）：
+- M16 happy path：mock AI provider + 3+ versions seed + 后台 runner + poll → succeeded
+- M17 happy path：mock AI provider + 3 步流程（propose / review / confirm） + WS 进度
+- M17 import zip：multipart/form-data + WS 客户端 + worker 真跑
+- M18 hybrid search：pgvector 真接通 + embedding worker + cosine 排序
+- M16/M17/M18 WS golden e2e（cross-sprint pool §16）
+
+**阻塞 Sprint 3**：CY 加 PAT workflow scope（GH Settings → Developer settings → PAT → Edit → 勾 workflow）—— 2026-05-10 CY 反馈"暂时加不了 / 让做别的"。无人值守期间无法替操作。
 
 ### 2026-05-10 Sprint 2 Task 2.3 part-1 + 4C.3 expunge fix（10 e2e PASS / 1638 pytest PASS）
 
