@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 跨模块立规一并立修 ✅ / 真漏洞 #6 + M02-A1 同根因关闭 / STILL_PUNT 31→29 / pytest 1629→1638**)
+last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 ✅ + Sprint 2 Task 2.1/2.2/2.3-part-1 ✅（含 4C.3 expunge fix）/ 10 e2e PASS / 1638 pytest PASS / SR-EXPUNGE-1 立规候选**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -39,6 +39,25 @@ policy:
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-10 Sprint 2 Task 2.3 part-1 + 4C.3 expunge fix（10 e2e PASS / 1638 pytest PASS）
+
+**完成**：
+- Task 2.1+2.2 基础设施（seed_e2e_admin.py + seed.ts + global-setup.ts + playwright config）
+- Task 2.3 spec 03+04+05+06 完整断言（API 路径 / 含 D 类 #3 join 实证 + L1-α detach 双 case）
+- 4C.3 issue_service.update 加 expunge fix（Sprint 2 e2e 暴露 raw SQL + selectinload identity map cache 副作用）
+
+**SR-EXPUNGE-1 立规候选**（待下次 sprint 关闸时正式立）：
+- 触发：service.update 用 dao raw SQL UPDATE + 响应含 selectinload join 字段
+- 范式：raw UPDATE 后 `db.expunge(existing)` → dao.get_by_id 真重 SELECT 触发 selectinload
+- 替代：用 ORM mutate（同 M02/M03/M14 范式 / setattr + db.flush）— 更干净，SQLAlchemy 自动管理 relationship expire
+- 当前实证：M07 issue（已修）；M05/M06 同范式但响应不含 join 字段所以无暴露 / 长期建议迁 ORM mutate 范式
+- ci-lint R18 grep 候选：`dao.update.*raw\|raw UPDATE` 调用 + Response 含 `_JOINS`/`selectinload` 字段 → 告警
+
+**Sprint 2 剩余（punt 下次会话）**：
+- spec 07-10（AI snapshot / import-export / search / relation graph）—— 各自依赖 mock provider / WS / multipart / XYFlow 交互
+- Task 2.4 pytest-benchmark + 1000 seed
+- Task 2.5 R1+R2 第 7 数据点（等 spec 07-10 + Task 2.4 完成 R 才齐）
 
 ### 2026-05-10 Sprint 4C.3 SR-DETACH-1 跨模块立规（5 模块同步立修 / 1629→1638 PASS）
 
