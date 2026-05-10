@@ -41,12 +41,16 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { type ProjectStats, type TreeNodeOverview } from "@/services/project-stats";
+import {
+  type ProjectStats,
+  type TreeNodeOverview,
+  getProjectStatsAction,
+  getProjectTreeOverviewAction,
+} from "@/actions/project-stats-proxy";
 import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama";
 import { getActivityLogs } from "@/actions/activity-log";
 import { getProject } from "@/actions/projects";
 import { getSessionUser } from "@/actions/auth";
-import { getProjectStatsAction, getProjectTreeOverviewAction } from "@/actions/project-stats-proxy";
 import {
   getFeedItems,
   getFeedSources,
@@ -268,14 +272,14 @@ export default function ProjectOverviewPage() {
     setStatsLoading(true);
     getProjectStatsAction(projectId).then((r) => {
       setStatsLoading(false);
-      if (r.ok) setRealStats(r.data);
+      if (r.success) setRealStats(r.data);
       else setApiError(r.error);
     });
 
     setTreeLoading(true);
     getProjectTreeOverviewAction(projectId).then((r) => {
       setTreeLoading(false);
-      if (r.ok) setRealTree(r.data.tree);
+      if (r.success) setRealTree(r.data.tree);
       else setApiError((prev) => prev ?? r.error);
     });
 
@@ -567,7 +571,7 @@ export default function ProjectOverviewPage() {
                   setTreeLoading(true);
                   getProjectTreeOverviewAction(projectId).then((r) => {
                     setTreeLoading(false);
-                    if (r.ok) {
+                    if (r.success) {
                       setRealTree(r.data.tree);
                       if (r.data.tree.length > 0) setIsEmptyProject(false);
                     }
