@@ -1,7 +1,7 @@
 "use server";
 
-import { serverApiPost, UnauthenticatedError } from "@/lib/server-http-client";
-import { redirect } from "next/navigation";
+import { serverApiPost } from "@/lib/server-http-client";
+import { withAuthRedirect } from "@/lib/server-action-helpers";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
 import type { components } from "@/types/api";
 
@@ -26,20 +26,19 @@ export async function globalSearch(
   }
 
   try {
-    const body: SearchRequest = {
-      query,
-      target_types: options.targetTypes ?? null,
-      limit: options.limit ?? 20,
-    };
-    const data = await serverApiPost<SearchResponse>(
-      `/api/projects/${options.projectId}/search`,
-      body,
-    );
-    return actionSuccess(data);
+    return await withAuthRedirect(async () => {
+      const body: SearchRequest = {
+        query,
+        target_types: options.targetTypes ?? null,
+        limit: options.limit ?? 20,
+      };
+      const data = await serverApiPost<SearchResponse>(
+        `/api/projects/${options.projectId}/search`,
+        body,
+      );
+      return actionSuccess(data);
+    });
   } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      redirect("/login");
-    }
     return actionError(error);
   }
 }
