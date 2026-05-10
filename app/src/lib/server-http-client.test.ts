@@ -11,7 +11,13 @@ vi.mock("./server-auth", () => ({
   getServerAccessToken: vi.fn(),
 }));
 
-import { serverApiGet, serverApiPost, UnauthenticatedError, ApiError } from "./server-http-client";
+import {
+  serverApiGet,
+  serverApiPost,
+  serverApiPostDownload,
+  UnauthenticatedError,
+  ApiError,
+} from "./server-http-client";
 import { getServerAccessToken } from "./server-auth";
 
 const originalFetch = global.fetch;
@@ -101,5 +107,76 @@ describe("server-http-client", () => {
   it("ApiError + UnauthenticatedError 已导出", () => {
     expect(ApiError).toBeDefined();
     expect(UnauthenticatedError).toBeDefined();
+  });
+
+  // Sprint 1 Task 1.1 — serverApiPostDownload (text/markdown + Content-Disposition)
+  describe("serverApiPostDownload", () => {
+    function mockDownloadResponse(body: string, filename: string, status = 200) {
+      const resp = new Response(body, {
+        status,
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+      (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(resp);
+    }
+
+    it("解析 text body + Content-Disposition filename 返 {filename, content}", async () => {
+      mockedToken.mockResolvedValueOnce("tok");
+      mockDownloadResponse("# Hello\n\nworld", "prism-export-20260510.md");
+
+      const result = await serverApiPostDownload("/api/projects/p1/exports", {
+        node_ids: ["n1"],
+      });
+
+      expect(result.filename).toBe("prism-export-20260510.md");
+      expect(result.content).toBe("# Hello\n\nworld");
+    });
+
+    it("无 Content-Disposition header → filename 回退 download.bin", async () => {
+      mockedToken.mockResolvedValueOnce("tok");
+      const resp = new Response("raw", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+      (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(resp);
+
+      const result = await serverApiPostDownload("/x", {});
+      expect(result.filename).toBe("download.bin");
+      expect(result.content).toBe("raw");
+    });
+
+    it("Content-Disposition 不带引号也能解析 filename", async () => {
+      mockedToken.mockResolvedValueOnce("tok");
+      const resp = new Response("body", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/markdown",
+          "Content-Disposition": "attachment; filename=plain.md",
+        },
+      });
+      (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(resp);
+
+      const result = await serverApiPostDownload("/x", {});
+      expect(result.filename).toBe("plain.md");
+    });
+
+    it("backend 4xx → 抛 ApiError 不抛入 content", async () => {
+      mockedToken.mockResolvedValueOnce("tok");
+      mockFetchOnce(403, { error_code: "permission_denied", message: "no" });
+
+      await expect(serverApiPostDownload("/x", {})).rejects.toMatchObject({
+        status: 403,
+        errorCode: "permission_denied",
+      });
+    });
+
+    it("backend 401 → 抛 UnauthenticatedError", async () => {
+      mockedToken.mockResolvedValueOnce("tok");
+      mockFetchOnce(401, { detail: "expired" });
+
+      await expect(serverApiPostDownload("/x", {})).rejects.toThrow(UnauthenticatedError);
+    });
   });
 });

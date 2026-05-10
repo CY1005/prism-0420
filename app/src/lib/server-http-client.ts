@@ -89,4 +89,61 @@ export const serverApiPut = <T>(path: string, body?: unknown, options?: RequestO
 export const serverApiDelete = <T = void>(path: string, options?: RequestOptions) =>
   serverApiFetch<T>(path, { ...options, method: "DELETE" });
 
+/**
+ * 文件下载响应（M19 export 等场景）：response body 是 text/binary，filename 在
+ * Content-Disposition header。返回 {filename, content} 给消费方直接构造 Blob + a.download。
+ *
+ * Why：M19 export 后端走标准 HTTP attachment（text/markdown bytes + Content-Disposition），
+ * 而非 JSON wrapper。serverApiPost 默认 res.json() 会失败，留 ExportPayload=unknown 让消费方
+ * 裸用 result.data.content（P22-3c-6 punt 真因 = 前端 client wrapper 不支持文本/二进制响应，
+ * 不是后端 schema 缺失 / 02-quality-spec.md §HTTP-Client 立规）。
+ */
+export interface DownloadResponse {
+  filename: string;
+  content: string;
+}
+
+const _CD_FILENAME_RE = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i;
+
+function parseFilename(disposition: string | null): string {
+  if (!disposition) return "download.bin";
+  const match = _CD_FILENAME_RE.exec(disposition);
+  return match?.[1]?.trim() || "download.bin";
+}
+
+export async function serverApiPostDownload(
+  path: string,
+  body?: unknown,
+  options: RequestOptions = {},
+): Promise<DownloadResponse> {
+  const { headers, ...rest } = options;
+  const token = await getServerAccessToken();
+  if (!token) {
+    throw new UnauthenticatedError(
+      "no server-side access token (refresh cookie missing or expired)",
+    );
+  }
+  const finalHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+    ...(headers as Record<string, string> | undefined),
+  };
+
+  const resp = await fetch(`${BASE_URL}${path}`, {
+    ...rest,
+    method: "POST",
+    headers: finalHeaders,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!resp.ok) {
+    throw await parseError(resp);
+  }
+
+  const filename = parseFilename(resp.headers.get("Content-Disposition"));
+  const content = await resp.text();
+  return { filename, content };
+}
+
 export { ApiError, UnauthenticatedError };

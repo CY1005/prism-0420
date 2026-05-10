@@ -1,7 +1,6 @@
 "use server";
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- 子片 3c：exportProject NOT_IMPLEMENTED stub（prism-0420 OpenAPI 暂无项目级 ZIP 导出 / Phase 2.3 评估补充） */
-import { serverApiPost } from "@/lib/server-http-client";
+import { serverApiPostDownload, type DownloadResponse } from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import type { components } from "@/types/api";
@@ -10,12 +9,17 @@ type MultiNodeExportRequest = components["schemas"]["MultiNodeExportRequest"];
 type SingleNodeExportRequest = components["schemas"]["SingleNodeExportRequest"];
 type ExportIncludeOptions = components["schemas"]["ExportIncludeOptions"];
 
-export type ExportPayload = unknown;
+/**
+ * Sprint 1 Task 1.1（P22-3c-6 收口）：原 ExportPayload = unknown 让消费方裸用 .content/.filename
+ * 真因是 client wrapper 不支持 text/binary 响应。改用 serverApiPostDownload 从 Content-Disposition
+ * 提取 filename + body.text() 提取 content，类型化为 DownloadResponse 给消费方稳定使用。
+ */
+export type ExportPayload = DownloadResponse;
 
 /**
  * 入口 A：多 node 导出 → POST /api/projects/{pid}/exports
- * 后端 200 响应 schema 为 unknown（design §7 / R1-A 字段裁剪到 service / API 类型不强约束）。
- * 调用方按需解析（旧 { filename, content } 字段不再保证 / 子片 5 cleanup 对齐消费方）。
+ * 后端响应 text/markdown bytes + Content-Disposition: attachment; filename="..."
+ * （design §7 + export_router._markdown_response）
  */
 export async function exportNodes(
   projectId: string,
@@ -27,7 +31,7 @@ export async function exportNodes(
       return actionError(new AppError("请选择要导出的节点", "blocking", "VALIDATION_ERROR"));
     }
     const body: MultiNodeExportRequest = { node_ids: nodeIds, ...(include && { include }) };
-    const data = await serverApiPost<ExportPayload>(`/api/projects/${projectId}/exports`, body);
+    const data = await serverApiPostDownload(`/api/projects/${projectId}/exports`, body);
     logger.action("export.nodes", "self", { projectId, nodeCount: nodeIds.length });
     return actionSuccess(data);
   } catch (error) {
@@ -46,7 +50,7 @@ export async function exportSingleNode(
 ): Promise<ActionResult<ExportPayload>> {
   try {
     const body: SingleNodeExportRequest = include ? { include } : {};
-    const data = await serverApiPost<ExportPayload>(
+    const data = await serverApiPostDownload(
       `/api/projects/${projectId}/nodes/${nodeId}/export`,
       body,
     );
@@ -59,10 +63,12 @@ export async function exportSingleNode(
 
 /**
  * 旧 exportProject(productLineId) 在 prism-0420 OpenAPI 无对应 endpoint
- * （ZIP 导出 / product_line scope 不在 design §7）。子片 5 后 Phase 2.3 评估补充。
+ * （ZIP 导出 / product_line scope 不在 design §7）。Phase 2.3 评估补充。
  */
 export async function exportProject(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- NOT_IMPLEMENTED stub 签名保留待 Phase 2.3 接通
   _projectId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- NOT_IMPLEMENTED stub 签名保留待 Phase 2.3 接通
   _productLineId?: string,
 ): Promise<ActionResult<{ filename: string; content: string }>> {
   return actionError(
