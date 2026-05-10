@@ -248,6 +248,37 @@ async def update(self, db, *, ..., fields: dict[str, Any]) -> Entity:
 
 **未来 update endpoint 必须遵守本原则**。如有特殊豁免必须在模块 design `00-design.md` §3 字面声明。
 
+### 配套规约 SR-EXPUNGE-1（2026-05-10 Sprint 2 e2e 暴露立规）
+
+**触发**：service.update 同时满足三条件：
+1. 用 `dao.update(...)` raw SQL UPDATE（vs ORM mutate setattr+flush）
+2. 响应 schema 含 selectinload join 字段（如 `IssueResponse.node_name`）
+3. 业务支持 detach（L1-α / nullable FK 显式 None）
+
+**问题**：raw SQL UPDATE 后 SQLAlchemy identity map 仍持 `existing` 旧 selectinload 关系；
+`db.refresh(existing, attribute_names=...)` 只刷 column 不触发 selectinload 重跑；
+后续 `dao.get_by_id` 走 identity map 命中同一 stale instance → 响应 join 字段渲染旧值。
+
+**修复范式**（M07 issue_service.update 已用，commit 22b3484）：
+
+```python
+rows = await self.dao.update(db, ...)
+if rows == 0:
+    raise NotFoundError(...)
+await db.refresh(existing, attribute_names=list(fields.keys()) + ["updated_at"])
+db.expunge(existing)  # ← 让 dao.get_by_id 真重 SELECT + 触发 _JOINS selectinload
+loaded = await self.dao.get_by_id(db, ...)
+return loaded
+```
+
+**优先替代范式**：service 用 ORM mutate（M02/M03/M14 范式 / `setattr(obj, k, v) + db.flush()` + 末尾 `return await self._get_or_raise(...)` ）—— SQLAlchemy 自动管理 relationship expire / 不需 expunge。M07 长期建议迁此范式。
+
+**ci-lint R18 候选**（待立 / 与 R16+R17 同形态守护）：grep `dao\..*update.*fields=` 调用 + 同 service 文件的 Response schema 是否含 selectinload 字段 → 如二者并存且无 `db.expunge` → 告警。
+
+**当前实证**：
+- M07 issue（已修 ✅ commit 22b3484）
+- M05/M06 用同 raw SQL UPDATE 但 Response schema 不含 selectinload 字段 → 无暴露 / 长期建议迁 ORM mutate
+
 ---
 
 ## 原则间的优先级

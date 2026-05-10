@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 ✅ + Sprint 2 Task 2.1/2.2/2.3-part-1 ✅（含 4C.3 expunge fix）/ 10 e2e PASS / 1638 pytest PASS / SR-EXPUNGE-1 立规候选**)
+last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4C.3 SR-DETACH-1 ✅ + Sprint 2 PARTIAL（Task 2.1/2.2/2.3-part-1 + Task 2.4 简化版 ✅ / 10 e2e + 1643 pytest PASS）+ SR-EXPUNGE-1 ✅ 立规到 design 06**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -47,12 +47,12 @@ policy:
 - Task 2.3 spec 03+04+05+06 完整断言（API 路径 / 含 D 类 #3 join 实证 + L1-α detach 双 case）
 - 4C.3 issue_service.update 加 expunge fix（Sprint 2 e2e 暴露 raw SQL + selectinload identity map cache 副作用）
 
-**SR-EXPUNGE-1 立规候选**（待下次 sprint 关闸时正式立）：
-- 触发：service.update 用 dao raw SQL UPDATE + 响应含 selectinload join 字段
-- 范式：raw UPDATE 后 `db.expunge(existing)` → dao.get_by_id 真重 SELECT 触发 selectinload
-- 替代：用 ORM mutate（同 M02/M03/M14 范式 / setattr + db.flush）— 更干净，SQLAlchemy 自动管理 relationship expire
-- 当前实证：M07 issue（已修）；M05/M06 同范式但响应不含 join 字段所以无暴露 / 长期建议迁 ORM mutate 范式
-- ci-lint R18 grep 候选：`dao.update.*raw\|raw UPDATE` 调用 + Response 含 `_JOINS`/`selectinload` 字段 → 告警
+**SR-EXPUNGE-1 ✅ 已正式立规**（design `00-architecture/06-design-principles.md` 附录 L1-α "配套规约 SR-EXPUNGE-1" 段 / 2026-05-10 commit 后续）：
+- 触发：service.update 同时满足 (1) raw SQL UPDATE (2) Response 含 selectinload join 字段 (3) 业务支持 detach
+- 范式：`db.refresh + db.expunge(existing) + dao.get_by_id` → 真重 SELECT 触发 _JOINS
+- 替代（优先）：service 用 ORM mutate（M02/M03/M14 范式 / setattr + db.flush + 末尾 self._get_or_raise）
+- 当前实证：M07 issue（已修 commit 22b3484）；M05/M06 同 raw 但 Response 无 selectinload 字段所以无暴露 / 长期建议迁 ORM mutate
+- ci-lint R18 候选（已写到 design 06 字面）
 
 **Sprint 2 剩余（punt 下次会话）**：
 - spec 07-10（AI snapshot / import-export / search / relation graph）—— 各自依赖 mock provider / WS / multipart / XYFlow 交互

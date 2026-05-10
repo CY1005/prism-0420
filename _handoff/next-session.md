@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 PARTIAL 完成（基础设施 + spec 03/04/05/06 + 4C.3 expunge fix / 10 e2e PASS / 1638 pytest PASS）/ Sprint 3 等 CY PAT scope / Sprint 2 spec 07-10 + Task 2.4 + 2.5 punt 下次**)
+last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 PARTIAL（基础设施 + spec 03/04/05/06 + 4C.3 expunge fix + Task 2.4 简化版 5 benchmark / 10 e2e + 1643 pytest PASS）+ SR-EXPUNGE-1 立规到 design 06 ✅ / Sprint 3 等 CY PAT scope / Sprint 2 spec 07-10 + Task 2.4 完整版 + Task 2.5 punt 下次**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -64,7 +64,13 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
     - 09 search：embedding seed + mock provider + pgvector
     - 10 relation graph：XYFlow 交互 + 拖拽创建 relation
     → 推荐立独立 sprint "Sprint 2-rest"（cost $3-4 / 各自 fixture + 一遍跑通），或推到上线后
-  - **Task 2.4 pytest-benchmark + 1000 seed punt**（cost $1-2 / 独立后端工作 / 不阻塞闸门 5 §8.1）：cleanup-plan §479 完整步骤；下次任意会话直接做
+  - **Task 2.4 简化版 ✅ 本会话完成**（cost $1-1.5）：
+    - `tests/perf/conftest.py` perf_seeded_db fixture（100 project + 500 node + 1000 issue / 用 make_project_with_member 走 ProjectMember 校验路径）
+    - `tests/perf/test_baseline_p95.py` 5 endpoint smoke benchmark（list_by_user / get_by_id_for_user / list_issues / list_nodes / aggregate_seed_health）
+    - `tests/perf/baseline.json` benchmark 数据落字面（pytest-benchmark 5.2.3 + py-cpuinfo dep 加 `pyproject.toml`）
+    - `tests/perf/README.md` 文档 + 已知限制（pytest-benchmark fixture 用法占位 / 真测量在 samples_ms / 下次升 1000 时改 sync wrapper）+ 下次升级路径
+    - 守护：pytest 1638 → 1643 PASS（+5 perf benchmarks）
+  - **Task 2.4 完整版（1000 seed + CI 接通 + sync wrapper）punt** 下次会话（cost $1-2 / cleanup-plan §479 完整步骤 + tests/perf/README.md "下次升级路径" 字面）
   - **Task 2.5 R1+R2 第 7 数据点 punt**：等 Task 2.3 spec 07-10 + Task 2.4 完成后才有完整 R 范式 ROI；当前阶段 R 数据点不齐
   - **cold-start 给下次会话**：先 `cd app && pnpm playwright test` 跑 10 PASS 不破，然后视 cost 任选：
     (a) Task 2.4 pytest-benchmark（独立 / 简单）
