@@ -3,8 +3,13 @@ title: Post-Phase-2.3 Cleanup Plan（4 Sprint 收尾）
 status: living
 owner: CY
 created: 2026-05-10
-last_updated: 2026-05-10
+last_updated: 2026-05-10 (**Sprint 1 完成 / 进入 Sprint 4（路由决策见 §下方）**)
 purpose: Phase 2.3 PARTIAL 关闸后所有 punt 的清扫计划——不上线，把仓库做到"真闸门 5 全 ✅、所有 STILL_PUNT 高/中风险归零"
+status_sprint1: ✅ DONE 2026-05-10 / commits dae2760→2e21b63 / 8 task 全清
+status_sprint2: ⏸ 暂缓（需 backend+frontend 服务端运行才能验真 e2e 断言 / CY 在线时启动）
+status_sprint3: ⏸ 阻塞（GH PAT 缺 workflow scope / CY 加 scope 后 5 min 推 ci.yml）
+status_sprint4: ▶️ 启动中（独立后端 / 不依赖外部）
+routing_decision: Sprint 1 ✅ → Sprint 4（独立纯后端 / 全可 pytest 验）→ 报到等 CY 启 server 跑 Sprint 2 + 加 PAT scope 跑 Sprint 3
 methodology: superpowers:writing-plans + 本仓 R1+R2 范式 + decision_transparency A 模式
 ---
 

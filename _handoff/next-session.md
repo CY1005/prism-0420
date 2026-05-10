@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-09 (**post-Phase-2.3-4-子-sprint-完成 / 闸门 5 PARTIAL / 上线 sprint 待立**)
+last_updated: 2026-05-10 (**Post-Phase-2.3 Cleanup Sprint 1 完成 / Sprint 4 启动中 / Sprint 2+3 等 CY**)
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -10,6 +10,42 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 > **冷启动 Claude 读这份**：先读本文件 → 再读 `design/00-roadmap.md` 看真实进度 →
 > 再读 `design/00-phase-gate.md` 看下一闸门 → 再决定从哪条 prompt 起手。
+
+## 0. 状态快照（更新于 2026-05-10 post-Sprint-1-完成）
+
+**Post-Phase-2.3 Cleanup 计划进度**（plan 在 `_handoff/post-phase23-cleanup-plan.md`）：
+- ✅ **Sprint 1（C-FOLLOW-UP 前端基础债 8 项）**：全 ✅ DONE 2026-05-10 / commits dae2760→2e21b63
+  - Task 1.1 dae2760 — P22-3c-6 ExportPayload 收口（serverApiPostDownload wrapper / 真因重定 = 前端 client 不支持 binary，非后端 schema 缺）
+  - Task 1.2 2b890dd — StatsResult→ActionResult 统一（删 services/project-stats.ts 死文件）
+  - Task 1.3 0507ffa — findInTree 抽 lib/tree-utils.ts（5 unit tests / 3 caller 收敛）
+  - Task 1.4 ad1d040 — actions 命名规约统一（issues list/get / competitor-references 资源前缀）
+  - Task 1.5 5afc6d1 — search.ts withAuthRedirect helper 复用
+  - Task 1.6 — 跳过（已在 af6f78e 子 sprint C 完成）
+  - Task 1.7 — 状态变更后 moot（Task 1.2 重写 proxy 后无需 anchor）
+  - Task 1.8 2e21b63 — eslint ignore 渐进还债 25 项 + _ 前缀立规
+  - 守护：vitest 20→30 / tsc 174→172 / eslint 全仓 0/0
+  - cross-sprint pool STILL_PUNT 39→31 / DONE 32→40
+
+- ⏸ **Sprint 2（B-FOLLOW-UP 集成 e2e 基础设施）**：暂缓
+  - 需 backend (FastAPI 8000) + frontend (Next.js 3000) 服务端运行才能验 Playwright e2e 真断言
+  - CY 在线时启动两端 server / Claude 即可起 prompt：`_handoff/post-phase23-cleanup-plan.md` "Sprint 2"
+  - DB seed fixture / storageState login share / e2e #2-#10 / pytest-benchmark 1000 seed / R 范式第 7 数据点
+
+- ⏸ **Sprint 3（A 后置债 / CI 接通）**：阻塞 GH PAT workflow scope
+  - 本地已写完 `.github/workflows/ci.yml`（7 jobs / pgvector+redis service container / codegen-drift / deps-audit cron）
+  - **CY 加 PAT workflow scope 后跑**（5 min 人工）：
+    `cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Sprint 3 — ci.yml workflow file" && git push`
+  - 然后接通 e2e job + 关闸门 5
+
+- ▶️ **Sprint 4（模块真漏洞 high/medium 9 项）**：启动中（不依赖 server）
+  - 4A M04 dimension 集中（IntegrityError 存量 + target_type enum + 联合索引 + db.get→DAO）
+  - 4B M18 worker 真接 + cron PCT + batch INSERT FROM unnest
+  - 4C 跨模块 race + write_event e2e + M07 detach（**M07 detach 需 CY 拍 A/B**）
+
+**下一步推荐**：
+- CY 在线时优先做 **Sprint 3** 5min 人工（PAT scope）+ 启 servers（Sprint 2）
+- 不在线时 Claude 继续推 Sprint 4
+
 
 ## 0. 状态快照（更新于 2026-05-09 post-Phase-2.3-4-子-sprint-完成 / 闸门 5 PARTIAL）
 

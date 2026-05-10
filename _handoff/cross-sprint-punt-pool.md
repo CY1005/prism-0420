@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-09 (**M-CLEANUP sprint 完成 / Phase 2.1 100% 收官 + 8 punt 关闭**)
+last_updated: 2026-05-10 (**Sprint 1 C-FOLLOW-UP 8 项全 ✅ DONE / STILL_PUNT 39→31 / Sprint 2 待启动**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -33,8 +33,8 @@ policy:
 
 | 状态 | 项数 | 占比 | 说明 |
 |---|---|---|---|
-| **STILL_PUNT** | **39** | 30% | 代码完全没动，问题还在（Phase 2.2 子片 5 关闭 #3+#15 41→39）|
-| **DONE** | **32** | 25% | 代码已落实（Phase 2.2 子片 5 +2：#3+#15 IssueResponse + DimensionResponse join 装配 / M-CLEANUP +8 / pre +22）|
+| **STILL_PUNT** | **31** | 24% | 代码完全没动，问题还在（Sprint 1 关闭 P22-3c-1~8 共 8 项 / 39→31）|
+| **DONE** | **40** | 31% | 代码已落实（Sprint 1 +8：P22-3c-1~8 全清 / Phase 2.2 子片 5 +2 / M-CLEANUP +8 / pre +22）|
 | **PARTIAL** | 2 | 2% | 部分子项做了 |
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
@@ -359,18 +359,18 @@ UNVERIFIABLE 8 项
 | B2 | M03-M08 service 裸 CRUD action_type | STILL_PUNT — **真漏洞 #2 / B1 联动** |
 | B3 | OpenAPI schema 一致性自动校验 | UNVERIFIABLE |
 
-### Phase 2.2 子片 3c punt 池（8 项 / 详 design/audit/p22-pilot-template-validation.md §3c）
+### Phase 2.2 子片 3c punt 池（8 项 / 全部 ✅ DONE 2026-05-10 Sprint 1 / 详 design/audit/p22-pilot-template-validation.md §3c）
 
 | # | 项 | 状态 / 触发时机 |
 |---|---|---|
-| P22-3c-1 | search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect / 是 P22-3b-1 子集 | ~~子片 5 cleanup~~ → **整批 defer Phase 2.3 frontend-polish 子 sprint**（子片 5 关闸 scope 自决 / 详 audit §3f）|
-| P22-3c-2 | StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行 | ~~子片 5 cleanup~~ → defer Phase 2.3 frontend-polish |
-| P22-3c-3 | issues.ts 命名前缀混用 list/get | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
-| P22-3c-4 | competitor-references 命名缺资源前缀 | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
-| P22-3c-5 | findInTree 三处重复（trend update of P22-3b-2）| ~~子片 5~~ → defer Phase 2.3 frontend-polish |
-| P22-3c-6 | export.ts ExportPayload = unknown / OpenAPI 真不约束 / consumer UI 解析旧字段不再保证 | ~~子片 5~~ → defer Phase 2.3 frontend-polish（含 CY 拍补 ExportResponse schema or 删 consumer）|
-| P22-3c-7 | activity-log.logActivity / logActivityAuto no-op 兼容层 / 残留 caller 未审计 | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
-| P22-3c-8 | project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor | ~~子片 5~~ → defer Phase 2.3 frontend-polish |
+| P22-3c-1 | ~~search.ts / project-stats-proxy.ts 内联 redirect / 不复用 withAuthRedirect~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.5 commit 5afc6d1 + Task 1.2 project-stats-proxy 一并并入 withAuthRedirect** |
+| P22-3c-2 | ~~StatsResult&lt;T&gt; vs ActionResult&lt;T&gt; 双 result 类型并行~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.2 commit 2b890dd**：删 services/project-stats.ts 死代码 + proxy 全 ActionResult / overview/page.tsx caller r.ok→r.success |
+| P22-3c-3 | ~~issues.ts 命名前缀混用 list/get~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.4 commit ad1d040**：getIssuesByNode/Category → listIssuesByNode/Category |
+| P22-3c-4 | ~~competitor-references 命名缺资源前缀~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.4 commit ad1d040**：updateReference→updateCompetitorReference + 全套资源前缀 |
+| P22-3c-5 | ~~findInTree 三处重复~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.3 commit 0507ffa**：抽 lib/tree-utils.ts 泛型 + 5 unit tests + 3 caller 收敛 |
+| P22-3c-6 | ~~export.ts ExportPayload = unknown / OpenAPI 真不约束~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.1 commit dae2760 / 真因重定**：原 punt 描述误导成 "后端 schema 缺失"；实际后端走标准 HTTP attachment / 真问题 = 前端 client wrapper 不支持 text/binary。新增 serverApiPostDownload 从 Content-Disposition 提 filename + body.text() / ExportPayload→DownloadResponse / 5 unit tests / 修 caller 存量 unknown 错 |
+| P22-3c-7 | ~~activity-log.logActivity / logActivityAuto no-op 兼容层~~ ✅ **DONE 2026-05-09 / Phase 2.3 子 sprint C commit af6f78e**：no-op 函数已删 / 残留 caller analysis/page.tsx 已清 / Sprint 1 Task 1.6 验证零残留 |
+| P22-3c-8 | ~~project-stats-proxy 注释提兼容层但缺 file-level eslint-disable cleanup anchor~~ ✅ **DONE 2026-05-10 / Sprint 1 Task 1.7 自然消除**：Task 1.2 重写 proxy 后 0 eslint issue / file-level disable 锚点不再需要 |
 
 **3c trend update**：
 - P22-3b-1 helper 重复从 5 文件扩散到 10 文件（superset）/ 抽 lib/server-action-helpers.ts 时机已成熟

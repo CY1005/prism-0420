@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-09（**Phase 2.3 4 子 sprint A+B+C+D 关闸**：A 工程规约补完 ✅ commit a42a786 / B 集成 e2e+性能基线 PARTIAL ✅ commit 9a4b192（Playwright pilot 1 真跑+9 skeleton+perf 2 smoke）/ C frontend-polish PARTIAL ✅ commit af6f78e（withAuthRedirect helper+logActivity no-op cleanup+isTeamOwner dead code）/ D perf 评估 ✅ 选项 C DEFER_TO_POST_LAUNCH（C 类 12 项升级 / 元发现 #2 黑洞关闭）/ 闸门 5 部分通过 / 上线 sprint 待补 e2e 完整+ci.yml workflow scope+docker-compose prod / cross-sprint pool 元发现 #2 关闭）
-current_phase: **Phase 2.3 集成验证 4 子 sprint 完成（PARTIAL 闸门 5）**（A+B+C+D ✅ / 上线 sprint 待立 / B-FOLLOW-UP+C-FOLLOW-UP+post-launch perf 三 punt 进 cross-sprint pool）
+last_updated: 2026-05-10（**Post-Phase-2.3 Cleanup Sprint 1 完成**：C-FOLLOW-UP 8 项全 ✅（commits dae2760→2b890dd→0507ffa→ad1d040→5afc6d1→2e21b63 / Task 1.6 在 af6f78e 已做 1.7 状态变更后 moot）/ cross-sprint pool STILL_PUNT 39→31 / DONE 32→40 / vitest 20→30 / tsc 174→172 / eslint 全仓 0/0 / Sprint 2 待启动 / Sprint 3 阻塞 PAT workflow scope）
+current_phase: **Post-Phase-2.3 Cleanup Sprint 1 完成 / Sprint 2 待启动**（前端基础债 8 项全清 / next: 集成 e2e 基础设施 + 模块真漏洞）
 ---
 
 # prism-0420 全项目 Roadmap
