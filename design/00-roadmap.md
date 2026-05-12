@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-12（**Sprint 3.1 CI 接通 + Sprint 3.2 auth migration ✅** / 5 commits e2141d2→d9fa3f4 / GitHub Actions 跑通 / 6 jobs 4 稳定绿 / 2 个红入 punt pool #25+#26 等 Phase 2.3 / 关闸盲区立规到 phase-gate.md）
-current_phase: **Sprint 3.1 + 3.2 完整收尾 / 下一步 Phase 2.3 集成验证 sprint**（W20 主线切 Phase 3 数据采集启动 / tsc 88 错 + M01 admin .local TLD 留给 Phase 2.3 入口处理）
+last_updated: 2026-05-12（**Phase 2.3 集成验证清债全完** / tsc 88→0 / next build PASS / pytest 1643 PASS / 6 sub-sprint 累计 S1+S3+S4+B+A+C+D / Phase 3 v0.3 关键 STAR 数据落地）
+current_phase: **Phase 2.3 集成验证完成 / Phase 3 v0.3 STAR 落地 / dogfooding 解锁**（2026-05-12 / 下一步：6/8+6/15 工作笔记导入 → Phase 3 完整报告 v1）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -28,10 +28,21 @@ Phase 0 准备     ✅ ████████████████ 100%
 Phase 1 设计前置 ✅ ████████████████ 100%   ← 2026-04-26 完成
 Phase 2.0 工程基线  ✅ ████████████████  100%  ← 闸门 2 全 ✅
 Phase 2.1 业务模块  ✅ ████████████████ 100%  ← M01-M08+M10-M20 全交付（M09 superseded by M18）
-Phase 2.2 前端继承  ✅ ████████████████ 100%  ← 7/7 子片完成（0+1+2+3a-i+3a-ii+3b+3c+4+5 / D 类 #3+#15 join 装配 + 关闸 audit）
-Phase 2.3 集成验证  ⏳ ░░░░░░░░░░░░░░░░   0%
-Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
+Phase 2.2 前端继承  ✅ ████████████████ 100%  ← 7/7 子片（但揭露关闸盲区 #2：数据形态迁移半完成 / 已立规）
+Phase 2.3 集成验证  ✅ ████████████████ 100%  ← 2026-05-12 cleanup S1+S3+S4+B+A+C+D 全完
+Phase 3 数据对照   🟢 ██████░░░░░░░░░░  v0.3   ← 同水位 STAR 数据落地（设计前置减 39% bug）
 ```
+
+**Phase 2.3 cleanup 总成果**：
+- tsc 88 → 0 / next build PASS / pytest 1643 PASS
+- 6 sub-sprint：S1 .local TLD / S3 permission.service 删 / S4 adapter / B dimension_types 8 维度 dev seed / A workspace 33→0 / C search project-scoped M18 / D consumer 22 错全清
+- Bonus: count_active_admins + bootstrap_admin_if_empty 排除 SYSTEM_USER_UUID / cookie secure=production-only
+
+**Phase 3 v0.3 关键 STAR**（同到达"测试通过/可上线"水位对照）：
+- prism-0420：23 天 / 14 fix commits
+- prism v1：13 天 / 23 fix commits
+- 🎯 **设计前置 + 三 Agent reviewer 减少 39% bug 的硬实证**
+- ⏱️ 时间代价 1.77x（设计前置 + AI 实现 + Phase 2.3 集成验证清债）
 
 **上次更新**：2026-05-09（Phase 2.2 子片 5 关闸 / Phase 2.2 100% / 下一步 Phase 2.3）
 

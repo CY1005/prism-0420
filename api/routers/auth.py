@@ -49,7 +49,10 @@ def _set_refresh_cookie(response: Response, raw_refresh: str) -> None:
         max_age=settings.refresh_token_ttl_days * 86400,
         path=REFRESH_COOKIE_PATH,
         httponly=True,
-        secure=settings.app_env != "local",
+        # Phase 2.3 cleanup A+ follow-up: production-only secure
+        # (旧 "!= local" 把 CI/test 当 production / 但 CI ASGITransport base_url=
+        # http://test 不是 HTTPS，secure=True 时 cookie 不发 → refresh test 401)
+        secure=settings.app_env == "production",
         samesite="strict",
     )
 
