@@ -21,6 +21,7 @@ purpose: |
 |------|------|------|---------|
 | **[INDEX.md](INDEX.md)** | 本文件 / 全 handoff 索引 | 📁 | 2026-05-12 |
 | **[cross-sprint-punt-pool.md](cross-sprint-punt-pool.md)** | 跨 sprint Punt 池总表 + 真漏洞表 + 8 个元发现 | 📁 | 2026-05-12（元发现 #8 立规）|
+| **[unsunk-scan-2026-05-12/FINAL.md](unsunk-scan-2026-05-12/FINAL.md)** | 4/23-5/12 共 140 session transcript 精华扫描结果（78 条未沉淀 finding / 4 路分流方案）| 📁 | 2026-05-12 / 待执行路 1+2 |
 | **[_archive/README.md](_archive/README.md)** | 归档清单（7 个历史 sprint prompt / plan / 旧交接）| 📦 | 2026-05-12 |
 
 > 旧的跨 session 交接 `next-session.md` 已归档到 `_archive/`。当前接力点 = `dogfooding/progress.md`。

@@ -1,0 +1,982 @@
+[
+  {
+    "file": "/tmp/prism-essences/root__00079318-c658-442f-96dd-643b06ffad9f.md",
+    "src_session": "/root/.claude/projects/-root/00079318-c658-442f-96dd-643b06ffad9f.jsonl",
+    "mtime": 1776886388.0349903,
+    "size": 212981,
+    "msg_count": 207
+  },
+  {
+    "file": "/tmp/prism-essences/root__605e1c0c-2fc2-41e7-b746-a53c34d62014.md",
+    "src_session": "/root/.claude/projects/-root/605e1c0c-2fc2-41e7-b746-a53c34d62014.jsonl",
+    "mtime": 1776886388.0349903,
+    "size": 200485,
+    "msg_count": 172
+  },
+  {
+    "file": "/tmp/prism-essences/root__700c032f-e07b-43ca-b100-56127ab1a084.md",
+    "src_session": "/root/.claude/projects/-root/700c032f-e07b-43ca-b100-56127ab1a084.jsonl",
+    "mtime": 1776924097.950654,
+    "size": 54910,
+    "msg_count": 88
+  },
+  {
+    "file": "/tmp/prism-essences/root__cc48ea4d-a71e-4bf1-86f0-2dd69ecacd9b.md",
+    "src_session": "/root/.claude/projects/-root/cc48ea4d-a71e-4bf1-86f0-2dd69ecacd9b.jsonl",
+    "mtime": 1776927754.8288026,
+    "size": 31456,
+    "msg_count": 67
+  },
+  {
+    "file": "/tmp/prism-essences/root__ab259e36-a7f9-487f-b6fe-ab45396630e3.md",
+    "src_session": "/root/.claude/projects/-root/ab259e36-a7f9-487f-b6fe-ab45396630e3.jsonl",
+    "mtime": 1776929947.1184793,
+    "size": 2921,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__66f9e9c6-0ced-461c-afa3-cfd8947385c3.md",
+    "src_session": "/root/.claude/projects/-root/66f9e9c6-0ced-461c-afa3-cfd8947385c3.jsonl",
+    "mtime": 1776930627.0678587,
+    "size": 103558,
+    "msg_count": 114
+  },
+  {
+    "file": "/tmp/prism-essences/root__0591a47b-22c1-4d48-bf45-57d09347b5f2.md",
+    "src_session": "/root/.claude/projects/-root/0591a47b-22c1-4d48-bf45-57d09347b5f2.jsonl",
+    "mtime": 1776966543.8221228,
+    "size": 10428,
+    "msg_count": 17
+  },
+  {
+    "file": "/tmp/prism-essences/root__8ce2e3bc-926f-4f00-952a-106b878bccd2.md",
+    "src_session": "/root/.claude/projects/-root/8ce2e3bc-926f-4f00-952a-106b878bccd2.jsonl",
+    "mtime": 1776966626.5072887,
+    "size": 1299,
+    "msg_count": 10
+  },
+  {
+    "file": "/tmp/prism-essences/root__9255dd38-712a-41f7-9c3e-ea605d2e86ae.md",
+    "src_session": "/root/.claude/projects/-root/9255dd38-712a-41f7-9c3e-ea605d2e86ae.jsonl",
+    "mtime": 1776967097.040818,
+    "size": 2736,
+    "msg_count": 6
+  },
+  {
+    "file": "/tmp/prism-essences/root__4210b60c-66f3-4920-8474-fa001985c9f4.md",
+    "src_session": "/root/.claude/projects/-root/4210b60c-66f3-4920-8474-fa001985c9f4.jsonl",
+    "mtime": 1776967180.2738457,
+    "size": 58867,
+    "msg_count": 33
+  },
+  {
+    "file": "/tmp/prism-essences/root__32e6e689-24bd-4033-9a94-451770caa00e.md",
+    "src_session": "/root/.claude/projects/-root/32e6e689-24bd-4033-9a94-451770caa00e.jsonl",
+    "mtime": 1776968638.4100082,
+    "size": 32396,
+    "msg_count": 31
+  },
+  {
+    "file": "/tmp/prism-essences/root__f446f3db-3971-4efa-adfd-5cf8bd1cf60a.md",
+    "src_session": "/root/.claude/projects/-root/f446f3db-3971-4efa-adfd-5cf8bd1cf60a.jsonl",
+    "mtime": 1776972167.8118985,
+    "size": 62053,
+    "msg_count": 86
+  },
+  {
+    "file": "/tmp/prism-essences/root__bff7f2e1-de38-4d5e-97c5-434dc1cc6990.md",
+    "src_session": "/root/.claude/projects/-root/bff7f2e1-de38-4d5e-97c5-434dc1cc6990.jsonl",
+    "mtime": 1776972286.7453375,
+    "size": 49775,
+    "msg_count": 65
+  },
+  {
+    "file": "/tmp/prism-essences/root__d2219af8-a41e-4bd0-9b1a-bc5674bd8c72.md",
+    "src_session": "/root/.claude/projects/-root/d2219af8-a41e-4bd0-9b1a-bc5674bd8c72.jsonl",
+    "mtime": 1777003571.8311455,
+    "size": 50769,
+    "msg_count": 25
+  },
+  {
+    "file": "/tmp/prism-essences/root__aa4c941a-3db6-48a3-ac48-158a8fc3327c.md",
+    "src_session": "/root/.claude/projects/-root/aa4c941a-3db6-48a3-ac48-158a8fc3327c.jsonl",
+    "mtime": 1777029589.6220627,
+    "size": 24914,
+    "msg_count": 19
+  },
+  {
+    "file": "/tmp/prism-essences/root__4f2ae312-0653-435e-956f-ab5aa7de0731.md",
+    "src_session": "/root/.claude/projects/-root/4f2ae312-0653-435e-956f-ab5aa7de0731.jsonl",
+    "mtime": 1777036537.9894366,
+    "size": 69985,
+    "msg_count": 46
+  },
+  {
+    "file": "/tmp/prism-essences/root__883f9377-d966-4e34-85e8-836d4c83c155.md",
+    "src_session": "/root/.claude/projects/-root/883f9377-d966-4e34-85e8-836d4c83c155.jsonl",
+    "mtime": 1777056112.6039743,
+    "size": 51961,
+    "msg_count": 43
+  },
+  {
+    "file": "/tmp/prism-essences/root__569b0c34-69ff-4914-979a-4a72ce0c37a3.md",
+    "src_session": "/root/.claude/projects/-root/569b0c34-69ff-4914-979a-4a72ce0c37a3.jsonl",
+    "mtime": 1777058421.3297744,
+    "size": 33522,
+    "msg_count": 46
+  },
+  {
+    "file": "/tmp/prism-essences/root__c14aa7e8-e6c7-4814-a93d-3b10fd688789.md",
+    "src_session": "/root/.claude/projects/-root/c14aa7e8-e6c7-4814-a93d-3b10fd688789.jsonl",
+    "mtime": 1777058421.3337743,
+    "size": 51103,
+    "msg_count": 22
+  },
+  {
+    "file": "/tmp/prism-essences/root__8003020e-e617-4a34-9a20-29383c0c0fc6.md",
+    "src_session": "/root/.claude/projects/-root/8003020e-e617-4a34-9a20-29383c0c0fc6.jsonl",
+    "mtime": 1777102243.8886979,
+    "size": 21363,
+    "msg_count": 32
+  },
+  {
+    "file": "/tmp/prism-essences/root__2d5391ba-b1e0-49a9-b8ed-3538bf7673b5.md",
+    "src_session": "/root/.claude/projects/-root/2d5391ba-b1e0-49a9-b8ed-3538bf7673b5.jsonl",
+    "mtime": 1777138192.5020049,
+    "size": 41180,
+    "msg_count": 68
+  },
+  {
+    "file": "/tmp/prism-essences/root__5f3219d0-ced3-428e-9c3f-c950b6f769a3.md",
+    "src_session": "/root/.claude/projects/-root/5f3219d0-ced3-428e-9c3f-c950b6f769a3.jsonl",
+    "mtime": 1777138996.7171628,
+    "size": 112218,
+    "msg_count": 207
+  },
+  {
+    "file": "/tmp/prism-essences/root__02eb3d8e-3109-4a43-b1df-beb38f7da328.md",
+    "src_session": "/root/.claude/projects/-root/02eb3d8e-3109-4a43-b1df-beb38f7da328.jsonl",
+    "mtime": 1777194049.8839614,
+    "size": 125622,
+    "msg_count": 78
+  },
+  {
+    "file": "/tmp/prism-essences/root__09cc6620-0775-46b8-9da7-c5bfbb958b5b.md",
+    "src_session": "/root/.claude/projects/-root/09cc6620-0775-46b8-9da7-c5bfbb958b5b.jsonl",
+    "mtime": 1777219538.5678668,
+    "size": 91173,
+    "msg_count": 120
+  },
+  {
+    "file": "/tmp/prism-essences/root__29949355-0248-4801-af69-cd6767232dad.md",
+    "src_session": "/root/.claude/projects/-root/29949355-0248-4801-af69-cd6767232dad.jsonl",
+    "mtime": 1777220268.3414145,
+    "size": 97726,
+    "msg_count": 136
+  },
+  {
+    "file": "/tmp/prism-essences/root__2815bd23-e702-4945-bf6e-fca291afa012.md",
+    "src_session": "/root/.claude/projects/-root/2815bd23-e702-4945-bf6e-fca291afa012.jsonl",
+    "mtime": 1777224018.5195453,
+    "size": 9187,
+    "msg_count": 12
+  },
+  {
+    "file": "/tmp/prism-essences/root__e69d2220-5b5c-4aba-8b62-2f1ea276fa9d.md",
+    "src_session": "/root/.claude/projects/-root/e69d2220-5b5c-4aba-8b62-2f1ea276fa9d.jsonl",
+    "mtime": 1777225795.1373112,
+    "size": 68717,
+    "msg_count": 81
+  },
+  {
+    "file": "/tmp/prism-essences/root__853c8fc7-f335-44dc-86b2-2ae0df49ffb8.md",
+    "src_session": "/root/.claude/projects/-root/853c8fc7-f335-44dc-86b2-2ae0df49ffb8.jsonl",
+    "mtime": 1777263025.5309172,
+    "size": 41403,
+    "msg_count": 59
+  },
+  {
+    "file": "/tmp/prism-essences/root__16c881e9-dec6-47f9-a087-4d65fbf1bd35.md",
+    "src_session": "/root/.claude/projects/-root/16c881e9-dec6-47f9-a087-4d65fbf1bd35.jsonl",
+    "mtime": 1777264906.503924,
+    "size": 90255,
+    "msg_count": 100
+  },
+  {
+    "file": "/tmp/prism-essences/root__71799986-1092-4de3-a617-7d491bee2bed.md",
+    "src_session": "/root/.claude/projects/-root/71799986-1092-4de3-a617-7d491bee2bed.jsonl",
+    "mtime": 1777266522.1975636,
+    "size": 17514,
+    "msg_count": 21
+  },
+  {
+    "file": "/tmp/prism-essences/root__34ea37a3-ef7c-424d-a30e-c3c87baed4b7.md",
+    "src_session": "/root/.claude/projects/-root/34ea37a3-ef7c-424d-a30e-c3c87baed4b7.jsonl",
+    "mtime": 1777268877.3612685,
+    "size": 19330,
+    "msg_count": 22
+  },
+  {
+    "file": "/tmp/prism-essences/root__d7b1b375-1afd-4de4-8141-05e31307b3a7.md",
+    "src_session": "/root/.claude/projects/-root/d7b1b375-1afd-4de4-8141-05e31307b3a7.jsonl",
+    "mtime": 1777275973.8521564,
+    "size": 100385,
+    "msg_count": 141
+  },
+  {
+    "file": "/tmp/prism-essences/root__9b3d7e21-b012-4057-bdc4-ed219a73cba2.md",
+    "src_session": "/root/.claude/projects/-root/9b3d7e21-b012-4057-bdc4-ed219a73cba2.jsonl",
+    "mtime": 1777285975.7484453,
+    "size": 14316,
+    "msg_count": 37
+  },
+  {
+    "file": "/tmp/prism-essences/root__6268b197-63a3-4293-bdbd-3719b5a1f1fa.md",
+    "src_session": "/root/.claude/projects/-root/6268b197-63a3-4293-bdbd-3719b5a1f1fa.jsonl",
+    "mtime": 1777290281.6446526,
+    "size": 16404,
+    "msg_count": 8
+  },
+  {
+    "file": "/tmp/prism-essences/root__02048879-2f08-4fc6-a68b-f401043ca7b0.md",
+    "src_session": "/root/.claude/projects/-root/02048879-2f08-4fc6-a68b-f401043ca7b0.jsonl",
+    "mtime": 1777305569.9162676,
+    "size": 47790,
+    "msg_count": 60
+  },
+  {
+    "file": "/tmp/prism-essences/root__8d14113a-1e42-4ab1-a18e-05ce522b3f7a.md",
+    "src_session": "/root/.claude/projects/-root/8d14113a-1e42-4ab1-a18e-05ce522b3f7a.jsonl",
+    "mtime": 1777314040.4765697,
+    "size": 20501,
+    "msg_count": 39
+  },
+  {
+    "file": "/tmp/prism-essences/root__504b5a59-f413-4e50-998a-5307d321f6ae.md",
+    "src_session": "/root/.claude/projects/-root/504b5a59-f413-4e50-998a-5307d321f6ae.jsonl",
+    "mtime": 1777315359.1026623,
+    "size": 101483,
+    "msg_count": 207
+  },
+  {
+    "file": "/tmp/prism-essences/root__a989c59a-1da2-4260-ab7c-7ec20e7a6391.md",
+    "src_session": "/root/.claude/projects/-root/a989c59a-1da2-4260-ab7c-7ec20e7a6391.jsonl",
+    "mtime": 1777344317.1184633,
+    "size": 23426,
+    "msg_count": 30
+  },
+  {
+    "file": "/tmp/prism-essences/root__cc581025-7d9f-4506-9ac8-efba60d5cd43.md",
+    "src_session": "/root/.claude/projects/-root/cc581025-7d9f-4506-9ac8-efba60d5cd43.jsonl",
+    "mtime": 1777357311.2306333,
+    "size": 120748,
+    "msg_count": 131
+  },
+  {
+    "file": "/tmp/prism-essences/root__aa6d365f-63a2-415f-8c23-68a1eac54160.md",
+    "src_session": "/root/.claude/projects/-root/aa6d365f-63a2-415f-8c23-68a1eac54160.jsonl",
+    "mtime": 1777364680.0921447,
+    "size": 24410,
+    "msg_count": 21
+  },
+  {
+    "file": "/tmp/prism-essences/root__ef5d9f58-1fe7-4754-9733-720e85466ad7.md",
+    "src_session": "/root/.claude/projects/-root/ef5d9f58-1fe7-4754-9733-720e85466ad7.jsonl",
+    "mtime": 1777374505.5359297,
+    "size": 63532,
+    "msg_count": 54
+  },
+  {
+    "file": "/tmp/prism-essences/root__26f551d5-69ba-4ced-8ac9-0d20449a4027.md",
+    "src_session": "/root/.claude/projects/-root/26f551d5-69ba-4ced-8ac9-0d20449a4027.jsonl",
+    "mtime": 1777375252.2217417,
+    "size": 5808,
+    "msg_count": 5
+  },
+  {
+    "file": "/tmp/prism-essences/root__15da0fb9-c571-41b5-9105-af3d029cfc11.md",
+    "src_session": "/root/.claude/projects/-root/15da0fb9-c571-41b5-9105-af3d029cfc11.jsonl",
+    "mtime": 1777381960.6200662,
+    "size": 138574,
+    "msg_count": 239
+  },
+  {
+    "file": "/tmp/prism-essences/root__98c15eca-41e3-4834-ac9a-3b669229eee1.md",
+    "src_session": "/root/.claude/projects/-root/98c15eca-41e3-4834-ac9a-3b669229eee1.jsonl",
+    "mtime": 1777404238.8934383,
+    "size": 11702,
+    "msg_count": 11
+  },
+  {
+    "file": "/tmp/prism-essences/root__e5d1825a-eb6a-4e1a-b7d3-315f6ac29d9d.md",
+    "src_session": "/root/.claude/projects/-root/e5d1825a-eb6a-4e1a-b7d3-315f6ac29d9d.jsonl",
+    "mtime": 1777404238.8964384,
+    "size": 57434,
+    "msg_count": 69
+  },
+  {
+    "file": "/tmp/prism-essences/root__52d118dc-ae9a-4fba-a90e-5fbd064ae185.md",
+    "src_session": "/root/.claude/projects/-root/52d118dc-ae9a-4fba-a90e-5fbd064ae185.jsonl",
+    "mtime": 1777404238.8984385,
+    "size": 40569,
+    "msg_count": 58
+  },
+  {
+    "file": "/tmp/prism-essences/root__b97aa567-252c-40aa-b9e5-e40412af7333.md",
+    "src_session": "/root/.claude/projects/-root/b97aa567-252c-40aa-b9e5-e40412af7333.jsonl",
+    "mtime": 1777437652.8659081,
+    "size": 56672,
+    "msg_count": 93
+  },
+  {
+    "file": "/tmp/prism-essences/root__937e6135-0327-4f3f-afda-49be57d21695.md",
+    "src_session": "/root/.claude/projects/-root/937e6135-0327-4f3f-afda-49be57d21695.jsonl",
+    "mtime": 1777444038.626838,
+    "size": 5728,
+    "msg_count": 14
+  },
+  {
+    "file": "/tmp/prism-essences/root__a7d08048-362d-47c6-be7a-ae2911b5a064.md",
+    "src_session": "/root/.claude/projects/-root/a7d08048-362d-47c6-be7a-ae2911b5a064.jsonl",
+    "mtime": 1777450734.6633728,
+    "size": 28734,
+    "msg_count": 44
+  },
+  {
+    "file": "/tmp/prism-essences/root__099ff181-61a9-4a5a-8c5f-8d7ba2227b87.md",
+    "src_session": "/root/.claude/projects/-root/099ff181-61a9-4a5a-8c5f-8d7ba2227b87.jsonl",
+    "mtime": 1777452363.7398236,
+    "size": 111962,
+    "msg_count": 127
+  },
+  {
+    "file": "/tmp/prism-essences/root__eb7d30cd-b250-4dc2-b5c6-c5032f85e120.md",
+    "src_session": "/root/.claude/projects/-root/eb7d30cd-b250-4dc2-b5c6-c5032f85e120.jsonl",
+    "mtime": 1777467982.191534,
+    "size": 3250,
+    "msg_count": 5
+  },
+  {
+    "file": "/tmp/prism-essences/root__18489090-c583-47db-86d6-8afb34050000.md",
+    "src_session": "/root/.claude/projects/-root/18489090-c583-47db-86d6-8afb34050000.jsonl",
+    "mtime": 1777638433.6784766,
+    "size": 59032,
+    "msg_count": 112
+  },
+  {
+    "file": "/tmp/prism-essences/root__40b56aa7-ba2a-4673-b57d-0a075d2f6877.md",
+    "src_session": "/root/.claude/projects/-root/40b56aa7-ba2a-4673-b57d-0a075d2f6877.jsonl",
+    "mtime": 1777660601.9800303,
+    "size": 168362,
+    "msg_count": 119
+  },
+  {
+    "file": "/tmp/prism-essences/root__1313dee3-f44a-4463-a67f-c29aac1b36b0.md",
+    "src_session": "/root/.claude/projects/-root/1313dee3-f44a-4463-a67f-c29aac1b36b0.jsonl",
+    "mtime": 1777886599.2847183,
+    "size": 206347,
+    "msg_count": 362
+  },
+  {
+    "file": "/tmp/prism-essences/root__d93187be-a1f3-4149-82a1-a0baf050f1ff.md",
+    "src_session": "/root/.claude/projects/-root/d93187be-a1f3-4149-82a1-a0baf050f1ff.jsonl",
+    "mtime": 1777904404.2346463,
+    "size": 162450,
+    "msg_count": 167
+  },
+  {
+    "file": "/tmp/prism-essences/root__88bff0bf-d362-4ce4-9dc6-b03c9631a38f.md",
+    "src_session": "/root/.claude/projects/-root/88bff0bf-d362-4ce4-9dc6-b03c9631a38f.jsonl",
+    "mtime": 1777922818.0447583,
+    "size": 143325,
+    "msg_count": 212
+  },
+  {
+    "file": "/tmp/prism-essences/root__09423d6b-5397-4a52-a7d1-4e0cc130ed3c.md",
+    "src_session": "/root/.claude/projects/-root/09423d6b-5397-4a52-a7d1-4e0cc130ed3c.jsonl",
+    "mtime": 1777973544.123727,
+    "size": 2672,
+    "msg_count": 10
+  },
+  {
+    "file": "/tmp/prism-essences/root__f12f3612-8bb7-4606-863f-6c72ed77afa9.md",
+    "src_session": "/root/.claude/projects/-root/f12f3612-8bb7-4606-863f-6c72ed77afa9.jsonl",
+    "mtime": 1777980309.0237136,
+    "size": 25838,
+    "msg_count": 45
+  },
+  {
+    "file": "/tmp/prism-essences/root__85f19a00-7617-4256-a82d-36411442bd9b.md",
+    "src_session": "/root/.claude/projects/-root/85f19a00-7617-4256-a82d-36411442bd9b.jsonl",
+    "mtime": 1777981480.361401,
+    "size": 158653,
+    "msg_count": 129
+  },
+  {
+    "file": "/tmp/prism-essences/root__fe264f8b-c44c-4a40-b45e-2c27a64ea0a4.md",
+    "src_session": "/root/.claude/projects/-root/fe264f8b-c44c-4a40-b45e-2c27a64ea0a4.jsonl",
+    "mtime": 1777985582.636765,
+    "size": 39651,
+    "msg_count": 76
+  },
+  {
+    "file": "/tmp/prism-essences/root__b417f8a7-0f12-4052-8727-bb085e04b555.md",
+    "src_session": "/root/.claude/projects/-root/b417f8a7-0f12-4052-8727-bb085e04b555.jsonl",
+    "mtime": 1777987673.4908004,
+    "size": 71297,
+    "msg_count": 113
+  },
+  {
+    "file": "/tmp/prism-essences/root__f3e1e5c0-26d1-4a43-8374-a62a456c1022.md",
+    "src_session": "/root/.claude/projects/-root/f3e1e5c0-26d1-4a43-8374-a62a456c1022.jsonl",
+    "mtime": 1777988240.8940318,
+    "size": 53433,
+    "msg_count": 30
+  },
+  {
+    "file": "/tmp/prism-essences/root__92a38836-2d2b-45e4-b814-671c2733c719.md",
+    "src_session": "/root/.claude/projects/-root/92a38836-2d2b-45e4-b814-671c2733c719.jsonl",
+    "mtime": 1777997172.8532753,
+    "size": 19319,
+    "msg_count": 34
+  },
+  {
+    "file": "/tmp/prism-essences/root__2addf8c0-29ad-441b-b4e7-88d33a72ba45.md",
+    "src_session": "/root/.claude/projects/-root/2addf8c0-29ad-441b-b4e7-88d33a72ba45.jsonl",
+    "mtime": 1778000107.9625142,
+    "size": 104817,
+    "msg_count": 98
+  },
+  {
+    "file": "/tmp/prism-essences/root__afdea0af-b486-4704-a208-511a3f570315.md",
+    "src_session": "/root/.claude/projects/-root/afdea0af-b486-4704-a208-511a3f570315.jsonl",
+    "mtime": 1778002023.0260625,
+    "size": 1349,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__11edd932-0765-4897-8d94-8d3c20b6296c.md",
+    "src_session": "/root/.claude/projects/-root/11edd932-0765-4897-8d94-8d3c20b6296c.jsonl",
+    "mtime": 1778002316.130636,
+    "size": 31163,
+    "msg_count": 50
+  },
+  {
+    "file": "/tmp/prism-essences/root__523b348e-7c5f-4ea2-930f-ec2aaf8d78dd.md",
+    "src_session": "/root/.claude/projects/-root/523b348e-7c5f-4ea2-930f-ec2aaf8d78dd.jsonl",
+    "mtime": 1778003597.9474707,
+    "size": 73495,
+    "msg_count": 114
+  },
+  {
+    "file": "/tmp/prism-essences/root__4f810217-53ed-40a2-9ad6-2fe41e4e4112.md",
+    "src_session": "/root/.claude/projects/-root/4f810217-53ed-40a2-9ad6-2fe41e4e4112.jsonl",
+    "mtime": 1778005101.182935,
+    "size": 1790,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__1ec8e235-d7c0-4b60-9cea-1e46aaeba5d7.md",
+    "src_session": "/root/.claude/projects/-root/1ec8e235-d7c0-4b60-9cea-1e46aaeba5d7.jsonl",
+    "mtime": 1778026849.4719758,
+    "size": 4033,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__85c3f179-5958-48a6-9469-9e1ff421fb4e.md",
+    "src_session": "/root/.claude/projects/-root/85c3f179-5958-48a6-9469-9e1ff421fb4e.jsonl",
+    "mtime": 1778033188.7689574,
+    "size": 3442,
+    "msg_count": 8
+  },
+  {
+    "file": "/tmp/prism-essences/root__78e0bc0b-0ad1-4d10-bbbb-ebfb758f2cee.md",
+    "src_session": "/root/.claude/projects/-root/78e0bc0b-0ad1-4d10-bbbb-ebfb758f2cee.jsonl",
+    "mtime": 1778035610.8298767,
+    "size": 16158,
+    "msg_count": 20
+  },
+  {
+    "file": "/tmp/prism-essences/root__2c835d02-4d5e-4f82-bba1-35a20b8ee6ef.md",
+    "src_session": "/root/.claude/projects/-root/2c835d02-4d5e-4f82-bba1-35a20b8ee6ef.jsonl",
+    "mtime": 1778069862.7343287,
+    "size": 6155,
+    "msg_count": 10
+  },
+  {
+    "file": "/tmp/prism-essences/root__a8dc0aa6-c59b-41f0-9c3a-7bb7e9478c7e.md",
+    "src_session": "/root/.claude/projects/-root/a8dc0aa6-c59b-41f0-9c3a-7bb7e9478c7e.jsonl",
+    "mtime": 1778076256.8908935,
+    "size": 4984,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__64869523-34f8-413a-b00c-15e0b898e112.md",
+    "src_session": "/root/.claude/projects/-root/64869523-34f8-413a-b00c-15e0b898e112.jsonl",
+    "mtime": 1778113227.670486,
+    "size": 7235,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__782d81b2-b9e4-4f07-b8b2-b09688ac07b1.md",
+    "src_session": "/root/.claude/projects/-root/782d81b2-b9e4-4f07-b8b2-b09688ac07b1.jsonl",
+    "mtime": 1778124789.5849597,
+    "size": 13310,
+    "msg_count": 6
+  },
+  {
+    "file": "/tmp/prism-essences/root__833e89f7-ef57-4001-b5cb-13eef8e8609e.md",
+    "src_session": "/root/.claude/projects/-root/833e89f7-ef57-4001-b5cb-13eef8e8609e.jsonl",
+    "mtime": 1778128411.2841074,
+    "size": 51245,
+    "msg_count": 65
+  },
+  {
+    "file": "/tmp/prism-essences/root__744eb91f-8586-4af3-93e1-1936d52827ca.md",
+    "src_session": "/root/.claude/projects/-root/744eb91f-8586-4af3-93e1-1936d52827ca.jsonl",
+    "mtime": 1778135659.053003,
+    "size": 25500,
+    "msg_count": 52
+  },
+  {
+    "file": "/tmp/prism-essences/root__22caaebb-26fa-4133-8853-b0c05dcb2ab0.md",
+    "src_session": "/root/.claude/projects/-root/22caaebb-26fa-4133-8853-b0c05dcb2ab0.jsonl",
+    "mtime": 1778140772.9228766,
+    "size": 7824,
+    "msg_count": 27
+  },
+  {
+    "file": "/tmp/prism-essences/root__21945aa6-518d-4ca1-8614-7cb9281f0171.md",
+    "src_session": "/root/.claude/projects/-root/21945aa6-518d-4ca1-8614-7cb9281f0171.jsonl",
+    "mtime": 1778143498.4524505,
+    "size": 9903,
+    "msg_count": 9
+  },
+  {
+    "file": "/tmp/prism-essences/root__72e0bcd8-b890-4582-93df-cde338692429.md",
+    "src_session": "/root/.claude/projects/-root/72e0bcd8-b890-4582-93df-cde338692429.jsonl",
+    "mtime": 1778145962.5145652,
+    "size": 130338,
+    "msg_count": 140
+  },
+  {
+    "file": "/tmp/prism-essences/root__2d88c327-45b9-489c-8fa0-0fc8e2f88995.md",
+    "src_session": "/root/.claude/projects/-root/2d88c327-45b9-489c-8fa0-0fc8e2f88995.jsonl",
+    "mtime": 1778145991.3619976,
+    "size": 6195,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__dc8ef034-e9ed-4873-854f-70bb358e1ed4.md",
+    "src_session": "/root/.claude/projects/-root/dc8ef034-e9ed-4873-854f-70bb358e1ed4.jsonl",
+    "mtime": 1778152422.410411,
+    "size": 52294,
+    "msg_count": 78
+  },
+  {
+    "file": "/tmp/prism-essences/root__be0bdb5d-71b3-474e-8216-4bcbb3347774.md",
+    "src_session": "/root/.claude/projects/-root/be0bdb5d-71b3-474e-8216-4bcbb3347774.jsonl",
+    "mtime": 1778156134.2277315,
+    "size": 34965,
+    "msg_count": 23
+  },
+  {
+    "file": "/tmp/prism-essences/root__09283375-8cd8-48ce-a238-2217e94f07b9.md",
+    "src_session": "/root/.claude/projects/-root/09283375-8cd8-48ce-a238-2217e94f07b9.jsonl",
+    "mtime": 1778156749.6571372,
+    "size": 58986,
+    "msg_count": 80
+  },
+  {
+    "file": "/tmp/prism-essences/root__10d25239-31ee-4785-9ab1-2dd994251c9c.md",
+    "src_session": "/root/.claude/projects/-root/10d25239-31ee-4785-9ab1-2dd994251c9c.jsonl",
+    "mtime": 1778157284.823859,
+    "size": 15193,
+    "msg_count": 14
+  },
+  {
+    "file": "/tmp/prism-essences/root__bb6626fa-2dce-40b6-a006-9c4fea06d7ea.md",
+    "src_session": "/root/.claude/projects/-root/bb6626fa-2dce-40b6-a006-9c4fea06d7ea.jsonl",
+    "mtime": 1778199626.748234,
+    "size": 8620,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__f22e5bc4-8f1a-48e1-87e7-efd1968b53ec.md",
+    "src_session": "/root/.claude/projects/-root/f22e5bc4-8f1a-48e1-87e7-efd1968b53ec.jsonl",
+    "mtime": 1778206688.1189308,
+    "size": 60443,
+    "msg_count": 103
+  },
+  {
+    "file": "/tmp/prism-essences/root__4b88a9bb-f267-4bf6-89ee-910fc370fd0d.md",
+    "src_session": "/root/.claude/projects/-root/4b88a9bb-f267-4bf6-89ee-910fc370fd0d.jsonl",
+    "mtime": 1778224496.5175495,
+    "size": 37655,
+    "msg_count": 66
+  },
+  {
+    "file": "/tmp/prism-essences/root__9ca526c4-1c8a-47af-8358-ebb5826765f7.md",
+    "src_session": "/root/.claude/projects/-root/9ca526c4-1c8a-47af-8358-ebb5826765f7.jsonl",
+    "mtime": 1778224536.3760056,
+    "size": 8789,
+    "msg_count": 9
+  },
+  {
+    "file": "/tmp/prism-essences/root__9638b21b-1665-4058-a07d-2dee8b6d3a2e.md",
+    "src_session": "/root/.claude/projects/-root/9638b21b-1665-4058-a07d-2dee8b6d3a2e.jsonl",
+    "mtime": 1778228872.0794957,
+    "size": 21473,
+    "msg_count": 50
+  },
+  {
+    "file": "/tmp/prism-essences/root__07c7a62c-b19d-468e-807a-389b53edc5ed.md",
+    "src_session": "/root/.claude/projects/-root/07c7a62c-b19d-468e-807a-389b53edc5ed.jsonl",
+    "mtime": 1778231467.5155094,
+    "size": 97557,
+    "msg_count": 163
+  },
+  {
+    "file": "/tmp/prism-essences/root__730f6d08-5157-458c-a15f-c0ed0b814781.md",
+    "src_session": "/root/.claude/projects/-root/730f6d08-5157-458c-a15f-c0ed0b814781.jsonl",
+    "mtime": 1778233909.1521358,
+    "size": 361390,
+    "msg_count": 238
+  },
+  {
+    "file": "/tmp/prism-essences/root__540ed1be-26b1-4b66-aa71-64c7980730d0.md",
+    "src_session": "/root/.claude/projects/-root/540ed1be-26b1-4b66-aa71-64c7980730d0.jsonl",
+    "mtime": 1778234675.8915598,
+    "size": 52981,
+    "msg_count": 74
+  },
+  {
+    "file": "/tmp/prism-essences/root__634f28a4-4567-4b31-93d1-cd0520dcd8da.md",
+    "src_session": "/root/.claude/projects/-root/634f28a4-4567-4b31-93d1-cd0520dcd8da.jsonl",
+    "mtime": 1778238387.2105787,
+    "size": 6977,
+    "msg_count": 6
+  },
+  {
+    "file": "/tmp/prism-essences/root__c61e4bae-ca0d-4bc5-9133-adff51791ed4.md",
+    "src_session": "/root/.claude/projects/-root/c61e4bae-ca0d-4bc5-9133-adff51791ed4.jsonl",
+    "mtime": 1778238571.592366,
+    "size": 33137,
+    "msg_count": 60
+  },
+  {
+    "file": "/tmp/prism-essences/root__fb1ffdc9-1f23-42f5-ba14-26e68f014d7d.md",
+    "src_session": "/root/.claude/projects/-root/fb1ffdc9-1f23-42f5-ba14-26e68f014d7d.jsonl",
+    "mtime": 1778245142.6515608,
+    "size": 32969,
+    "msg_count": 82
+  },
+  {
+    "file": "/tmp/prism-essences/root__98e9ff35-e910-47a9-a704-53bca2861b48.md",
+    "src_session": "/root/.claude/projects/-root/98e9ff35-e910-47a9-a704-53bca2861b48.jsonl",
+    "mtime": 1778256785.922504,
+    "size": 23595,
+    "msg_count": 33
+  },
+  {
+    "file": "/tmp/prism-essences/root__98b3e486-3dc3-41ca-b959-e54f08990c06.md",
+    "src_session": "/root/.claude/projects/-root/98b3e486-3dc3-41ca-b959-e54f08990c06.jsonl",
+    "mtime": 1778260314.087952,
+    "size": 30218,
+    "msg_count": 40
+  },
+  {
+    "file": "/tmp/prism-essences/root__93fa04f8-1fd6-49a6-af96-020531eebb7e.md",
+    "src_session": "/root/.claude/projects/-root/93fa04f8-1fd6-49a6-af96-020531eebb7e.jsonl",
+    "mtime": 1778261069.8764617,
+    "size": 24441,
+    "msg_count": 42
+  },
+  {
+    "file": "/tmp/prism-essences/root__3231867c-4673-4640-b96d-ed9775bd93ce.md",
+    "src_session": "/root/.claude/projects/-root/3231867c-4673-4640-b96d-ed9775bd93ce.jsonl",
+    "mtime": 1778264888.3007977,
+    "size": 37375,
+    "msg_count": 34
+  },
+  {
+    "file": "/tmp/prism-essences/root__4682bc29-1cc3-4892-b322-b73ed3cb7180.md",
+    "src_session": "/root/.claude/projects/-root/4682bc29-1cc3-4892-b322-b73ed3cb7180.jsonl",
+    "mtime": 1778286049.4524755,
+    "size": 4086,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__152bff88-78b5-43c8-87fd-3e9c1ce48e81.md",
+    "src_session": "/root/.claude/projects/-root/152bff88-78b5-43c8-87fd-3e9c1ce48e81.jsonl",
+    "mtime": 1778289331.6756835,
+    "size": 273870,
+    "msg_count": 265
+  },
+  {
+    "file": "/tmp/prism-essences/root__f6e60d31-d952-40cd-ac81-cb4b20d95284.md",
+    "src_session": "/root/.claude/projects/-root/f6e60d31-d952-40cd-ac81-cb4b20d95284.jsonl",
+    "mtime": 1778289387.5384629,
+    "size": 33039,
+    "msg_count": 44
+  },
+  {
+    "file": "/tmp/prism-essences/ai-quality-engineering__0bd726b8-34bc-435a-9ade-2126475ebf61.md",
+    "src_session": "/root/.claude/projects/-root-workspace-projects-ai-quality-engineering/0bd726b8-34bc-435a-9ade-2126475ebf61.jsonl",
+    "mtime": 1778291719.380401,
+    "size": 4263,
+    "msg_count": 4
+  },
+  {
+    "file": "/tmp/prism-essences/ai-quality-engineering__42d4a6f5-5ba1-4944-a8c7-9e343baf7162.md",
+    "src_session": "/root/.claude/projects/-root-workspace-projects-ai-quality-engineering/42d4a6f5-5ba1-4944-a8c7-9e343baf7162.jsonl",
+    "mtime": 1778291917.0195248,
+    "size": 2341,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/ai-quality-engineering__57b92569-f614-423d-b3fa-efb9d6042567.md",
+    "src_session": "/root/.claude/projects/-root-workspace-projects-ai-quality-engineering/57b92569-f614-423d-b3fa-efb9d6042567.jsonl",
+    "mtime": 1778291999.4611137,
+    "size": 4291,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__69105db2-915d-4416-8f1d-467f7f95ed31.md",
+    "src_session": "/root/.claude/projects/-root/69105db2-915d-4416-8f1d-467f7f95ed31.jsonl",
+    "mtime": 1778294165.451688,
+    "size": 28356,
+    "msg_count": 47
+  },
+  {
+    "file": "/tmp/prism-essences/root__164cac94-d177-4b69-87f0-719ee78a915c.md",
+    "src_session": "/root/.claude/projects/-root/164cac94-d177-4b69-87f0-719ee78a915c.jsonl",
+    "mtime": 1778298812.6382349,
+    "size": 18055,
+    "msg_count": 34
+  },
+  {
+    "file": "/tmp/prism-essences/root__2b6ca151-1fab-458d-b48d-116a5ca314b5.md",
+    "src_session": "/root/.claude/projects/-root/2b6ca151-1fab-458d-b48d-116a5ca314b5.jsonl",
+    "mtime": 1778302693.6631076,
+    "size": 63604,
+    "msg_count": 123
+  },
+  {
+    "file": "/tmp/prism-essences/root__7661dd6a-996b-40ea-a077-bc069f2bcdcc.md",
+    "src_session": "/root/.claude/projects/-root/7661dd6a-996b-40ea-a077-bc069f2bcdcc.jsonl",
+    "mtime": 1778303445.6305385,
+    "size": 233256,
+    "msg_count": 223
+  },
+  {
+    "file": "/tmp/prism-essences/root__b1e8c900-b495-4e1f-b399-3eddbb5947ed.md",
+    "src_session": "/root/.claude/projects/-root/b1e8c900-b495-4e1f-b399-3eddbb5947ed.jsonl",
+    "mtime": 1778308547.9393826,
+    "size": 37902,
+    "msg_count": 35
+  },
+  {
+    "file": "/tmp/prism-essences/root__2b8cce62-134c-42fa-9566-cb9f41eb3cbe.md",
+    "src_session": "/root/.claude/projects/-root/2b8cce62-134c-42fa-9566-cb9f41eb3cbe.jsonl",
+    "mtime": 1778311840.6878817,
+    "size": 24205,
+    "msg_count": 28
+  },
+  {
+    "file": "/tmp/prism-essences/root__c3b33844-2dc9-41ec-be02-f729ae68df58.md",
+    "src_session": "/root/.claude/projects/-root/c3b33844-2dc9-41ec-be02-f729ae68df58.jsonl",
+    "mtime": 1778314207.4977775,
+    "size": 20914,
+    "msg_count": 28
+  },
+  {
+    "file": "/tmp/prism-essences/root__b1168f99-4350-4265-ad6e-0ebf6aea47fe.md",
+    "src_session": "/root/.claude/projects/-root/b1168f99-4350-4265-ad6e-0ebf6aea47fe.jsonl",
+    "mtime": 1778315772.590077,
+    "size": 20814,
+    "msg_count": 19
+  },
+  {
+    "file": "/tmp/prism-essences/root__5e1a4683-58f5-49d5-8b1c-929921af82fd.md",
+    "src_session": "/root/.claude/projects/-root/5e1a4683-58f5-49d5-8b1c-929921af82fd.jsonl",
+    "mtime": 1778323016.6491127,
+    "size": 29318,
+    "msg_count": 21
+  },
+  {
+    "file": "/tmp/prism-essences/root__31d295af-42cf-4943-ae9f-7f6b585bc169.md",
+    "src_session": "/root/.claude/projects/-root/31d295af-42cf-4943-ae9f-7f6b585bc169.jsonl",
+    "mtime": 1778328371.9150968,
+    "size": 67041,
+    "msg_count": 163
+  },
+  {
+    "file": "/tmp/prism-essences/root__904c4554-a25c-4a4a-874a-bd511fa69266.md",
+    "src_session": "/root/.claude/projects/-root/904c4554-a25c-4a4a-874a-bd511fa69266.jsonl",
+    "mtime": 1778328386.4672847,
+    "size": 31806,
+    "msg_count": 38
+  },
+  {
+    "file": "/tmp/prism-essences/root__044642f2-2681-4006-80a4-bd3d2331c92b.md",
+    "src_session": "/root/.claude/projects/-root/044642f2-2681-4006-80a4-bd3d2331c92b.jsonl",
+    "mtime": 1778374943.232963,
+    "size": 2156,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__9e17b4d0-9ed6-444e-ac01-3ae215f03d62.md",
+    "src_session": "/root/.claude/projects/-root/9e17b4d0-9ed6-444e-ac01-3ae215f03d62.jsonl",
+    "mtime": 1778380395.8115888,
+    "size": 267317,
+    "msg_count": 204
+  },
+  {
+    "file": "/tmp/prism-essences/root__ed95f370-1a13-48c4-bb48-d02b03ba4a82.md",
+    "src_session": "/root/.claude/projects/-root/ed95f370-1a13-48c4-bb48-d02b03ba4a82.jsonl",
+    "mtime": 1778393125.9931896,
+    "size": 5834,
+    "msg_count": 25
+  },
+  {
+    "file": "/tmp/prism-essences/root__816efae8-39c7-4773-bc61-209f0958795e.md",
+    "src_session": "/root/.claude/projects/-root/816efae8-39c7-4773-bc61-209f0958795e.jsonl",
+    "mtime": 1778393126.418196,
+    "size": 22245,
+    "msg_count": 43
+  },
+  {
+    "file": "/tmp/prism-essences/root__e1a871c9-3488-4011-9fa9-54447eecce69.md",
+    "src_session": "/root/.claude/projects/-root/e1a871c9-3488-4011-9fa9-54447eecce69.jsonl",
+    "mtime": 1778410737.7372432,
+    "size": 45582,
+    "msg_count": 58
+  },
+  {
+    "file": "/tmp/prism-essences/root__1fbd72d8-d9d6-4e2e-a4c3-1f159b57f213.md",
+    "src_session": "/root/.claude/projects/-root/1fbd72d8-d9d6-4e2e-a4c3-1f159b57f213.jsonl",
+    "mtime": 1778457288.245866,
+    "size": 66384,
+    "msg_count": 81
+  },
+  {
+    "file": "/tmp/prism-essences/root__8a51bb79-01bf-41b2-9127-2bb8429b3ba7.md",
+    "src_session": "/root/.claude/projects/-root/8a51bb79-01bf-41b2-9127-2bb8429b3ba7.jsonl",
+    "mtime": 1778457288.3578675,
+    "size": 47908,
+    "msg_count": 83
+  },
+  {
+    "file": "/tmp/prism-essences/root__ec1718cf-6b6c-43a4-a98f-60f0875bd3b7.md",
+    "src_session": "/root/.claude/projects/-root/ec1718cf-6b6c-43a4-a98f-60f0875bd3b7.jsonl",
+    "mtime": 1778457288.685872,
+    "size": 37104,
+    "msg_count": 87
+  },
+  {
+    "file": "/tmp/prism-essences/root__c09718f0-ae6a-42f8-b759-da54cefae50d.md",
+    "src_session": "/root/.claude/projects/-root/c09718f0-ae6a-42f8-b759-da54cefae50d.jsonl",
+    "mtime": 1778458852.432225,
+    "size": 7575,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__ae0a61c9-cf27-443c-8850-d2d857cc2c3f.md",
+    "src_session": "/root/.claude/projects/-root/ae0a61c9-cf27-443c-8850-d2d857cc2c3f.jsonl",
+    "mtime": 1778464155.3080728,
+    "size": 34769,
+    "msg_count": 29
+  },
+  {
+    "file": "/tmp/prism-essences/root__e7a9711c-53b3-447f-822f-8d744551cca6.md",
+    "src_session": "/root/.claude/projects/-root/e7a9711c-53b3-447f-822f-8d744551cca6.jsonl",
+    "mtime": 1778471858.614804,
+    "size": 63480,
+    "msg_count": 65
+  },
+  {
+    "file": "/tmp/prism-essences/root__55c9a0d5-d094-46e6-8817-fc9f41704e41.md",
+    "src_session": "/root/.claude/projects/-root/55c9a0d5-d094-46e6-8817-fc9f41704e41.jsonl",
+    "mtime": 1778479893.1129782,
+    "size": 26839,
+    "msg_count": 25
+  },
+  {
+    "file": "/tmp/prism-essences/root__9c2211a6-54f3-4c4e-9352-9a977f1f7d13.md",
+    "src_session": "/root/.claude/projects/-root/9c2211a6-54f3-4c4e-9352-9a977f1f7d13.jsonl",
+    "mtime": 1778505948.8724008,
+    "size": 25029,
+    "msg_count": 29
+  },
+  {
+    "file": "/tmp/prism-essences/root__13ab0a50-e9a0-4ada-afcd-88fc38187b20.md",
+    "src_session": "/root/.claude/projects/-root/13ab0a50-e9a0-4ada-afcd-88fc38187b20.jsonl",
+    "mtime": 1778545278.96871,
+    "size": 8444,
+    "msg_count": 2
+  },
+  {
+    "file": "/tmp/prism-essences/root__682e7dd9-4133-4377-af2f-3b98f50fd1da.md",
+    "src_session": "/root/.claude/projects/-root/682e7dd9-4133-4377-af2f-3b98f50fd1da.jsonl",
+    "mtime": 1778565241.3631976,
+    "size": 1684,
+    "msg_count": 3
+  },
+  {
+    "file": "/tmp/prism-essences/root__5cf6f219-224e-4dc9-81dd-498aa1f0d20a.md",
+    "src_session": "/root/.claude/projects/-root/5cf6f219-224e-4dc9-81dd-498aa1f0d20a.jsonl",
+    "mtime": 1778566675.0715687,
+    "size": 53779,
+    "msg_count": 97
+  },
+  {
+    "file": "/tmp/prism-essences/root__77b3f34e-249c-4a98-9f0f-10ecdfd047ac.md",
+    "src_session": "/root/.claude/projects/-root/77b3f34e-249c-4a98-9f0f-10ecdfd047ac.jsonl",
+    "mtime": 1778579741.086307,
+    "size": 169999,
+    "msg_count": 212
+  },
+  {
+    "file": "/tmp/prism-essences/root__703f2360-8206-41ad-919b-f9a60dc55469.md",
+    "src_session": "/root/.claude/projects/-root/703f2360-8206-41ad-919b-f9a60dc55469.jsonl",
+    "mtime": 1778580950.770688,
+    "size": 8117,
+    "msg_count": 22
+  },
+  {
+    "file": "/tmp/prism-essences/root__1bbc6158-2e10-4fbb-8ff6-f631fdf349d5.md",
+    "src_session": "/root/.claude/projects/-root/1bbc6158-2e10-4fbb-8ff6-f631fdf349d5.jsonl",
+    "mtime": 1778581052.0783203,
+    "size": 30810,
+    "msg_count": 39
+  },
+  {
+    "file": "/tmp/prism-essences/root__e49c4963-a394-4c5a-8688-8f8e9df82cdb.md",
+    "src_session": "/root/.claude/projects/-root/e49c4963-a394-4c5a-8688-8f8e9df82cdb.jsonl",
+    "mtime": 1778581637.3350737,
+    "size": 6827,
+    "msg_count": 17
+  },
+  {
+    "file": "/tmp/prism-essences/root__6664f27d-9c0b-4a14-a742-ddb60d792280.md",
+    "src_session": "/root/.claude/projects/-root/6664f27d-9c0b-4a14-a742-ddb60d792280.jsonl",
+    "mtime": 1778583889.3439295,
+    "size": 8405,
+    "msg_count": 25
+  },
+  {
+    "file": "/tmp/prism-essences/root__400f54a1-fa46-4bf8-8e1f-e25b6895b402.md",
+    "src_session": "/root/.claude/projects/-root/400f54a1-fa46-4bf8-8e1f-e25b6895b402.jsonl",
+    "mtime": 1778584258.5017183,
+    "size": 3040,
+    "msg_count": 9
+  },
+  {
+    "file": "/tmp/prism-essences/root__aae35cb6-f61c-4c3f-bd1c-a7062feb4029.md",
+    "src_session": "/root/.claude/projects/-root/aae35cb6-f61c-4c3f-bd1c-a7062feb4029.jsonl",
+    "mtime": 1778584285.1680653,
+    "size": 7546,
+    "msg_count": 27
+  }
+]
