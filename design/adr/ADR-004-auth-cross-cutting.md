@@ -297,6 +297,45 @@ cookies().get('refresh_token') → POST /auth/refresh → access_token →
 - [ ] CI 静态扫描 routers/ 下 `import jwt` 零命中
 - [ ] 该端点的 auth_audit_log metadata 含 `auth_path: P1 | P2` 区分
 
+##### 3.8 INTERNAL_TOKEN 全域 root 风险候选缓解策略对比（2026-05-12 补 / F-1.1 unsunk-scan 沉淀）
+
+**目的**：§3.7 风险登记表的 R1/R5（INTERNAL_TOKEN 泄露 = 全域 root，无 scope 化、无二次防线）是接受的攻击面，靠运维兜底。本段把"未来如何降低残留风险"的候选方案显式登记，方便 P2 通道启用前（参 §3.5.1）或运维侧出现告警时直接查表选型，避免临时拍脑袋。
+
+**前提声明**：当前 prism-0420 实情下（参 §3.5.1）Server Action 走 α-P1 链路，P2 通道**未启用**，本段所有候选都是"P2 启用后的演进路径"，非本期立项。
+
+###### 候选方案对比表
+
+| 候选 | 思路 | 可逆性 | 业务理由 / 适用场景 | 实施成本（粗估）| 残留风险变化 |
+|------|------|--------|---------------------|----------------|--------------|
+| **C1. 周期轮换（rotation）** | INTERNAL_TOKEN 季度强制轮换 / 双 token 并行窗口 7 天（旧 token 灰度退役）| 🟢 可逆（撤销轮换即回原值，零代码改）| 已在 §3.3 + §3.7 主约束中声明"建议季度"。**业务理由**：泄露后即使未发现也最多损失 1 季度窗口；与 secrets manager 配套是行业标准做法 | 低（运维脚本 + AuthService 支持 OLD+NEW 双 token 比对 ~30 行）| R1 Critical → 🟡 High（窗口收窄到 1 季度） |
+| **C2. scope 化 token（per-route scope）** | INTERNAL_TOKEN 拆成 N 个细粒度 token（`AUTH_TOKEN_PROJECT_READ` / `AUTH_TOKEN_FILE_UPLOAD` / `AUTH_TOKEN_ADMIN_OP`），每路由声明所需 scope | 🟡 部分可逆（已发出的 scope token 撤销容易，但 Service 层的 scope 校验代码回退要改路由签名）| **业务理由**：泄露任一 scope token 不会沦陷全系统；admin 操作有独立 token 防 lateral movement。**反对理由**：Server Action 持有所有 scope token = 单点泄露仍然全域；与 prism-0420 单一 Next.js 部署架构契合度低 | 中高（routers 全量声明 scope + AuthService 增 scope 校验层 ~150 行 + 部署侧多 secret 注入）| R1 Critical → 🟢 Mid（须同时泄露多 scope 才完整沦陷）/ R5 Critical → 🟡 High |
+| **C3. multi-token 分权（read/write/admin 三 token）** | C2 的轻量版：仅拆 3 个 token（READ_TOKEN / WRITE_TOKEN / ADMIN_TOKEN），routers 按操作类型挑用 | 🟡 部分可逆（同 C2，但 scope 维度少 → 撤销代价低）| **业务理由**：admin 操作隔离收益最大（platform_admin 冒充是最严重场景，R5 Critical 根源）；read/write 分离防"泄露 read token 导致全量数据泄露"| 中（3 套 secret + routers 选用器 + AuthService 多 path 校验 ~80 行）| R1 Critical → 🟡 High（admin 操作隔离）/ R5 Critical → 🟡 High |
+| **C4. secrets manager（AWS / Vault）** | INTERNAL_TOKEN 从 env 改为运行时从 secrets manager 拉取，启动期 + 周期 refresh（如每 6 小时）| 🟢 可逆（回退到 env 注入零代码改）| 已在 §3.3 + §3.7 主约束中"建议"但未强制。**业务理由**：env 注入有"docker inspect 暴露 / pid env dump / 容器 layer 缓存"等次级泄露面；secrets manager 提供审计日志（谁拉过 token）+ 自动轮换 + 内存驻留无文件落盘 | 中（运维侧 secrets manager 部署 + AuthService 启动期拉取 + 周期 refresh 钩子 ~50 行 + 灾备 fallback 到 env）| R1 Critical → 🟡 High（泄露面收窄 + 有审计） |
+| **C5. mTLS 服务间证书替代 token** | P2 通道改用 mTLS 双向证书（Next.js 持有 client cert / FastAPI 验 client cert subject + issuer）| 🔴 不可逆（基础设施改造 / cert lifecycle / dev 环境 cert 自动化）| **业务理由**：彻底废除 INTERNAL_TOKEN 概念（cert subject = 信任主体），泄露 cert 需私钥 + CA 联合泄露才能复用。**反对理由**：dev / CI 环境引入 cert 管理复杂度 / 与 prism-0420 "最小依赖 + 最少基础设施" 哲学冲突 | 高（mTLS 基建 + Next.js fetch 配 cert + dev 环境 cert 自动签发 ~工作量数天）| R1 Critical → 🟢 Low / R5 Critical → 🟢 Low（但引入新攻击面：CA 私钥） |
+
+###### 候选采纳态势（2026-05-12 现状）
+
+- **C1（rotation）**：✅ 已在 §3.3 / §3.7 主约束中声明（"建议季度"），未代码强制 / 运维侧承担。**默认推荐保持**。
+- **C4（secrets manager）**：✅ 已在 §3.3 / §3.7 主约束中声明（"secrets manager 或 env 注入"二选一），运维侧选择题。**默认推荐保持**。
+- **C2 / C3 / C5**：⏸️ 未立项 / 待 P2 通道启用后再评估（参 §3.5.1 "Phase 2.3 评估是否启用 P2"）。**触发条件**：P2 启用 + admin 端点纳入 P2 路径 + 出现首次泄露告警 / 内审建议。
+
+###### 决策路径建议
+
+| 信号 | 应启动候选 |
+|------|----------|
+| Phase 2.3 启用 P2 通道 | 重读本段；至少加 **C3 multi-token 分权**，admin 操作单独 token |
+| 出现 INTERNAL_TOKEN 泄露事件 | 立即 **C1 轮换**；事后评估 **C4 secrets manager** 是否补强 |
+| Next.js 实例数 > 1 / 多部署 | **C4 secrets manager** 必加（多实例同步轮换的唯一可靠路径）|
+| 合规要求（SOC2 / ISO27001）审计 token 访问日志 | **C4 secrets manager** 必加 |
+| Prism-0420 引入财务 / 支付 / 强敏感操作 | **C2 scope 化** 或 **C5 mTLS** 进入评估 |
+
+###### 关联
+
+- §3.7 风险登记表 R1/R5（残留风险）→ 本段提供"如何降低残留"
+- §3.5.1 prism-0420 当前 P2 未启用 → 本段为 P2 启用前置评估材料
+- F-1.1（`_handoff/unsunk-scan-2026-05-12/chunk_1.md`）→ 本段沉淀源头
+- 未来：若任一候选立项，开新 ADR（如 ADR-007-token-rotation）+ 本段标 superseded_by
+
 #### 4. Access token 失效后的续杯策略
 
 前端（浏览器）拿到 401 后**唯一**的续杯路径 = 调 `POST /auth/refresh` 走 P3。禁止前端在 401 后自动调 P1 用旧 JWT 重试。

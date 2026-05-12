@@ -141,3 +141,40 @@
 4. **自验区**：找一个空 session 用 grep 批跑确认即可
 
 raw findings 文件在 `/tmp/prism-findings/chunk_{1-8}.md`，本报告在 `/tmp/prism-findings/FINAL.md`。
+
+---
+
+## F.1 路 2 自验结果（2026-05-12 跑完 / cost ~$0.3 / 11 项）
+
+> grep / ls / Read 一行命令确认现状，不需要 subagent。
+
+| # | 检查 | 结果 | 证据 | 后续动作 |
+|---|---|---|---|---|
+| F1 | `feedback_prompts_not_in_repo.md` 5/9 重塑没删 | ✅ | 5/12 21:35 在 memory 目录 | — |
+| F2 | `feedback_prism_behavior_observation.md` 观察期+禁区 | ✅ | L26-37 完整 | — |
+| F3 | `Claude-Thinking-Effort-Token消耗分析.md` commit+push | ✅ | auto-sync 4/27 在 `30-技术-自学/AI工具链/Claude生态/` | — |
+| F4 | NodeChildrenServiceProtocol 4-param 5 处回写 | ✅ | M03 §6 §8 + M06 §6 §8 + M07 §6 §8 + README R-X2 全到位 | — |
+| F5 | R-X1 orchestrator raise 约束 | ✅ | 在 `design/02-modules/README.md` L330（注：`design/principles/` 目录不存在，R-X1 子条款挂 README）| — |
+| F6 | M11 produces_action_types underscore 统一 | ✅ | `cold_start_create / cold_start_completed / cold_start_failed` | — |
+| F7 | M04 `db.get(DimensionType)` punt 是否登记 | ❌ | M04 design 找不到此 punt；有其他 punt（R1-A A4/A5、enqueue B 推迟）但缺此条 | **升 P1 路 1** |
+| F8 | R4-3a M01/M16/M17/M18 补丁 | ✅ | 4 模块全有"非常规态登记表（R4-3a）" + reserved/transient/pseudo-terminal since v1 | — |
+| F9 | M18 OpenAI api_key 对齐 ProjectSettings AES | ❌ | M18 只把 OpenAI 当 provider，缺 api_key 来源 vs M13 AES 解密路径对齐 | **升 P1 路 1（原 C6-F14 P2 升 P1）** |
+| F10 | F-OPT-001~003 Prism 产品知识 lifecycle | ❌（预期）| punt-pool L655-661 明确"未落地"，约定 dogfooding sprint 后实施 | 按原计划 punt |
+| F11 | OpenClaw memory 边界协议 (TG HOME=/home/openclaw) | ✅ | `reference_openclaw_file_deps.md` L36 已落地（2026-05-06）| — |
+
+### 路 1 待沉淀清单新增（路 2 自验产出）
+
+原 P1 共 12 条 → **现 14 条**（+F7 新增 + F9 从 C6-F14 P2 升 P1）：
+
+| # | P | 待沉淀内容 | 来源 |
+|---|---|---|---|
+| **路 1-13** | P1 | **M04 `db.get(DimensionType)` punt 漏登/失踪**：需 fact-finding 确认 punt 是否被实施未标 / 真漏 / 应在哪个 audit 文件登记 | F7 自验 |
+| **路 1-14** | P1 | **M18 OpenAI api_key vs M13 ProjectSettings AES 解密路径对齐**（原 C6-F14 升级）：决策 key 来源统一管理范式 → ADR-006 候选段 / 或 M18/M13 design 加 cross-ref | F9 自验 |
+
+### 路 2 闸门
+
+- ✅ 8 项确认已沉淀（可消掉，不动作）
+- ❌ 1 项预期 punt（F10，dogfooding sprint 后处理）
+- ❌ 2 项升路 1 真漏洞（F7 + F9）
+
+路 2 状态：**DONE**。下一步路 1 / 路 3 / 路 4 按原计划。

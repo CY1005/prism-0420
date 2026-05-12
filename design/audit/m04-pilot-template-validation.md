@@ -163,7 +163,7 @@ last_reviewed_at: 2026-05-07
 | R1-A A1 | 5 | SQLAlchemy block 字面 `dimension_type` relationship 实装未建 | P3 | 顺手清 |
 | R1-A B4 | 6 | `completion(enabled_count=...)` 推 caller vs design §6 字面 | P3 | docstring 加 punt 注释 |
 | R1-B B1.1 | 7 | `_seed_dim_type` 三文件重复 → conftest `make_dim_type` | P2 | M05 sprint 启动前 |
-| R1-B B2.4 | 8 | `db.get(DimensionType)` 未走 `DimensionTypeDAO`（与 M02 风格不一致） | P3 | M15 sprint 启动前 |
+| R1-B B2.4 | 8 | ~~`db.get(DimensionType)` 未走 `DimensionTypeDAO`（与 M02 风格不一致）~~ ✅ **DONE 2026-05-09 commit `33b5759`**（M-CLEANUP 子片 1 / cross-sprint pool #14 关闭 / `DimensionDAO.get_type_by_id` 新增 + service 3 处替换 line 353/432/478） | ~~P3~~ | ~~M15 sprint 启动前~~ |
 | R1-B B6 | 9 | `target_type` 字符串未 const 提取 | P3 | M15 sprint 启动前（一次性 const 化所有） |
 | R1-C C1.2 | 10 | `delete_by_node_id` 并发 continue 跳过 activity_log 写（R10-1 弱化） | P2 | docstring 显式说明 / M15 升级真 INSERT 时复审 |
 | R1-C C2.2 | 11 | design §6 字面 `delete_by_node_id` 仍 3 参（已合并到 A13 立修） | — | 已闭环 |
