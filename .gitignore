@@ -42,3 +42,6 @@ app/playwright/.cache/
 # Temporary
 tmp/
 temp/
+
+# Claude Code 本地 override（per-machine，不进 git）
+.claude/settings.local.json
