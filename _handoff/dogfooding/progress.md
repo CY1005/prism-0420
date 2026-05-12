@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 (P2 sprint 全闭环 + P2-close fixture opt-in 改造 / 22 spec + 505 tests / 6 pre-existing FAIL 确认为 spec 设计 bug 非 fixture 问题)
-phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 待启 / P4 4/N FIX_DONE / P5 待启
-sub_task: P2 全 22 spec / 505 tests / batch 1-5 全跑完 / 全 20 模块 M01-M20 + cross-cutting A/B/C / commits cf25cb9 + 57c0116 + 42f02c1 / fixture P2-close commit pending / CI 全绿
-cost_cumulative: P1 ~$21 + P1→P2 audit $3 + P2 spike $1.5 + P4 fix1+2 $2.8 + P4 fix3 $2 + batch 2-5 ~$15 + close $0.5 + P2-close fixture $1-2 = **~$47-51**
-status: NORMAL / P2 sprint 全闭环 + fixture opt-in 落地 / 待启 P3 executor 跑全 505 tests 真路径产 final bug-queue / M04/M05/M11/M19 pre-existing FAIL 已确认为 spec 设计 bug（详 P2-close 段）
+last_session: 2026-05-13 (P3 executor 全量 505 tests 真跑 / 488 PASS 96.6% / 17 FAIL / 2 新 bug 入队)
+phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 ✅ DONE / P4 4/N FIX_DONE / P5 待启
+sub_task: P3 全 22 spec / 505 tests / 6 batch 全跑完 / 488 PASS / 17 FAIL（6 known OPEN verified + 8 pre-existing + 3 新）/ 05-regression-results.md 产出
+cost_cumulative: P1 ~$21 + P1→P2 audit $3 + P2 spike $1.5 + P4 fix1+2 $2.8 + P4 fix3 $2 + batch 2-5 ~$15 + close $0.5 + P2-close fixture $1-2 + P3 ~$2 = **~$49-53**
+status: NORMAL / P3 全量回归完成 / init pass rate 96.6% / 03-bug-queue OPEN 池 +2 新条 = 29 OPEN 总 / 待启 P4 收口 / P5 最终回归
 ---
 
 # Dogfooding Sprint Progress
@@ -202,7 +202,15 @@ status: NORMAL / P2 sprint 全闭环 + fixture opt-in 落地 / 待启 P3 executo
   - 测试方法学发现已沉淀进 `prompts/phase2-case.md` Forbidden 红线（Next.js 4 坑 / shadcn Label / dialog 时序 / SSE 范式 / WebSocket 范式 / XYFlow drag 范式不支持）
   - 真 bug 累计 **~31 OPEN + 4 FIX_DONE**（详 `03-bug-queue.md`）
   - **frontend gap 模式累计 5 个模块**（M12/M13/M14/M16/M17 backend 实装 vs frontend stub puntResult / fake progress / 调错 URL）= Phase 2.2 前端继承期遗漏 = dogfooding 真价值
-- **P3 executor** ⬜ NOT_STARTED（待 P2 close 后启 / 跑全 505 tests 真路径产 final bug-queue）
+- **P3 executor** ✅ DONE（2026-05-13 / 505 tests 全量真跑 / 488 PASS 96.6% / 17 FAIL / init regression baseline 产出）
+  - PASS: 488 (96.6%) / FAIL: 17 (3.4%)
+  - 已知真 bug FAIL verified: 6（M06×3 + M18×3）
+  - Spec-design pre-existing FAIL: 8（M11×4 + M19×2 + M04×1 + M05×1）
+  - 新 FAIL: 3（B-P3-M13-save-btn-shows-on-error + B-P3-M17-ws-invalid-jwt-close-code + M18 transient ECONNRESET）
+  - 新入队 bug: 2（B-P3-M13 + B-P3-M17 → 03-bug-queue.md OPEN 池）
+  - 关键发现: cc-A 必须独立跑（末尾 5-strike lockout test）+ unlock 脚本用 .venv python
+  - 输出: `_handoff/dogfooding/05-regression-results.md`（P5b STAR D1 baseline）
+  - commit: 待下一步
 - **P4 闭环** 🟡 4/N FIX_DONE
   - ✅ B-trigger-bug-server-action-cookie（commit cf25cb9 / Next.js refresh_token cookie Path=/auth → /）
   - ✅ B-list-projects-search-loader（commit cf25cb9 / Turbopack SWC dead re-export）
