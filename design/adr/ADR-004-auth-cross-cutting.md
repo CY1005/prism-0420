@@ -253,6 +253,50 @@ cookies().get('refresh_token') → POST /auth/refresh → access_token →
 - **优势**：不透明 token 防 JWT 类型混淆攻击（A4 测试：refresh_token 误放进 `Authorization: Bearer` 头会 JWT decode 失败 → 自然 401，无需 type=access claim 检查）
 - **TTL**：`refresh_tokens.expires_at`（30 天默认，可由 `settings.refresh_token_ttl_days` 配置）
 
+##### 3.7 INTERNAL_TOKEN 风险登记与缓解汇总（2026-05-12 补）
+
+**目的**：审计端点时一次性看完所有 INTERNAL_TOKEN 相关风险及对应缓解，免在 §3.1 / §3.3 / §3.5 跳读。
+
+###### 风险登记表
+
+| RID | 风险 | 严重度 | 触发条件 | 已实施缓解 | 残留风险 |
+|-----|------|--------|----------|-----------|---------|
+| R1 | INTERNAL_TOKEN 泄露 | 🔴 Critical | 写入日志 / config 误 commit / 内网扫描到 .env | §3.3 部署约束（secrets manager / 日志禁打印 / ≥32 字节强度 / 周期轮换）；§3.2 签名机制使"泄露 token ≠ 直接可冒充"，必须同时抓包到有效签名样本才能重放 | 5min 窗口内可重放（未实装 nonce 防御，§3.4） |
+| R2 | 中间人抓包 P2 请求 | 🟡 High | 私网可达 + 抓包能力 | §3.2 签名绑定 ts + method + path_with_query + user_id + body_hash；§3.4 5min 时间窗口 | 5min 窗口内同签名可重放；攻击者改 query 时签名失效 |
+| R3 | INTERNAL_TOKEN 强度不足 | 🟡 High | 配置错误（生产用 dev 默认值）| §3.3 启动期 config validator 阻断 < 32 字节（生产）；dev 环境允许 ≥ 16 字节 + warning | 配置 validator bypass（不太可能但理论存在） |
+| R4 | URL query 篡改 | 🟢 Mid | 抓包后改 query string 重发 | §3.2 NI-01 修正：`path_with_query` 含 query string；签名重建时同样含 query | 无 — 改 query 后签名必失败 |
+| R5 | P2 信任链滥用（X-User-Id 不可信问题）| 🔴 Critical | INTERNAL_TOKEN 泄露 + 私网可达 | §3.5 显式声明这是**接受的攻击面**（Next.js Server Action 信任由 cookie/session 验证完成，FastAPI 不重验 X-User-Id）；config validator + 部署约束兜底 | 与 R1 同源：泄露后等同全域 root（含 platform_admin），靠运维侧防御 |
+| R6 | 浏览器直接拿到 INTERNAL_TOKEN | 🔴 Critical | INTERNAL_TOKEN 进入前端 bundle / cookie | §3.3 部署约束：INTERNAL_TOKEN 仅 Server Action 用，禁进浏览器；§3.5 错误用法警示 | 代码审查兜底（未实装静态扫描） |
+| R7 | 同秒边界 token 失效漂移 | 🟢 Mid | 改密码 / admin 禁用账号瞬间签发新 token | §5 同秒按"已失效"规约（安全侧倾）+ PATCH /auth/me 改密码不签发新 token | 用户体验代价：改密码后必须重登录 |
+
+**严重度分类**：
+- 🔴 Critical：单次触发即系统沦陷（任意冒充任意用户含 admin）
+- 🟡 High：需要触发条件组合（抓包 + 私网）才造成实际损害
+- 🟢 Mid：损害边界已明确且有兜底（重登录 / 重试机制）
+
+###### 主要绝对约束（再次声明）
+
+1. **INTERNAL_TOKEN 是主密钥**，泄露后必须**立即轮换**且**所有部署同步更新**
+2. **运维侧**：① secrets manager 或 env 注入 ② 日志禁打印 ③ 周期轮换（建议季度）④ 生产长度 ≥ 64 字节
+3. **不在浏览器侧暴露**：Server Action 是 INTERNAL_TOKEN 的唯一持有者
+4. **常量时间比较**：`hmac.compare_digest` 禁 `==` 比较
+
+###### 未实装但已声明的扩展防御
+
+- **Redis nonce store**（§3.4）：当 Next.js 实例数 > 1 或 P2 端点含强敏感操作（财务 / 权限变更）时启用，`SETNX auth:nonce:{signature} "" EX 300`
+- **静态扫描**：路由层禁 `import jwt` / 禁 `db.query(RefreshToken)`（§1 已声明）+ 凡 `user.status = 'disabled'` 必同步 `revoke_all_user_tokens`（§5 已声明），CI 阻断未实装
+- **IP-based rate limit**：P3 端点防"无限重试 refresh"（§4 已声明）未实装
+
+###### audit-verify checklist
+
+推荐 admin 端点 audit 时跑一遍：
+
+- [ ] 该端点用 `Depends(require_user)` 或 `Depends(require_admin)`，没自己解析 token
+- [ ] config validator 测试覆盖生产环境 INTERNAL_TOKEN < 32 字节阻断
+- [ ] 日志样本搜 `INTERNAL_TOKEN` / `x-internal-token` 零命中
+- [ ] CI 静态扫描 routers/ 下 `import jwt` 零命中
+- [ ] 该端点的 auth_audit_log metadata 含 `auth_path: P1 | P2` 区分
+
 #### 4. Access token 失效后的续杯策略
 
 前端（浏览器）拿到 401 后**唯一**的续杯路径 = 调 `POST /auth/refresh` 走 P3。禁止前端在 401 后自动调 P1 用旧 JWT 重试。
