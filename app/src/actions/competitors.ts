@@ -19,6 +19,27 @@ type CompetitorListResponse = components["schemas"]["CompetitorListResponse"];
 type CompetitorCreate = components["schemas"]["CompetitorCreate"];
 type CompetitorUpdate = components["schemas"]["CompetitorUpdate"];
 
+// Phase 2.3 cleanup A: actions 层 adapter snake_case → camelCase（prism v1 component 期望）
+export interface Competitor {
+  id: string;
+  projectId: string;
+  name: string;
+  website: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
+export function toCompetitor(r: CompetitorResponse): Competitor {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    name: r.display_name,
+    website: r.website_url,
+    description: r.description,
+    createdAt: r.created_at,
+  };
+}
+
 export const createCompetitor = defineAction(
   createCompetitorSchema,
   async ({ projectId, name, website, description }): Promise<ActionResult<{ id: string }>> => {
@@ -82,11 +103,11 @@ export async function deleteCompetitor(
   }
 }
 
-export async function getCompetitorsByProject(projectId: string): Promise<CompetitorResponse[]> {
+export async function getCompetitorsByProject(projectId: string): Promise<Competitor[]> {
   return withAuthRedirect(async () => {
     const data = await serverApiGet<CompetitorListResponse>(
       `/api/projects/${projectId}/competitors`,
     );
-    return data.items;
+    return data.items.map(toCompetitor);
   });
 }

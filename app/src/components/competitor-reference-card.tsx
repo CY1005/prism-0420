@@ -23,30 +23,11 @@ import {
 } from "@/components/ui/select";
 
 // ─── Types ──────────────────────────────────────────────
+// Phase 2.3 cleanup A: actions 层做 snake → camel adapter，nested form 单点维护。
 
-export type Competitor = {
-  id: string;
-  projectId: string;
-  name: string;
-  website: string | null;
-  description: string | null;
-  createdAt: Date;
-};
-
-export type CompetitorReference = {
-  reference: {
-    id: string;
-    nodeId: string;
-    competitorId: string;
-    version: string | null;
-    featureCoverage: string | null;
-    technicalApproach: string | null;
-    prosAndCons: { pros: string[]; cons: string[] } | null;
-    createdAt: Date;
-    updatedAt: Date;
-  };
-  competitor: Competitor;
-};
+import type { Competitor } from "@/actions/competitors";
+import type { CompetitorReference } from "@/actions/competitor-references";
+export type { Competitor, CompetitorReference };
 
 // ─── Reference List ─────────────────────────────────────
 

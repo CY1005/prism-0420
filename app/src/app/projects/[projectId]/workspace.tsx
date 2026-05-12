@@ -64,6 +64,8 @@ import {
   updateNodeSortOrder,
   getNodeDescendantCount,
   moveNode,
+  type DimensionConfig,
+  type NodeData,
 } from "@/actions/nodes";
 import { createVersion } from "@/actions/versions";
 import { createIssue, listIssuesByNode, deleteIssue } from "@/actions/issues";
@@ -113,37 +115,8 @@ type Project = {
   versionMode: string;
 };
 
-type DimensionConfig = {
-  config: { id: number; dimensionTypeId: number; sortOrder: number };
-  dimType: {
-    id: number;
-    key: string;
-    name: string;
-    icon: string;
-    description: string | null;
-    fieldSchema: Record<string, unknown> | null;
-  };
-};
-
-type NodeData = {
-  node: { id: string; name: string; parentId: string | null; path: string; [key: string]: unknown };
-  records: {
-    record: {
-      id: string;
-      dimensionTypeId: number;
-      content: Record<string, unknown>;
-      [key: string]: unknown;
-    };
-    dimType: { id: number; key: string; name: string; [key: string]: unknown };
-  }[];
-  versions: {
-    id: string;
-    versionLabel: string;
-    summary: string;
-    isCurrent?: boolean;
-    [key: string]: unknown;
-  }[];
-};
+// Phase 2.3 cleanup A: DimensionConfig / NodeData 类型迁到 actions/nodes.ts
+// 单点定义（D-aware adapter / 同时给 features+page+import+modules+settings 复用）
 
 type FolderChild = {
   id: string;
@@ -473,7 +446,7 @@ export function ProjectWorkspace({
     setShowSnapshotDialog(false);
     setSnapshotData(null);
     // Refresh node data
-    const data = await getNodeWithDimensions(nodeData.node.id);
+    const data = await getNodeWithDimensions(nodeData.node.id, project.id);
     setNodeData(data);
     refreshPage();
   };
@@ -530,7 +503,7 @@ export function ProjectWorkspace({
       if (type === "file") {
         setFolderChildren(null);
         const [data, issues, refs, comps, feedLinked] = await Promise.all([
-          getNodeWithDimensions(id),
+          getNodeWithDimensions(id, project.id),
           listIssuesByNode(project.id, id),
           listCompetitorReferencesByNode(project.id, id),
           getCompetitorsByProject(project.id),
@@ -583,7 +556,7 @@ export function ProjectWorkspace({
 
   const handleRename = (nodeId: string, newName: string) => {
     startTransition(async () => {
-      await renameNode({ nodeId, name: newName });
+      await renameNode({ nodeId, name: newName, projectId: project.id });
       refreshPage();
     });
   };
@@ -591,7 +564,7 @@ export function ProjectWorkspace({
   const handleDelete = (nodeId: string) => {
     setDeleteNodeId(nodeId);
     startTransition(async () => {
-      const info = await getNodeDescendantCount(nodeId);
+      const info = await getNodeDescendantCount(nodeId, project.id);
       setDeleteDescendantInfo(info);
       setDeleteDialog(true);
     });
@@ -615,7 +588,7 @@ export function ProjectWorkspace({
         parentId = findParent(tree, deleteNodeId);
       }
 
-      await deleteNode({ nodeId: deleteNodeId });
+      await deleteNode({ nodeId: deleteNodeId, projectId: project.id });
 
       if (selectedId === deleteNodeId) {
         if (parentId) {
@@ -652,11 +625,12 @@ export function ProjectWorkspace({
       const hadNoRecords = nodeData.records.length === 0;
       await createDimensionRecord({
         nodeId: nodeData.node.id,
+        projectId: project.id,
         dimensionTypeId: addDimTypeId,
         content,
       });
       setAddDimDialog(false);
-      const data = await getNodeWithDimensions(nodeData.node.id);
+      const data = await getNodeWithDimensions(nodeData.node.id, project.id);
       setNodeData(data);
       if (hadNoRecords && data && data.records.length > 0) {
         setShowPanoramaPrompt(true);
@@ -685,35 +659,49 @@ export function ProjectWorkspace({
       const currentRecord = nodeData.records.find((r) => r.record.id === editDimRecordId);
       const currentVersion =
         ((currentRecord?.record as Record<string, unknown>)?.version as number) ?? 1;
-      await updateDimensionRecord(editDimRecordId, content, currentVersion);
+      const dimTypeId = currentRecord?.record.dimension_type_id ?? 0;
+      await updateDimensionRecord(
+        editDimRecordId,
+        content,
+        currentVersion,
+        project.id,
+        nodeData.node.id,
+        dimTypeId,
+      );
       setEditDimDialog(false);
-      const data = await getNodeWithDimensions(nodeData.node.id);
+      const data = await getNodeWithDimensions(nodeData.node.id, project.id);
       setNodeData(data);
     });
   };
 
   const handleReorder = (nodeId: string, newIndex: number) => {
     startTransition(async () => {
-      await updateNodeSortOrder(nodeId, newIndex);
+      await updateNodeSortOrder(nodeId, newIndex, project.id);
       refreshPage();
     });
   };
 
   const handleMove = (nodeId: string, newParentId: string) => {
     startTransition(async () => {
-      await moveNode(nodeId, newParentId);
+      await moveNode(nodeId, newParentId, project.id);
       refreshPage();
     });
   };
 
   const handleDeleteDimension = (recordId: string) => {
     if (!confirm("确定删除此记录？")) return;
+    if (!nodeData) return;
+    const target = nodeData.records.find((r) => r.record.id === recordId);
+    if (!target) return;
     startTransition(async () => {
-      await deleteDimensionRecord(recordId);
-      if (nodeData) {
-        const data = await getNodeWithDimensions(nodeData.node.id);
-        setNodeData(data);
-      }
+      await deleteDimensionRecord(
+        recordId,
+        project.id,
+        nodeData.node.id,
+        target.record.dimension_type_id,
+      );
+      const data = await getNodeWithDimensions(nodeData.node.id, project.id);
+      setNodeData(data);
       refreshPage();
     });
   };
@@ -734,7 +722,7 @@ export function ProjectWorkspace({
         data.changeType,
         data.details,
       );
-      const updated = await getNodeWithDimensions(nodeData.node.id);
+      const updated = await getNodeWithDimensions(nodeData.node.id, project.id);
       setNodeData(updated);
       refreshPage();
     });
@@ -742,19 +730,25 @@ export function ProjectWorkspace({
 
   // ─── F7: Issue Handlers ─────────────────────────────────
 
-  const handleAddIssue = (data: { category: string; description: string; tags: string[] }) => {
+  const handleAddIssue = (data: {
+    category: string;
+    description: string;
+    tags: string[];
+    title?: string;
+  }) => {
     if (!nodeData) return;
     startTransition(async () => {
       const result = await createIssue({
         projectId: project.id,
         nodeId: nodeData.node.id,
         category: data.category as "bug" | "tech_debt" | "design_flaw" | "performance",
+        title: data.title || data.description.slice(0, 60),
         description: data.description,
         tags: data.tags,
       });
       if (result.success) {
         const issues = await listIssuesByNode(project.id, nodeData.node.id);
-        setNodeIssues(issues as Issue[]);
+        setNodeIssues(issues);
       }
     });
   };
@@ -762,10 +756,10 @@ export function ProjectWorkspace({
   const handleDeleteIssue = (issueId: string) => {
     if (!confirm("确定删除此问题？")) return;
     startTransition(async () => {
-      const result = await deleteIssue(issueId);
+      const result = await deleteIssue(project.id, issueId);
       if (result.success && nodeData) {
         const issues = await listIssuesByNode(project.id, nodeData.node.id);
-        setNodeIssues(issues as Issue[]);
+        setNodeIssues(issues);
       }
     });
   };
@@ -780,7 +774,7 @@ export function ProjectWorkspace({
     const result = await createCompetitor({ projectId: project.id, ...data });
     if (result.success) {
       const comps = await getCompetitorsByProject(project.id);
-      setProjectCompetitors(comps as Competitor[]);
+      setProjectCompetitors(comps);
       return result.data.id;
     }
     return null;
@@ -796,7 +790,12 @@ export function ProjectWorkspace({
     if (!nodeData) return;
     startTransition(async () => {
       if (editingRef) {
-        await updateCompetitorReference(editingRef.reference.id, project.id, data);
+        await updateCompetitorReference(
+          project.id,
+          nodeData.node.id,
+          editingRef.reference.id,
+          data,
+        );
       } else {
         await createReference({
           projectId: project.id,
@@ -805,7 +804,7 @@ export function ProjectWorkspace({
         });
       }
       const refs = await listCompetitorReferencesByNode(project.id, nodeData.node.id);
-      setNodeRefs(refs as CompetitorReference[]);
+      setNodeRefs(refs);
       setEditingRef(null);
     });
   };
@@ -813,10 +812,11 @@ export function ProjectWorkspace({
   const handleDeleteRef = (refId: string) => {
     if (!confirm("确定删除此竞品参考？")) return;
     startTransition(async () => {
-      await deleteCompetitorReference(refId, project.id);
+      if (!nodeData) return;
+      await deleteCompetitorReference(project.id, nodeData.node.id, refId);
       if (nodeData) {
         const refs = await listCompetitorReferencesByNode(project.id, nodeData.node.id);
-        setNodeRefs(refs as CompetitorReference[]);
+        setNodeRefs(refs);
       }
     });
   };
@@ -832,7 +832,7 @@ export function ProjectWorkspace({
     if (!nodeData || dimensions.length === 0) return 0;
     let dimSum = 0;
     for (const dim of dimensions) {
-      const records = nodeData.records.filter((r) => r.record.dimensionTypeId === dim.dimType.id);
+      const records = nodeData.records.filter((r) => r.record.dimension_type_id === dim.dimType.id);
       if (records.length === 0) {
         dimSum += 0;
         continue;
@@ -861,7 +861,7 @@ export function ProjectWorkspace({
   })();
   const filledDimensions = nodeData
     ? dimensions.filter((d) =>
-        nodeData.records.some((r) => r.record.dimensionTypeId === d.dimType.id),
+        nodeData.records.some((r) => r.record.dimension_type_id === d.dimType.id),
       ).length
     : 0;
   const totalDimensions = dimensions.length;
@@ -1078,7 +1078,7 @@ export function ProjectWorkspace({
               <>
                 {dimensions.map((dim) => {
                   const matchingRecords = nodeData.records.filter(
-                    (r) => r.record.dimensionTypeId === dim.dimType.id,
+                    (r) => r.record.dimension_type_id === dim.dimType.id,
                   );
                   const hasContent = matchingRecords.length > 0;
                   const DimIcon = dimensionIconMap[dim.dimType.key];
@@ -1102,7 +1102,10 @@ export function ProjectWorkspace({
                         <div className="space-y-3">
                           {matchingRecords.map((r) => (
                             <div key={r.record.id} className="group relative">
-                              {renderDimensionContent(r.dimType.key, r.record.content)}
+                              {renderDimensionContent(
+                                r.dimType?.key ?? "description",
+                                r.record.content,
+                              )}
                               <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                                 <Button
                                   variant="ghost"
@@ -1517,6 +1520,7 @@ export function ProjectWorkspace({
                   sourceNodeId: selectedId,
                   targetNodeId: relationTargetId,
                   relationType,
+                  projectId: project.id,
                 });
                 setRelationSaving(false);
                 if (result.success) {

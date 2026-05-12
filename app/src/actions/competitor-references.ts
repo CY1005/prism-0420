@@ -19,6 +19,54 @@ type CompetitorRefListResponse = components["schemas"]["CompetitorRefListRespons
 type CompetitorRefCreate = components["schemas"]["CompetitorRefCreate"];
 type CompetitorRefUpdate = components["schemas"]["CompetitorRefUpdate"];
 
+// Phase 2.3 cleanup A: actions 层组装 nested + camelCase form（prism v1 component 期望）
+import { type Competitor, getCompetitorsByProject } from "@/actions/competitors";
+
+export interface CompetitorReference {
+  reference: {
+    id: string;
+    nodeId: string;
+    competitorId: string;
+    version: string | null;
+    featureCoverage: string | null;
+    technicalApproach: string | null;
+    prosAndCons: { pros: string[]; cons: string[] } | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  competitor: Competitor;
+}
+
+function toCompetitorReference(
+  r: CompetitorRefResponse,
+  competitorById: Map<string, Competitor>,
+): CompetitorReference | null {
+  const competitor = competitorById.get(r.competitor_id);
+  if (!competitor) return null;
+  const pac = r.pros_and_cons as { pros?: unknown; cons?: unknown } | null;
+  const prosAndCons =
+    pac && Array.isArray(pac.pros) && Array.isArray(pac.cons)
+      ? {
+          pros: pac.pros.filter((p): p is string => typeof p === "string"),
+          cons: pac.cons.filter((c): c is string => typeof c === "string"),
+        }
+      : null;
+  return {
+    reference: {
+      id: r.id,
+      nodeId: r.node_id,
+      competitorId: r.competitor_id,
+      version: r.competitor_version,
+      featureCoverage: r.feature_coverage,
+      technicalApproach: r.tech_approach,
+      prosAndCons,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    },
+    competitor,
+  };
+}
+
 export const createReference = defineAction(
   createCompetitorReferenceSchema,
   async ({
@@ -104,11 +152,17 @@ export async function deleteCompetitorReference(
 export async function listCompetitorReferencesByNode(
   projectId: string,
   nodeId: string,
-): Promise<CompetitorRefResponse[]> {
+): Promise<CompetitorReference[]> {
   return withAuthRedirect(async () => {
-    const data = await serverApiGet<CompetitorRefListResponse>(
-      `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs`,
-    );
-    return data.items;
+    const [data, competitors] = await Promise.all([
+      serverApiGet<CompetitorRefListResponse>(
+        `/api/projects/${projectId}/nodes/${nodeId}/competitor-refs`,
+      ),
+      getCompetitorsByProject(projectId),
+    ]);
+    const competitorById = new Map(competitors.map((c) => [c.id, c]));
+    return data.items
+      .map((r) => toCompetitorReference(r, competitorById))
+      .filter((x): x is CompetitorReference => x !== null);
   });
 }

@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { components } from "@/types/api";
 
 // ─── Category Config ────────────────────────────────────
 
@@ -70,16 +71,10 @@ const CATEGORY_DIMENSION_MAP: Record<IssueCategory, string> = {
 
 // ─── Types ──────────────────────────────────────────────
 
-export type Issue = {
-  id: string;
-  projectId: string;
-  nodeId: string | null;
-  category: string;
-  description: string;
-  tags: string[] | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
+// Phase 2.3 cleanup A: 对齐 IssueResponse (snake_case + status/title/created_by/
+// assigned_to/created_at/updated_at + join 字段 assigned_to_name 等)。
+// 内部使用 issue.id/category/description/tags 4 字段都兼容（同名）。
+export type Issue = components["schemas"]["IssueResponse"];
 
 // ─── Issue List Component ───────────────────────────────
 

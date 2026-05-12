@@ -44,6 +44,63 @@ interface TreeNode extends NodeWithChildren {
   completionPercent: number;
 }
 
+// Phase 2.3 cleanup A: workspace + features + page + import + modules 期望 nested
+// DimensionConfig { config, dimType } 形态（prism v1 drizzle 拷贝层惯例）。
+// backend DimensionConfigResponse 扁平且不返 icon/description/field_schema → 前端
+// 用 DIMENSION_ICON_MAP / DIMENSION_META_MAP hardcoded fallback（来自 B sprint
+// seed_dimension_types.py 真值）。
+const DIMENSION_META_MAP: Record<string, { icon: string; description: string }> = {
+  description: { icon: "FileText", description: "功能的核心说明" },
+  user_scenario: { icon: "Users", description: "谁在什么场景下使用" },
+  tech_impl: { icon: "Server", description: "平台侧的技术方案" },
+  design_decision: { icon: "GitBranch", description: "关键架构决策及取舍" },
+  engineering_exp: { icon: "Lightbulb", description: "踩坑记录与最佳实践" },
+  test_analysis: { icon: "TestTube", description: "测试策略与问题记录" },
+  requirement_analysis: { icon: "ClipboardList", description: "需求拆解与影响范围" },
+  competitive_ref: { icon: "Building", description: "竞品功能对标分析" },
+};
+
+export interface DimensionConfig {
+  config: { id: number; dimensionTypeId: number; sortOrder: number };
+  dimType: {
+    id: number;
+    key: string;
+    name: string;
+    icon: string;
+    description: string | null;
+    fieldSchema: Record<string, unknown> | null;
+  };
+}
+
+export function toDimensionConfig(r: DimensionConfigResponse): DimensionConfig {
+  const meta = DIMENSION_META_MAP[r.dimension_type_key];
+  return {
+    config: { id: r.id, dimensionTypeId: r.dimension_type_id, sortOrder: r.sort_order },
+    dimType: {
+      id: r.dimension_type_id,
+      key: r.dimension_type_key,
+      name: r.dimension_type_name,
+      icon: meta?.icon ?? "FileText",
+      description: meta?.description ?? null,
+      fieldSchema: null, // backend 暂不返 field_schema，前端走 null 容错（workspace:840 已有 ?? 1 fallback）
+    },
+  };
+}
+
+// Phase 2.3 cleanup A: NodeData nested + camelCase form for workspace consumption
+// 内部 record/dimType 字段从 DimensionListResponse 装配（dimType 来自 enabled_dimension_types
+// join + DIMENSION_META_MAP hardcoded icon/description）。
+export interface NodeDataRecord {
+  record: DimensionResponse;
+  dimType: DimensionConfig["dimType"] | null;
+}
+
+export interface NodeData {
+  node: NodeResponse;
+  records: NodeDataRecord[];
+  versions: components["schemas"]["VersionResponse"][];
+}
+
 /**
  * 项目节点树 + 完善度（M16 overview）。
  * 走 /api/projects/{pid}/overview 端点（NodeOverview 已含 completion_rate / 后端已计算）。
@@ -76,7 +133,10 @@ function overviewToTreeNode(node: NodeOverview, projectId: string): TreeNode {
   };
 }
 
-export async function getNodeWithDimensions(nodeId: string, projectId: string) {
+export async function getNodeWithDimensions(
+  nodeId: string,
+  projectId: string,
+): Promise<NodeData | null> {
   return withAuthRedirect(async () => {
     try {
       const node = await serverApiGet<NodeResponse>(`/api/projects/${projectId}/nodes/${nodeId}`);
@@ -86,11 +146,27 @@ export async function getNodeWithDimensions(nodeId: string, projectId: string) {
       const versions = await serverApiGet<VersionListResponse>(
         `/api/projects/${projectId}/nodes/${nodeId}/versions`,
       );
+      const dimTypeById = new Map(
+        dims.enabled_dimension_types.map((t) => {
+          const meta = DIMENSION_META_MAP[t.key];
+          return [
+            t.id,
+            {
+              id: t.id,
+              key: t.key,
+              name: t.name,
+              icon: t.icon || meta?.icon || "FileText",
+              description: meta?.description ?? null,
+              fieldSchema: null as Record<string, unknown> | null,
+            },
+          ];
+        }),
+      );
       return {
         node,
         records: dims.items.map((r) => ({
           record: r,
-          dimType: dims.enabled_dimension_types.find((t) => t.id === r.dimension_type_id) ?? null,
+          dimType: dimTypeById.get(r.dimension_type_id) ?? null,
         })),
         versions: versions.items,
       };
@@ -101,12 +177,12 @@ export async function getNodeWithDimensions(nodeId: string, projectId: string) {
   });
 }
 
-export async function getProjectDimensions(projectId: string): Promise<DimensionConfigResponse[]> {
+export async function getProjectDimensions(projectId: string): Promise<DimensionConfig[]> {
   return withAuthRedirect(async () => {
     const data = await serverApiGet<DimensionConfigListResponse>(
       `/api/projects/${projectId}/dimension-configs`,
     );
-    return data.items;
+    return data.items.map(toDimensionConfig);
   });
 }
 
