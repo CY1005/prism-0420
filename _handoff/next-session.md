@@ -2,7 +2,7 @@
 title: prism-0420 跨 session 交接
 status: living
 owner: CY
-last_updated: 2026-05-10 (**Sprint 1 + Sprint 4 + Sprint 2 NEAR-DONE（全 9 spec API smoke + Task 2.4 完整版 1000 seed / 19 e2e + 1643 pytest PASS）+ SR-DETACH-1 + SR-EXPUNGE-1 立规 ✅ / Sprint 3 仍等 CY PAT scope / M16+M17+M18 happy path full + WS golden 推专 sprint**)
+last_updated: 2026-05-12 (**Sprint 3.1 CI 接通 + Sprint 3.2 auth migration ✅** / PAT scope CY 已加 / 5 commits e2141d2→d9fa3f4 / GitHub Actions 跑通 4/6 jobs / 2 个红入 punt pool #25+#26 等 Phase 2.3）
 purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"——避免冷启动 Claude 凭印象拍板
 ---
 
@@ -15,13 +15,11 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ## 🔴 等 CY 解锁的硬阻塞（每会话开始必读 / 不要替 CY 拍）
 
-**T3 Sprint 3.1 push ci.yml — 等 CY 加 GH PAT workflow scope**
-- 2026-05-10 CY 反馈"暂时加不了"。原因待 CY 补（可能在外/没在 GH 控制台/账户原因）
-- 不能替 CY 操作（token 权限只 token 所有者能改）
-- 解锁动作：GH Settings → Developer settings → PAT → Edit → 勾 `workflow` → Update token
-- 解锁后命令：`cd /root/workspace/projects/prism-0420 && git add .github/workflows/ci.yml && git commit -m "Sprint 3 — ci.yml workflow file" && git push`
-- 解锁后 cost：$1-2 / 调 CI 全绿（首次 run 可能要 1-3 个 fix commit）
-- CY 状态变化时，每次开会话提一句"PAT scope 加好了吗？"再决定要不要等
+~~**T3 Sprint 3.1 push ci.yml — 等 CY 加 GH PAT workflow scope**~~ ✅ **DONE 2026-05-12**
+- PAT scope 已加 / ci.yml push 进 main / Sprint 3.1+3.2 完整收尾
+- 5 commits e2141d2→d9fa3f4 / 6 jobs 里 4 个稳定绿
+- 2 个红收窄到 Phase 2.3 真实工作量（入 punt pool #25 tsc 88 错 + #26 M01 admin .local TLD）
+- 闸门 5 §8.0 CI 接通项部分 ✅ — build job 100% 绿留作 Phase 2.3 集成验证入口判据
 
 ---
 

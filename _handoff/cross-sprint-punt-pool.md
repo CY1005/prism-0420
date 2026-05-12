@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-10 (**Sprint 1 ✅ + Sprint 4 ✅ + Sprint 2 NEAR-DONE（全 9 spec smoke + Task 2.4 完整版 ✅ / 19 e2e + 1643 pytest PASS）+ SR-DETACH-1 + SR-EXPUNGE-1 ✅ 立规到 design 06 / Sprint 3 仍等 PAT scope**)
+last_updated: 2026-05-12 (**Sprint 3.1 CI 接通完整收尾 + Sprint 3.2 auth migration ✅ / 5 commits (e2141d2→d9fa3f4) / 4/6 jobs 稳定绿 / 2 新真漏入池 #25+#26 等 Phase 2.3**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -39,6 +39,34 @@ policy:
 | **UNVERIFIABLE** | **53** | 41% | 设计意图 / 性能压测 / 未来 sprint 才触发 / docstring 注释类（M-CLEANUP 子片 5 清扫 6 项）|
 | **OBSOLETE** | 3 | 2% | punt 已不适用 |
 | **总计** | **129** | 100% | （一审 94 + 二审 41 - 6 DUPE）|
+
+### 2026-05-12 Sprint 3.1 + 3.2 CI 接通完整收尾（5 commits / e2141d2→d9fa3f4）
+
+**触发**：CY 5/12 拍 PAT workflow scope 解锁 → Claude push ci.yml 启动 Sprint 3.1
+
+**5 commits 时间线**：
+- `e2141d2` push ci.yml（253 行 / design/01-engineering/03-cicd-plan.md §8 实施）→ 首次 CI run 4 红
+- `81d7067` fix#1: pytest-cov 加 dev group + pnpm-workspace.yaml 加 packages 字段（方案 A）→ 5/6 jobs 转绿
+- `abff5c6` fix#2: CY 选 B 切方案——删 pnpm-workspace.yaml + 移 ignoredBuiltDependencies 到 app/package.json 的 pnpm 字段（语义干净 / app/ 是单包不是 monorepo）
+- `f07fa3c` Sprint 3.2: 3 处 @/actions/auth migration 到 useAuth（use-page-context.ts + settings/page.tsx + overview/page.tsx）+ phase-gate.md 关闸盲区立规
+- `d9fa3f4` fix#3: test_config CI-friendly（monkeypatch.delenv APP_ENV/DATABASE_URL/REDIS_URL 验代码 default）
+
+**累计成果**：
+- ci.yml 进 main + GitHub Actions 跑通
+- 6 触发 jobs 里 **4 个稳定绿**（backend-typecheck / backend-lint / frontend-test / frontend-lint）
+- 2 个红收窄到 Phase 2.3 真实工作量（入新真漏 #25 + #26）
+- 闸门 5 §8.0 部分 ✅（CI 配置 + 5 个 job 接通 / build 项 ⏳ 待 Phase 2.3 完成 88 tsc 错清理）
+
+**学习沉淀**（候选入 docs/testing/bugs/INDEX.md）：
+- 暴露 4 个"spec → impl 文本抄但本地 dry-run 缺失"系列 bug（pytest-cov 不在 deps / pnpm-workspace 缺 packages / 3 处 auth 死引用 / test_config env 假设）
+- 统一根因 = 契约漂移 28% 模式的子分类"配置文本契约 vs 运行时 deps/env 漂移"
+- phase-gate.md 立规：未来前端关闸必跑 `next build`（不只 tsc）+ 删 export 前必 grep 调用方
+
+**未做（入 punt pool 真漏 #25+#26 等 Phase 2.3 集成验证 sprint）**：
+- #25 tsc 88 错（permission.service.ts drizzle 死依赖 / project-role-context 类型漂移 / 等 86 处）
+- #26 M01 admin list users 撞 .local TLD（seed 系统用户 email vs EmailStr 严格验证）
+
+---
 
 ### 2026-05-10 Sprint 2 NEAR-DONE — Task 2.3 全 9 spec API smoke + Task 2.4 完整版（19 e2e + 1643 pytest PASS）
 
@@ -156,6 +184,8 @@ policy:
 | **22** | **EmbeddingTargetNotFoundError noop 转 succeeded 语义**（R1-A P1-11）| M18 R1-A | design 加字面或 task DAO 加 result_label="noop" | low — 当前 worker noop 路径转 task=succeeded 但 embeddings 表无对应行；admin /stats total_embeddings vs succeeded_tasks 有 gap | design 加一句"noop 转 succeeded + error_code=embedding_target_not_found"；或 cas_complete 加新参数 result_label="noop" |
 | **23** | **M18 cron_failure_monitor PCT 维度真实施**（R1-C P2-3 / R2 #7）| M18 R1-C / R2 | 子片 4+ / 接 task_dao.count_completed_in_window | medium — 当前缺 PCT 维度只剩 ABS+PER_PROJECT 两维 / design line 1043 三维设计避免单维死参数；占位期已加 TODO 注释 | 实施 task_dao.count_completed_in_window 后接 PCT 计算分子分母 |
 | **24** | **M18 batch_backfill 真 batch INSERT INTO embedding_tasks SELECT FROM unnest**（R1-C P1-4）| M18 R1-C | 子片 4+ / 5 万条规模 | medium — 当前 for-loop 逐条 enqueue() N+1 INSERT pattern / 5 万条回填 = 5 万次 DB 往返；占位期仅适用 mock provider 测试 | EmbeddingTaskDAO 增 batch_create(ids: list[UUID]) 用 INSERT ... SELECT FROM unnest(:ids) 单 SQL 批量 |
+| **25** | **CI build job tsc 88 错（Phase 2.3 残留死代码）** | Sprint 3.1 CI 接通暴露 2026-05-12 | Phase 2.3 集成验证 sprint 入口首条 | high — `app/src/services/permission.service.ts` 仍 import `@/db`/`@/db/schema`/`drizzle-orm`（子片 0 prep 删 drizzle 时漏文件）+ `app/src/contexts/project-role-context.tsx` 状态机收窄漂移 + 其余 86 错；本地 `cd app && pnpm exec tsc --noEmit` 全量验；`pnpm build` 编译通过但 "Running TypeScript" step 卡红 | Phase 2.3 集成验证 sprint 按文件维度分批清；优先 permission.service.ts（明显死代码可整文件删，对应 cleanup-plan §"前端基础债"延续） |
+| **26** | **M01 admin list users 撞 .local TLD（EmailStr 严格验证）** | Sprint 3.1 CI 接通暴露 2026-05-12 | Phase 2.3 集成验证 sprint | high — `tests/test_m01_admin.py::test_admin_list_users_returns_all` 调 admin endpoint 收 500 / 根因 seed 系统用户 email `system@internal.prism0420.local` + pydantic EmailStr 用 email-validator 拒 `.local` TLD（RFC 6762 mDNS 保留 + email-validator 默认严验）/ 影响 admin/users API 生产不可用（不只是测试问题） | (a) 改 seed 系统用户 email 用合法 TLD（如 `system@internal.prism0420.example`）/ (b) `UserListItem.email` 用 str 不用 EmailStr；推荐 (a)——bug 在 seed 数据不在 schema 设计 |
 
 ---
 

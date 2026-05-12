@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-10（**Post-Phase-2.3 Cleanup Sprint 1 完成**：C-FOLLOW-UP 8 项全 ✅（commits dae2760→2b890dd→0507ffa→ad1d040→5afc6d1→2e21b63 / Task 1.6 在 af6f78e 已做 1.7 状态变更后 moot）/ cross-sprint pool STILL_PUNT 39→31 / DONE 32→40 / vitest 20→30 / tsc 174→172 / eslint 全仓 0/0 / Sprint 2 待启动 / Sprint 3 阻塞 PAT workflow scope）
-current_phase: **Post-Phase-2.3 Cleanup Sprint 1 完成 / Sprint 2 待启动**（前端基础债 8 项全清 / next: 集成 e2e 基础设施 + 模块真漏洞）
+last_updated: 2026-05-12（**Sprint 3.1 CI 接通 + Sprint 3.2 auth migration ✅** / 5 commits e2141d2→d9fa3f4 / GitHub Actions 跑通 / 6 jobs 4 稳定绿 / 2 个红入 punt pool #25+#26 等 Phase 2.3 / 关闸盲区立规到 phase-gate.md）
+current_phase: **Sprint 3.1 + 3.2 完整收尾 / 下一步 Phase 2.3 集成验证 sprint**（W20 主线切 Phase 3 数据采集启动 / tsc 88 错 + M01 admin .local TLD 留给 Phase 2.3 入口处理）
 ---
 
 # prism-0420 全项目 Roadmap
@@ -243,8 +243,8 @@ Phase 3 数据对照   ⏳ ░░░░░░░░░░░░░░░░   0%
 
 > 03/04/05 三份 spec 是 Phase 2.0 的"最小决策占位"，足够 2.0/2.1/2.2 业务开发，但上线前必须补完，否则线上会缺 CI/可观测/密钥能力。
 
-**03-cicd-plan 必补**（Phase 2.3 子 sprint A 关闸 2026-05-09）：
-- [x] `.github/workflows/ci.yml` 完整步骤（lint / typecheck / test / build / migrate dry-run / codegen drift / deps audit）
+**03-cicd-plan 必补**（Phase 2.3 子 sprint A 关闸 2026-05-09 / Sprint 3.1 CI 实际接通 2026-05-12）：
+- [⚠️ partial] `.github/workflows/ci.yml` 完整步骤（lint / typecheck / test / build / migrate dry-run / codegen drift / deps audit）— **Sprint 3.1 实际跑通**：4/6 jobs 稳定绿（backend-typecheck/lint + frontend-test/lint），backend-test + build 红入 punt pool #25+#26 等 Phase 2.3 集成 sprint 处理
 - [x] 缓存策略（uv cache + pnpm cache / docker layer 推上线 sprint）
 - [x] secrets 注入（GH repo secrets → env: 字段 / prod environment 二次门控）
 - [x] 部署触发条件（main push CI / tag 部署 prod / workflow_dispatch backup）
