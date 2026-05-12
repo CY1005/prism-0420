@@ -327,6 +327,7 @@ complexity: low                         # 必填：low / medium / high（来自 
 
 ### 横切
 - **R-X1**：M17 的"M17 不直 INSERT 跨模块表"原则——orchestrator 模块通过其他模块 Service.batch_create_in_transaction 调用，不直查/直写其他模块的表（M17 教训：原稿直写 nodes/dimension_records 等违反分层）
+  - **R-X1 子条款（2026-05-12 M11 sprint 沉淀，来源 unsunk-scan F-5.5）**：orchestrator 子任务跳过必须 **raise 明确异常**（如 `ColdStartRowAlreadyExists`），不允许静默 `pass`；`completed` 状态不允许 silent pass——任何子任务的"已存在/已处理"分支都要 raise 让 orchestrator 显式记录 + 决策是否继续，避免误吞导致 status 误判为 success。M11 sprint CSV 上传冷启动场景首次实证。
 - **R-X2**（新增，batch2 audit 沉淀）：**DB CASCADE 不触发下游 activity_log**
   - 若本模块被其他模块 FK 引用且设为 `ON DELETE CASCADE`（如 M03 nodes 被 M04/M06/M07 引用），**本模块删除时必须在 Service 层显式调用下游 Service.delete_by_xxx** 以写入下游 activity_log，DB CASCADE 仅作兜底
   - 反例：M03 若只靠 DB CASCADE 删除节点，M04 dimension_records 删除不写 activity_log——违反清单 1（所有变更操作必须写 activity_log）

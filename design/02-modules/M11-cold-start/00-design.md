@@ -57,9 +57,9 @@ references:
       reason: "orchestrator 调 IssueService.batch_create_in_transaction 写问题"
   consumes_action_types: []  # M11 不订阅 M15 activity_log
   produces_action_types:
-    - cold_start.create
-    - cold_start.completed
-    - cold_start.failed
+    - cold_start_create
+    - cold_start_completed
+    - cold_start_failed
 ---
 
 # M11 冷启动支持 - 详细设计
@@ -446,9 +446,9 @@ class ColdStartDAO:
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
-| `cold_start.create` | `cold_start_task` | task_id | 创建冷启动导入任务 | `{source_hash, source_filename, total_rows}` |
-| `cold_start.completed` | `cold_start_task` | task_id | 冷启动导入完成 | `{total_rows, success_rows, nodes_created, dimensions_created, competitors_created, issues_created}` |
-| `cold_start.failed` | `cold_start_task` | task_id | 冷启动导入失败 | `{stage, failed_rows, error_code}` |
+| `cold_start_create` | `cold_start_task` | task_id | 创建冷启动导入任务 | `{source_hash, source_filename, total_rows}` |
+| `cold_start_completed` | `cold_start_task` | task_id | 冷启动导入完成 | `{total_rows, success_rows, nodes_created, dimensions_created, competitors_created, issues_created}` |
+| `cold_start_failed` | `cold_start_task` | task_id | 冷启动导入失败 | `{stage, failed_rows, error_code}` |
 
 **实现位置**：`api/services/cold_start_service.py`，各状态转换后在事务内调 `self.activity.log(...)`。
 
@@ -583,7 +583,8 @@ class ColdStartFileTooLargeError(AppError):
 - [x] 节 7：所有 API endpoint + Pydantic schema（G6 移除 partial_failed）
 - [x] 节 8：权限三层防御（无 Queue/WebSocket，3 层即可）
 - [x] 节 9：DAO tenant 过滤代码（G2/G6 已移除 find_idempotent）+ 豁免清单
-- [x] 节 10：activity_log 事件清单（G6 移除 cold_start.partial_failed）
+- [x] 节 10：activity_log 事件清单（G6 移除 cold_start_partial_failed）
+- [x] **2026-05-12 命名修正**：frontmatter + §10 表格 3 处由 dot notation (`cold_start.create / .completed / .failed`) 改为 underscore (`cold_start_create / _completed / _failed`)，与 activity_log `action_type` 枚举 + M14 baseline-patch `{entity}_{past_verb}` 规约对齐（来源：unsunk-scan F-5.6 + lessons-2026-05-12-batch 教训 B）
 - [x] 节 11：idempotency 无（G2/G6 决策；并发导入同名节点为已知行为 G7-M11-R2-08）
 - [x] 节 12：Queue 显式 N/A
 - [x] 节 13：ErrorCode（G2/G6 移除 COLD_START_DUPLICATE；7 个有效 ErrorCode + AppError 子类）
