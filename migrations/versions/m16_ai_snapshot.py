@@ -41,7 +41,7 @@ def upgrade() -> None:
         INSERT INTO users (id, email, name, password_hash, status, role)
         VALUES (
             '00000000-0000-0000-0000-00000000fe00',
-            'system@internal.prism0420.local',
+            'system@internal.prism0420.example',
             '系统',
             '__system_no_login__',
             'active',

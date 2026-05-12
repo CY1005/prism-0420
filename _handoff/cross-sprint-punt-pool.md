@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-12 (**Sprint 3.1 CI 接通完整收尾 + Sprint 3.2 auth migration ✅ / 5 commits (e2141d2→d9fa3f4) / 4/6 jobs 稳定绿 / 2 新真漏入池 #25+#26 等 Phase 2.3**)
+last_updated: 2026-05-12 (**Phase 2.3 cleanup S1 ✅ — #26 M01 admin .local TLD seed 修 → DONE / 1643 PASS 6 skipped 0 fail / 顺手 -x 验证 S2 backend-test 等价完成**)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -185,7 +185,7 @@ policy:
 | **23** | **M18 cron_failure_monitor PCT 维度真实施**（R1-C P2-3 / R2 #7）| M18 R1-C / R2 | 子片 4+ / 接 task_dao.count_completed_in_window | medium — 当前缺 PCT 维度只剩 ABS+PER_PROJECT 两维 / design line 1043 三维设计避免单维死参数；占位期已加 TODO 注释 | 实施 task_dao.count_completed_in_window 后接 PCT 计算分子分母 |
 | **24** | **M18 batch_backfill 真 batch INSERT INTO embedding_tasks SELECT FROM unnest**（R1-C P1-4）| M18 R1-C | 子片 4+ / 5 万条规模 | medium — 当前 for-loop 逐条 enqueue() N+1 INSERT pattern / 5 万条回填 = 5 万次 DB 往返；占位期仅适用 mock provider 测试 | EmbeddingTaskDAO 增 batch_create(ids: list[UUID]) 用 INSERT ... SELECT FROM unnest(:ids) 单 SQL 批量 |
 | **25** | **CI build job tsc 88 错（Phase 2.3 残留死代码）** | Sprint 3.1 CI 接通暴露 2026-05-12 | Phase 2.3 集成验证 sprint 入口首条 | high — `app/src/services/permission.service.ts` 仍 import `@/db`/`@/db/schema`/`drizzle-orm`（子片 0 prep 删 drizzle 时漏文件）+ `app/src/contexts/project-role-context.tsx` 状态机收窄漂移 + 其余 86 错；本地 `cd app && pnpm exec tsc --noEmit` 全量验；`pnpm build` 编译通过但 "Running TypeScript" step 卡红 | Phase 2.3 集成验证 sprint 按文件维度分批清；优先 permission.service.ts（明显死代码可整文件删，对应 cleanup-plan §"前端基础债"延续） |
-| **26** | **M01 admin list users 撞 .local TLD（EmailStr 严格验证）** | Sprint 3.1 CI 接通暴露 2026-05-12 | Phase 2.3 集成验证 sprint | high — `tests/test_m01_admin.py::test_admin_list_users_returns_all` 调 admin endpoint 收 500 / 根因 seed 系统用户 email `system@internal.prism0420.local` + pydantic EmailStr 用 email-validator 拒 `.local` TLD（RFC 6762 mDNS 保留 + email-validator 默认严验）/ 影响 admin/users API 生产不可用（不只是测试问题） | (a) 改 seed 系统用户 email 用合法 TLD（如 `system@internal.prism0420.example`）/ (b) `UserListItem.email` 用 str 不用 EmailStr；推荐 (a)——bug 在 seed 数据不在 schema 设计 |
+| ~~**26**~~ | ~~**M01 admin list users 撞 .local TLD（EmailStr 严格验证）**~~ ✅ **DONE 2026-05-12 Phase 2.3 cleanup S1** | Sprint 3.1 CI 接通暴露 2026-05-12 | Phase 2.3 集成验证 sprint | ✅ 已修复 — `migrations/versions/m16_ai_snapshot.py:44` `'system@internal.prism0420.local'` → `'system@internal.prism0420.example'`（.example 是 IANA 保留示例域名 / email-validator 接受）+ dev DB row 同步 UPDATE / 1643 PASS 6 skipped 0 fail（顺手 `-x` 验 S2 等价完成）| 采方案 (a)：bug 在 seed 数据不在 schema 设计；schema EmailStr 严验保留 |
 
 ---
 
