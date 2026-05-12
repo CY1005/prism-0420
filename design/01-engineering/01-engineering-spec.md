@@ -858,16 +858,32 @@ def update_module(self, user_id, module_id, version, **fields):
     return rows
 
 # Router：FastAPI 全局 exception handler 把 AppError 转成 HTTP 响应
+# 响应体格式：**flat**（顶层 code/message/details，无 "error" wrapper）
+# 锚点：api/errors/middleware.py::_payload + app/src/lib/server-http-client.ts::parseError
+# 历史：旧 design 草案曾写嵌套 `{"error":{"code":...}}` / 实装从未走嵌套 / 2026-05-13
+# dogfooding P4 cluster-5 同步为 flat（B-P2-M10-error-response-format-design-gap）
 @app.exception_handler(AppError)
 async def app_error_handler(request, exc: AppError):
     return JSONResponse(
         status_code=exc.http_status,
         content={
-            "error": {
-                "code": exc.code.value,           # ← 前端识别这个
-                "message": exc.message,
-                "details": exc.details,
-            }
+            "code": exc.code.value,           # ← 前端识别这个（body.code）
+            "message": exc.message,
+            "details": exc.details,           # 缺省 / 仅在 details 非空时序列化
+        },
+    )
+
+# Pydantic RequestValidationError（empty body / 字段缺失等 422）也必须走 flat 格式
+# 不能让 FastAPI 默认 raw Pydantic body `{"detail":[{"type":"missing","loc":["body"]}]}`
+# 直接对外暴露（内部字段名泄漏 + 非契约错误格式）
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "code": "invalid_request_body",
+            "message": "Request body validation failed",
+            "details": {"errors": [...] },     # 简化字段名 / 不暴露 Pydantic loc/type/msg 原结构
         },
     )
 ```
@@ -957,7 +973,8 @@ try {
 | 错误码 | 新错误必须在 `ErrorCode` 枚举注册 |
 | 前后端一致 | 前端 `ErrorCode` 必须从 OpenAPI 生成（CI 校验差异为 0） |
 | 异常 wrap | DAO 抛低层 / Service wrap 成 AppError / Router 全局 handler |
-| 错误响应格式 | 统一 `{"error": {"code", "message", "details"}}` |
+| 错误响应格式 | 统一 **flat**：`{"code", "message", "details"?}`（顶层 / 无 `"error"` wrapper / 实装锚 api/errors/middleware.py::_payload）|
+| 422 raw Pydantic | 必须走全局 `RequestValidationError` handler 包成 flat `{"code":"invalid_request_body", ...}` / 禁直接暴露 raw `detail[]` |
 
 ### 7.7 反例
 

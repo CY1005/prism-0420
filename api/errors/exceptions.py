@@ -35,6 +35,16 @@ class ValidationError(AppError):
     message = "Validation failed"
 
 
+# P4 cluster-5 (2026-05-13): 全局 RequestValidationError wrapper / 取代 raw Pydantic 422 输出
+# 触发: FastAPI Pydantic body 校验失败（empty body / 字段缺失 / 类型不符）
+# 锚: api/errors/middleware.py::_handle_request_validation
+# B-P2-cc-A-empty-body-pydantic-422 fix
+class InvalidRequestBodyError(ValidationError):
+    code = ErrorCode.INVALID_REQUEST_BODY
+    http_status = 422
+    message = "Request body validation failed"
+
+
 class ConflictError(AppError):
     code = ErrorCode.CONFLICT
     http_status = 409

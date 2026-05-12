@@ -550,12 +550,14 @@ test.describe("M06 竞品参考 dogfooding", () => {
     expect(res.status()).toBe(404);
     const body = await res.json();
 
-    // 规约 7 格式: {"error": {"code": "...", "message": "..."}}
-    expect(body).toHaveProperty("error");
-    expect(body.error).toHaveProperty("code");
-    expect(body.error).toHaveProperty("message");
-    expect(typeof body.error.code).toBe("string");
-    expect(typeof body.error.message).toBe("string");
+    // 规约 7 格式（P4 cluster-5 同步 flat / B-P2-M10 fix）：顶层 {code, message, details?}
+    // 锚: api/errors/middleware.py::_payload + engineering-spec §7.4
+    // 旧 spec assert `body.error.code` 嵌套契约 / 跟实装+前端 parseError 不符 / fix 同步
+    expect(body).toHaveProperty("code");
+    expect(body).toHaveProperty("message");
+    expect(typeof body.code).toBe("string");
+    expect(typeof body.message).toBe("string");
+    expect(body).not.toHaveProperty("error"); // 防嵌套契约回滚
 
     // 不暴露 stacktrace
     const bodyStr = JSON.stringify(body);

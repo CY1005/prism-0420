@@ -17,6 +17,10 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = "validation_error"
     CONFLICT = "conflict"
     RATE_LIMITED = "rate_limited"
+    # P4 cluster-5 (2026-05-13): 全局 RequestValidationError wrapper / flat 格式 / 不暴露 raw Pydantic
+    # 锚点: api/errors/middleware.py::_handle_request_validation
+    # 触发: empty body / 字段缺失 / 类型不符 / 等 Pydantic 422
+    INVALID_REQUEST_BODY = "invalid_request_body"
 
     UNAUTHENTICATED = "unauthenticated"
     ACCESS_TOKEN_EXPIRED = "access_token_expired"

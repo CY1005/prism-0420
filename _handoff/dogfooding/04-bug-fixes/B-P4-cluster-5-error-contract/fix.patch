@@ -1,0 +1,260 @@
+diff --git a/api/errors/__init__.py b/api/errors/__init__.py
+index 344038a..b58bc7e 100644
+--- a/api/errors/__init__.py
++++ b/api/errors/__init__.py
+@@ -9,6 +9,7 @@ from api.errors.exceptions import (
+     EmailAlreadyExistsError,
+     InvalidCredentialsError,
+     InvalidRefreshTokenError,
++    InvalidRequestBodyError,
+     InvalidStatusTransitionError,
+     LastAdminProtectedError,
+     NotFoundError,
+@@ -37,6 +38,7 @@ __all__ = [
+     "ErrorCode",
+     "InvalidCredentialsError",
+     "InvalidRefreshTokenError",
++    "InvalidRequestBodyError",
+     "InvalidStatusTransitionError",
+     "LastAdminProtectedError",
+     "NotFoundError",
+diff --git a/api/errors/codes.py b/api/errors/codes.py
+index 83a4b84..1680370 100644
+--- a/api/errors/codes.py
++++ b/api/errors/codes.py
+@@ -17,6 +17,10 @@ class ErrorCode(StrEnum):
+     VALIDATION_ERROR = "validation_error"
+     CONFLICT = "conflict"
+     RATE_LIMITED = "rate_limited"
++    # P4 cluster-5 (2026-05-13): 全局 RequestValidationError wrapper / flat 格式 / 不暴露 raw Pydantic
++    # 锚点: api/errors/middleware.py::_handle_request_validation
++    # 触发: empty body / 字段缺失 / 类型不符 / 等 Pydantic 422
++    INVALID_REQUEST_BODY = "invalid_request_body"
+ 
+     UNAUTHENTICATED = "unauthenticated"
+     ACCESS_TOKEN_EXPIRED = "access_token_expired"
+diff --git a/api/errors/exceptions.py b/api/errors/exceptions.py
+index d70b8dd..e453e7f 100644
+--- a/api/errors/exceptions.py
++++ b/api/errors/exceptions.py
+@@ -35,6 +35,16 @@ class ValidationError(AppError):
+     message = "Validation failed"
+ 
+ 
++# P4 cluster-5 (2026-05-13): 全局 RequestValidationError wrapper / 取代 raw Pydantic 422 输出
++# 触发: FastAPI Pydantic body 校验失败（empty body / 字段缺失 / 类型不符）
++# 锚: api/errors/middleware.py::_handle_request_validation
++# B-P2-cc-A-empty-body-pydantic-422 fix
++class InvalidRequestBodyError(ValidationError):
++    code = ErrorCode.INVALID_REQUEST_BODY
++    http_status = 422
++    message = "Request body validation failed"
++
++
+ class ConflictError(AppError):
+     code = ErrorCode.CONFLICT
+     http_status = 409
+diff --git a/api/errors/middleware.py b/api/errors/middleware.py
+index 1ee8447..e8c5d37 100644
+--- a/api/errors/middleware.py
++++ b/api/errors/middleware.py
+@@ -7,6 +7,7 @@
+ """
+ 
+ from fastapi import FastAPI, Request
++from fastapi.exceptions import RequestValidationError
+ from fastapi.responses import JSONResponse
+ 
+ from api.core.logging import log
+@@ -49,6 +50,40 @@ async def _handle_unhandled(request: Request, exc: Exception) -> JSONResponse:
+     )
+ 
+ 
++# P4 cluster-5 (2026-05-13): 全局 RequestValidationError → flat error 包装
++# 取代 FastAPI 默认输出 `{"detail":[{"type":"missing","loc":["body"],"msg":...}]}`
++# 防止 raw Pydantic 内部字段名（loc/type/msg）泄漏 + 让所有 422 走 design §13 flat 契约
++# 锚: B-P2-cc-A-empty-body-pydantic-422 / engineering-spec §7.4 / §7.6
++# 简化 details.errors[]：只保留 loc 路径 + msg 文案 / 去掉 type / input 等内部字段
++async def _handle_request_validation(
++    request: Request,
++    exc: RequestValidationError,
++) -> JSONResponse:
++    errors_simplified = [
++        {
++            "loc": [str(item) for item in (err.get("loc") or [])],
++            "msg": err.get("msg") or "Field invalid",
++        }
++        for err in (exc.errors() or [])
++    ]
++    log.info(
++        "app.request_validation",
++        code=ErrorCode.INVALID_REQUEST_BODY.value,
++        path=request.url.path,
++        method=request.method,
++        error_count=len(errors_simplified),
++    )
++    return JSONResponse(
++        status_code=422,
++        content=_payload(
++            ErrorCode.INVALID_REQUEST_BODY,
++            "Request body validation failed",
++            {"errors": errors_simplified},
++        ),
++    )
++
++
+ def register_exception_handlers(app: FastAPI) -> None:
+     app.add_exception_handler(AppError, _handle_app_error)
++    app.add_exception_handler(RequestValidationError, _handle_request_validation)
+     app.add_exception_handler(Exception, _handle_unhandled)
+diff --git a/app/e2e/dogfooding/M06-competitor.spec.ts b/app/e2e/dogfooding/M06-competitor.spec.ts
+index cb99af6..9596166 100644
+--- a/app/e2e/dogfooding/M06-competitor.spec.ts
++++ b/app/e2e/dogfooding/M06-competitor.spec.ts
+@@ -550,12 +550,14 @@ test.describe("M06 竞品参考 dogfooding", () => {
+     expect(res.status()).toBe(404);
+     const body = await res.json();
+ 
+-    // 规约 7 格式: {"error": {"code": "...", "message": "..."}}
+-    expect(body).toHaveProperty("error");
+-    expect(body.error).toHaveProperty("code");
+-    expect(body.error).toHaveProperty("message");
+-    expect(typeof body.error.code).toBe("string");
+-    expect(typeof body.error.message).toBe("string");
++    // 规约 7 格式（P4 cluster-5 同步 flat / B-P2-M10 fix）：顶层 {code, message, details?}
++    // 锚: api/errors/middleware.py::_payload + engineering-spec §7.4
++    // 旧 spec assert `body.error.code` 嵌套契约 / 跟实装+前端 parseError 不符 / fix 同步
++    expect(body).toHaveProperty("code");
++    expect(body).toHaveProperty("message");
++    expect(typeof body.code).toBe("string");
++    expect(typeof body.message).toBe("string");
++    expect(body).not.toHaveProperty("error"); // 防嵌套契约回滚
+ 
+     // 不暴露 stacktrace
+     const bodyStr = JSON.stringify(body);
+diff --git a/design/01-engineering/01-engineering-spec.md b/design/01-engineering/01-engineering-spec.md
+index a41fdec..94813a6 100644
+--- a/design/01-engineering/01-engineering-spec.md
++++ b/design/01-engineering/01-engineering-spec.md
+@@ -858,16 +858,32 @@ def update_module(self, user_id, module_id, version, **fields):
+     return rows
+ 
+ # Router：FastAPI 全局 exception handler 把 AppError 转成 HTTP 响应
++# 响应体格式：**flat**（顶层 code/message/details，无 "error" wrapper）
++# 锚点：api/errors/middleware.py::_payload + app/src/lib/server-http-client.ts::parseError
++# 历史：旧 design 草案曾写嵌套 `{"error":{"code":...}}` / 实装从未走嵌套 / 2026-05-13
++# dogfooding P4 cluster-5 同步为 flat（B-P2-M10-error-response-format-design-gap）
+ @app.exception_handler(AppError)
+ async def app_error_handler(request, exc: AppError):
+     return JSONResponse(
+         status_code=exc.http_status,
+         content={
+-            "error": {
+-                "code": exc.code.value,           # ← 前端识别这个
+-                "message": exc.message,
+-                "details": exc.details,
+-            }
++            "code": exc.code.value,           # ← 前端识别这个（body.code）
++            "message": exc.message,
++            "details": exc.details,           # 缺省 / 仅在 details 非空时序列化
++        },
++    )
++
++# Pydantic RequestValidationError（empty body / 字段缺失等 422）也必须走 flat 格式
++# 不能让 FastAPI 默认 raw Pydantic body `{"detail":[{"type":"missing","loc":["body"]}]}`
++# 直接对外暴露（内部字段名泄漏 + 非契约错误格式）
++@app.exception_handler(RequestValidationError)
++async def request_validation_handler(request, exc: RequestValidationError):
++    return JSONResponse(
++        status_code=422,
++        content={
++            "code": "invalid_request_body",
++            "message": "Request body validation failed",
++            "details": {"errors": [...] },     # 简化字段名 / 不暴露 Pydantic loc/type/msg 原结构
+         },
+     )
+ ```
+@@ -957,7 +973,8 @@ try {
+ | 错误码 | 新错误必须在 `ErrorCode` 枚举注册 |
+ | 前后端一致 | 前端 `ErrorCode` 必须从 OpenAPI 生成（CI 校验差异为 0） |
+ | 异常 wrap | DAO 抛低层 / Service wrap 成 AppError / Router 全局 handler |
+-| 错误响应格式 | 统一 `{"error": {"code", "message", "details"}}` |
++| 错误响应格式 | 统一 **flat**：`{"code", "message", "details"?}`（顶层 / 无 `"error"` wrapper / 实装锚 api/errors/middleware.py::_payload）|
++| 422 raw Pydantic | 必须走全局 `RequestValidationError` handler 包成 flat `{"code":"invalid_request_body", ...}` / 禁直接暴露 raw `detail[]` |
+ 
+ ### 7.7 反例
+ 
+diff --git a/tests/test_errors.py b/tests/test_errors.py
+index 5440671..ea9d930 100644
+--- a/tests/test_errors.py
++++ b/tests/test_errors.py
+@@ -1,5 +1,6 @@
+ from fastapi import FastAPI
+ from fastapi.testclient import TestClient
++from pydantic import BaseModel
+ 
+ from api.errors import (
+     AppError,
+@@ -41,6 +42,14 @@ def _build_app() -> FastAPI:
+     def _raise_bare():
+         raise RuntimeError("oops should not leak")
+ 
++    class _Body(BaseModel):
++        name: str
++        value: int
++
++    @app.post("/needs-body")
++    def _needs_body(payload: _Body):
++        return {"ok": True}
++
+     return app
+ 
+ 
+@@ -83,3 +92,47 @@ def test_unhandled_exception_does_not_leak_internal_message():
+     body = r.json()
+     assert body["code"] == "internal_error"
+     assert "oops" not in body["message"]
++
++
++# ─── B-P2-cc-A-empty-body-pydantic-422 / P4 cluster-5 (2026-05-13) ─────────
++
++
++def test_request_validation_empty_body_returns_flat_invalid_request_body():
++    """空 body → flat `{"code":"invalid_request_body", ...}` / 不暴露 raw Pydantic detail。"""
++    client = TestClient(_build_app())
++    r = client.post("/needs-body")  # 无 body
++    assert r.status_code == 422
++    body = r.json()
++    # flat 契约：顶层 code/message/details / 无 "error" wrapper / 无 "detail" raw 输出
++    assert body["code"] == "invalid_request_body"
++    assert body["message"] == "Request body validation failed"
++    assert "error" not in body  # 防嵌套契约回滚
++    assert "detail" not in body  # 防 raw Pydantic 输出回滚
++    # details.errors[] 简化版只含 loc + msg / 不含 type / input
++    assert "errors" in body["details"]
++    assert isinstance(body["details"]["errors"], list)
++    assert len(body["details"]["errors"]) >= 1
++    first = body["details"]["errors"][0]
++    assert "loc" in first
++    assert "msg" in first
++    assert "type" not in first  # 不暴露 Pydantic 内部 type
++    assert "input" not in first
++
++
++def test_request_validation_missing_field_returns_flat():
++    """字段缺失 → 同样走 flat handler。"""
++    client = TestClient(_build_app())
++    r = client.post("/needs-body", json={"name": "x"})  # 缺 value
++    assert r.status_code == 422
++    body = r.json()
++    assert body["code"] == "invalid_request_body"
++    assert "errors" in body["details"]
++
++
++def test_request_validation_invalid_type_returns_flat():
++    """类型不符 → flat handler。"""
++    client = TestClient(_build_app())
++    r = client.post("/needs-body", json={"name": "x", "value": "not-int"})
++    assert r.status_code == 422
++    body = r.json()
++    assert body["code"] == "invalid_request_body"
