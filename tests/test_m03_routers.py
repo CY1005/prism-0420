@@ -223,9 +223,39 @@ async def test_create_with_unknown_parent_returns_404(auth_client, make_user):
     assert r.json()["code"] == "node_parent_not_found"
 
 
-# ─────────────── 边界 E5: type immutable (PUT 不接受 type 字段, schema 不含) ───────────────
-# NodeUpdate schema 不含 type 字段，前端无法发送 → schema 层就拦住
-# (R-X5: design §13 NODE_TYPE_IMMUTABLE 备用 — Service 层校验仍存在用于直调 service 路径)
+# ─────────────── 边界 E5: type immutable (B-P2-M03-node-type-immutable-not-enforced fix) ───────────────
+# NodeUpdate schema 现在显式声明 type 字段，service 层捕获变更抛 NODE_TYPE_IMMUTABLE 422。
+# 原方案：schema 排除法 → Pydantic 静默忽略 → 返 200，design §4 NODE_TYPE_IMMUTABLE 未实装。
+
+
+async def test_update_node_type_returns_422_node_type_immutable(auth_client, make_user):
+    """PUT 改 type 返 422 NODE_TYPE_IMMUTABLE (B-P2-M03 fix / design §4 字面)。"""
+    user = await make_user(email="m03-typeimm@example.com")
+    pid = await _create_project(auth_client, user.id)
+    node = await _create_node(auth_client, user.id, pid, name="root", type="folder")
+    r = await auth_client.put(
+        f"/api/projects/{pid}/nodes/{node['id']}",
+        json={"name": "root", "type": "file"},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 422
+    assert r.json()["code"] == "node_type_immutable"
+
+
+async def test_update_node_same_type_succeeds(auth_client, make_user):
+    """PUT 传相同 type 视为 no-op (无变更不触发 NODE_TYPE_IMMUTABLE / 服务对齐)。"""
+    user = await make_user(email="m03-typesame@example.com")
+    pid = await _create_project(auth_client, user.id)
+    node = await _create_node(auth_client, user.id, pid, name="root", type="folder")
+    r = await auth_client.put(
+        f"/api/projects/{pid}/nodes/{node['id']}",
+        json={"name": "renamed", "type": "folder"},
+        headers=_bearer(user.id),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["type"] == "folder"
+    assert body["name"] == "renamed"
 
 
 # ─────────────── 边界 E6: reorder 跨 parent ───────────────

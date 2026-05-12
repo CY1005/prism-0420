@@ -576,10 +576,16 @@ class TestMetadataFieldsLiteral:
 
 
 class TestPydantic422:
-    """Pydantic 422 boundary：query 空 / query 200+ / target_types 非合法枚举 / limit 0。"""
+    """边界一致性: query 空/超长/limit 越界全部 400 INVALID_QUERY_LENGTH
+    (B-P2-M18-search-query-validation-returns-422 fix);
+    target_types 非合法枚举仍走 Pydantic 422 (类型错误, 非边界值)。"""
 
-    async def test_query_empty_returns_422(self, auth_client, make_user):
-        """query 空字符串 → 422（Pydantic min_length=1）。"""
+    async def test_query_empty_returns_400_invalid_query_length(self, auth_client, make_user):
+        """query 空字符串 → 400 invalid_query_length（design §7 line 663 字面 / router 单点拦截）。
+
+        B-P2-M18 fix 前: Pydantic min_length=1 走 422 与 service 层 >200 走 400 路径不一致;
+        修后 schema 删 min_length, router 统一抛 400。
+        """
         user = await make_user(email="m18-422e@example.com")
         pid = await _create_project(auth_client, user.id)
         r = await auth_client.post(
@@ -587,7 +593,8 @@ class TestPydantic422:
             json={"query": ""},
             headers=_bearer(user.id),
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
+        assert r.json()["code"] == "invalid_query_length"
 
     async def test_query_201_chars_returns_400_invalid_query_length(self, auth_client, make_user):
         """query 201 字符 → 400 invalid_query_length（design §7 line 663 字面 / router 手动 check）。
@@ -627,8 +634,8 @@ class TestPydantic422:
         )
         assert r.status_code == 422
 
-    async def test_limit_zero_returns_422(self, auth_client, make_user):
-        """limit=0 → 422（Pydantic ge=1）。"""
+    async def test_limit_zero_returns_400_invalid_query_length(self, auth_client, make_user):
+        """limit=0 → 400 invalid_query_length（B-P2-M18 fix / router 单点拦截）。"""
         user = await make_user(email="m18-422lz@example.com")
         pid = await _create_project(auth_client, user.id)
         r = await auth_client.post(
@@ -636,10 +643,11 @@ class TestPydantic422:
             json={"query": "test", "limit": 0},
             headers=_bearer(user.id),
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
+        assert r.json()["code"] == "invalid_query_length"
 
-    async def test_limit_101_returns_422(self, auth_client, make_user):
-        """limit=101 → 422（Pydantic le=100）。"""
+    async def test_limit_101_returns_400_invalid_query_length(self, auth_client, make_user):
+        """limit=101 → 400 invalid_query_length（B-P2-M18 fix / router 单点拦截）。"""
         user = await make_user(email="m18-422lmax@example.com")
         pid = await _create_project(auth_client, user.id)
         r = await auth_client.post(
@@ -647,7 +655,8 @@ class TestPydantic422:
             json={"query": "test", "limit": 101},
             headers=_bearer(user.id),
         )
-        assert r.status_code == 422
+        assert r.status_code == 400
+        assert r.json()["code"] == "invalid_query_length"
 
 
 # ─────────────── admin endpoint Pydantic 422 ───────────────

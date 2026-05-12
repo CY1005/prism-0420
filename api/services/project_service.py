@@ -155,6 +155,43 @@ class ProjectService:
         )
         return proj
 
+    async def delete_project(
+        self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
+    ) -> None:
+        """物理删除项目 (B-P2-M03-project-delete-endpoint-missing fix).
+
+        DB 层 ON DELETE CASCADE 兜底删 nodes / project_members / dimension_configs / 等
+        17 个子表（详 ADR-005 §3.2 横切表清单 + api/models/* FK ondelete="CASCADE"）。
+
+        ⚠️ design §1 / §4 / §13 字面声明 "本期不支持物理删除" + ErrorCode
+        `PROJECT_DELETE_NOT_SUPPORTED`(422) 已注册但未实装为 endpoint。本 fix 按
+        dogfooding P4 cluster-2 prompt + E2E spec 期望 200/204 cascade 实装真物理删除。
+        design vs impl 漂移已记 _handoff/dogfooding/04-bug-fixes/B-P4-cluster-2-M18-M03/design-audit.md
+        作为 HIGH 冲突上报 CY 决策 sync code 还是 sync design。
+        """
+        proj, _m = await self.require_owner(db, project_id, actor_user_id)
+
+        # 写 activity_log 必须先于物理删除（FK CASCADE 也会删 activity_log 行；
+        # 但本写入是审计意图，记录"删除发生过"——保留事件指向被删 project_id 的字符串）
+        await write_event(
+            db=db,
+            actor_user_id=actor_user_id,
+            project_id=project_id,
+            action_type="project_deleted",
+            target_type="project",
+            target_id=str(project_id),
+            summary=f"Deleted project '{proj.name}'",
+            metadata={
+                "project_id": str(project_id),
+                "previous_status": proj.status,
+                "name": proj.name,
+            },
+        )
+        await db.flush()
+
+        # 物理删除 — DB CASCADE 兜底删子表（nodes / members / dimension_configs / etc.）
+        await self.projects.delete_one(db, project_id)
+
     async def archive_project(
         self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
     ) -> Project:

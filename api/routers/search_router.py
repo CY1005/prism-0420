@@ -76,10 +76,15 @@ async def search_project(
     - R-X1 失败补偿：search read-only 无写操作（M11/M17 N/A）
     - viewer 写 403：search 是 read endpoint（POST 语义是 query / 非写操作，M07 N/A）
     """
-    # design §7 line 663：query 超 200 char → 400 INVALID_QUERY_LENGTH（Pydantic 不拦 / router 手动 check）
-    # Pydantic min_length=1 已拦空串（422）；超长由此处抛 400。
-    if len(body.query) > 200:
-        raise InvalidQueryLengthError()
+    # design §7 line 663：query / limit 全部边界 → 400 INVALID_QUERY_LENGTH
+    # （B-P2-M18-search-query-validation-returns-422 fix：原 Pydantic min_length/ge/le 走 422
+    # 与 service 层 >200 走 400 不一致；schema 已删除约束，router 单点拦截全部边界）
+    if len(body.query) < 1 or len(body.query) > 200:
+        raise InvalidQueryLengthError(
+            reason="query_length_out_of_range", query_length=len(body.query)
+        )
+    if body.limit < 1 or body.limit > 100:
+        raise InvalidQueryLengthError(reason="limit_out_of_range", limit=body.limit)
 
     svc = SearchService()
 

@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class EmbeddingTargetType(StrEnum):
@@ -29,15 +29,21 @@ _EMBEDDING_TARGET_TYPES: tuple[str, ...] = ("node", "dimension_record", "competi
 
 
 class SearchRequest(BaseModel):
-    """POST /api/projects/{project_id}/search 请求 schema（design §7 line 626-630）。"""
+    """POST /api/projects/{project_id}/search 请求 schema（design §7 line 626-630）。
+
+    边界校验全部在 router 层抛 400 INVALID_QUERY_LENGTH（design §7 line 663 字面）；
+    Pydantic min_length/ge/le 已移除以保持错误路径单一（B-P2-M18-search-query-validation-returns-422 fix）。
+    schema 仅保留类型/枚举校验（target_types 仍走 Pydantic 422，错误类型而非边界值）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(..., min_length=1)
-    """最大 200 字符由 router 手动 check 抛 400 INVALID_QUERY_LENGTH（design §7 line 663 字面）。"""
+    query: str
+    """长度 1-200 字符；空 / 超 200 均由 router 抛 400 INVALID_QUERY_LENGTH。"""
     target_types: list[EmbeddingTargetType] | None = None
     """None 表示全部 4 类（不过滤）。"""
-    limit: int = Field(20, ge=1, le=100)
+    limit: int = 20
+    """范围 1-100；越界由 router 抛 400 INVALID_QUERY_LENGTH。"""
 
 
 class SearchResultItem(BaseModel):

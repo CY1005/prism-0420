@@ -28,7 +28,10 @@ class NodeCreate(BaseModel):
 class NodeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = Field(None, max_length=2000)
-    # 注：type 不可变更（design §4）；parent_id 走独立 /move endpoint
+    # design §4: type 不可变更，但显式声明字段以便 service 层抛 NODE_TYPE_IMMUTABLE 422
+    # （B-P2-M03-node-type-immutable-not-enforced fix：原 schema 排除法 → Pydantic 静默忽略 → 返 200）
+    type: NodeTypeEnum | None = None
+    # 注：parent_id 走独立 /move endpoint
 
 
 class NodeReorderItem(BaseModel):

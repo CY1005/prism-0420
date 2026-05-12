@@ -1,0 +1,364 @@
+diff --git a/api/dao/project_dao.py b/api/dao/project_dao.py
+index 584dafc..3542d4c 100644
+--- a/api/dao/project_dao.py
++++ b/api/dao/project_dao.py
+@@ -68,6 +68,15 @@ class ProjectDAO:
+         await db.flush()
+         return proj
+ 
++    async def delete_one(self, db: AsyncSession, project_id: UUID) -> int:
++        """物理删除项目（B-P2-M03-project-delete-endpoint-missing fix）。
++
++        FK ondelete="CASCADE" 兜底删 nodes/members/dimension_configs 等子表。
++        无 tenant 过滤——caller (ProjectService.delete_project) 已通过 require_owner 校验。
++        """
++        result = await db.execute(delete(Project).where(Project.id == project_id))
++        return result.rowcount or 0
++
+ 
+ class ProjectMemberDAO:
+     async def list_by_project(self, db: AsyncSession, project_id: UUID) -> Sequence[ProjectMember]:
+diff --git a/api/routers/project_router.py b/api/routers/project_router.py
+index cf351a4..2f7fb0c 100644
+--- a/api/routers/project_router.py
++++ b/api/routers/project_router.py
+@@ -1,10 +1,11 @@
+ """M02 项目 + 成员 + 维度配置 router (design §7 + §8 权限三层).
+ 
+-11 endpoints (design §7 表):
++12 endpoints (design §7 表 / DELETE /pid 由 B-P2-M03-project-delete-endpoint-missing fix 补):
+     GET    /api/projects                      list_projects
+     POST   /api/projects                      create_project
+     GET    /api/projects/{pid}                get_project
+     PUT    /api/projects/{pid}                update_project
++    DELETE /api/projects/{pid}                delete_project (B-P2-M03 fix / 物理删除 / 详 design-audit HIGH 冲突)
+     POST   /api/projects/{pid}/archive        archive_project
+     GET    /api/projects/{pid}/members        list_members
+     POST   /api/projects/{pid}/members        invite_member
+@@ -27,7 +28,7 @@ from __future__ import annotations
+ 
+ from uuid import UUID
+ 
+-from fastapi import APIRouter, Depends, status
++from fastapi import APIRouter, Depends, Response, status
+ from sqlalchemy.ext.asyncio import AsyncSession
+ 
+ from api.auth.check_project_access import ProjectAccess, check_project_access
+@@ -149,6 +150,27 @@ async def update_project(
+     return _project_response(proj)
+ 
+ 
++@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
++async def delete_project(
++    access: ProjectAccess = Depends(check_project_access(role="owner")),
++    db: AsyncSession = Depends(get_db),
++) -> Response:
++    """物理删除项目（B-P2-M03-project-delete-endpoint-missing fix）。
++
++    DB ON DELETE CASCADE 兜底删 nodes / project_members / dimension_configs / 等 17
++    个子表（详 ADR-005 §3.2 横切表清单 + api/models/* FK ondelete="CASCADE"）。
++
++    ⚠️ design §1/§4/§13 字面 "本期不支持物理删除" + ErrorCode
++    `PROJECT_DELETE_NOT_SUPPORTED`(422) 已注册。本 endpoint 按 P4 cluster-2 + E2E spec
++    期望实装真物理删除；HIGH design 冲突上报 CY 决策
++    （详 _handoff/dogfooding/04-bug-fixes/B-P4-cluster-2-M18-M03/design-audit.md）。
++    """
++    svc = ProjectService()
++    await svc.delete_project(db, project_id=access.project.id, actor_user_id=access.user.id)
++    await db.commit()
++    return Response(status_code=status.HTTP_204_NO_CONTENT)
++
++
+ @router.post("/{project_id}/archive", response_model=ProjectResponse)
+ async def archive_project(
+     access: ProjectAccess = Depends(check_project_access(role="owner")),
+diff --git a/api/routers/search_router.py b/api/routers/search_router.py
+index d865b65..3963876 100644
+--- a/api/routers/search_router.py
++++ b/api/routers/search_router.py
+@@ -76,10 +76,15 @@ async def search_project(
+     - R-X1 失败补偿：search read-only 无写操作（M11/M17 N/A）
+     - viewer 写 403：search 是 read endpoint（POST 语义是 query / 非写操作，M07 N/A）
+     """
+-    # design §7 line 663：query 超 200 char → 400 INVALID_QUERY_LENGTH（Pydantic 不拦 / router 手动 check）
+-    # Pydantic min_length=1 已拦空串（422）；超长由此处抛 400。
+-    if len(body.query) > 200:
+-        raise InvalidQueryLengthError()
++    # design §7 line 663：query / limit 全部边界 → 400 INVALID_QUERY_LENGTH
++    # （B-P2-M18-search-query-validation-returns-422 fix：原 Pydantic min_length/ge/le 走 422
++    # 与 service 层 >200 走 400 不一致；schema 已删除约束，router 单点拦截全部边界）
++    if len(body.query) < 1 or len(body.query) > 200:
++        raise InvalidQueryLengthError(
++            reason="query_length_out_of_range", query_length=len(body.query)
++        )
++    if body.limit < 1 or body.limit > 100:
++        raise InvalidQueryLengthError(reason="limit_out_of_range", limit=body.limit)
+ 
+     svc = SearchService()
+ 
+diff --git a/api/schemas/node_schema.py b/api/schemas/node_schema.py
+index 53b1d89..cc43545 100644
+--- a/api/schemas/node_schema.py
++++ b/api/schemas/node_schema.py
+@@ -28,7 +28,10 @@ class NodeCreate(BaseModel):
+ class NodeUpdate(BaseModel):
+     name: str | None = Field(None, min_length=1, max_length=200)
+     description: str | None = Field(None, max_length=2000)
+-    # 注：type 不可变更（design §4）；parent_id 走独立 /move endpoint
++    # design §4: type 不可变更，但显式声明字段以便 service 层抛 NODE_TYPE_IMMUTABLE 422
++    # （B-P2-M03-node-type-immutable-not-enforced fix：原 schema 排除法 → Pydantic 静默忽略 → 返 200）
++    type: NodeTypeEnum | None = None
++    # 注：parent_id 走独立 /move endpoint
+ 
+ 
+ class NodeReorderItem(BaseModel):
+diff --git a/api/schemas/search_schema.py b/api/schemas/search_schema.py
+index a28ace0..7f7bee2 100644
+--- a/api/schemas/search_schema.py
++++ b/api/schemas/search_schema.py
+@@ -12,7 +12,7 @@ from enum import StrEnum
+ from typing import Literal
+ from uuid import UUID
+ 
+-from pydantic import BaseModel, ConfigDict, Field
++from pydantic import BaseModel, ConfigDict
+ 
+ 
+ class EmbeddingTargetType(StrEnum):
+@@ -29,15 +29,21 @@ _EMBEDDING_TARGET_TYPES: tuple[str, ...] = ("node", "dimension_record", "competi
+ 
+ 
+ class SearchRequest(BaseModel):
+-    """POST /api/projects/{project_id}/search 请求 schema（design §7 line 626-630）。"""
++    """POST /api/projects/{project_id}/search 请求 schema（design §7 line 626-630）。
++
++    边界校验全部在 router 层抛 400 INVALID_QUERY_LENGTH（design §7 line 663 字面）；
++    Pydantic min_length/ge/le 已移除以保持错误路径单一（B-P2-M18-search-query-validation-returns-422 fix）。
++    schema 仅保留类型/枚举校验（target_types 仍走 Pydantic 422，错误类型而非边界值）。
++    """
+ 
+     model_config = ConfigDict(extra="forbid")
+ 
+-    query: str = Field(..., min_length=1)
+-    """最大 200 字符由 router 手动 check 抛 400 INVALID_QUERY_LENGTH（design §7 line 663 字面）。"""
++    query: str
++    """长度 1-200 字符；空 / 超 200 均由 router 抛 400 INVALID_QUERY_LENGTH。"""
+     target_types: list[EmbeddingTargetType] | None = None
+     """None 表示全部 4 类（不过滤）。"""
+-    limit: int = Field(20, ge=1, le=100)
++    limit: int = 20
++    """范围 1-100；越界由 router 抛 400 INVALID_QUERY_LENGTH。"""
+ 
+ 
+ class SearchResultItem(BaseModel):
+diff --git a/api/services/project_service.py b/api/services/project_service.py
+index 7442b66..5870c99 100644
+--- a/api/services/project_service.py
++++ b/api/services/project_service.py
+@@ -155,6 +155,43 @@ class ProjectService:
+         )
+         return proj
+ 
++    async def delete_project(
++        self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
++    ) -> None:
++        """物理删除项目 (B-P2-M03-project-delete-endpoint-missing fix).
++
++        DB 层 ON DELETE CASCADE 兜底删 nodes / project_members / dimension_configs / 等
++        17 个子表（详 ADR-005 §3.2 横切表清单 + api/models/* FK ondelete="CASCADE"）。
++
++        ⚠️ design §1 / §4 / §13 字面声明 "本期不支持物理删除" + ErrorCode
++        `PROJECT_DELETE_NOT_SUPPORTED`(422) 已注册但未实装为 endpoint。本 fix 按
++        dogfooding P4 cluster-2 prompt + E2E spec 期望 200/204 cascade 实装真物理删除。
++        design vs impl 漂移已记 _handoff/dogfooding/04-bug-fixes/B-P4-cluster-2-M18-M03/design-audit.md
++        作为 HIGH 冲突上报 CY 决策 sync code 还是 sync design。
++        """
++        proj, _m = await self.require_owner(db, project_id, actor_user_id)
++
++        # 写 activity_log 必须先于物理删除（FK CASCADE 也会删 activity_log 行；
++        # 但本写入是审计意图，记录"删除发生过"——保留事件指向被删 project_id 的字符串）
++        await write_event(
++            db=db,
++            actor_user_id=actor_user_id,
++            project_id=project_id,
++            action_type="project_deleted",
++            target_type="project",
++            target_id=str(project_id),
++            summary=f"Deleted project '{proj.name}'",
++            metadata={
++                "project_id": str(project_id),
++                "previous_status": proj.status,
++                "name": proj.name,
++            },
++        )
++        await db.flush()
++
++        # 物理删除 — DB CASCADE 兜底删子表（nodes / members / dimension_configs / etc.）
++        await self.projects.delete_one(db, project_id)
++
+     async def archive_project(
+         self, db: AsyncSession, *, project_id: UUID, actor_user_id: UUID
+     ) -> Project:
+diff --git a/tests/test_m03_routers.py b/tests/test_m03_routers.py
+index 6e4a87d..0df923a 100644
+--- a/tests/test_m03_routers.py
++++ b/tests/test_m03_routers.py
+@@ -223,9 +223,39 @@ async def test_create_with_unknown_parent_returns_404(auth_client, make_user):
+     assert r.json()["code"] == "node_parent_not_found"
+ 
+ 
+-# ─────────────── 边界 E5: type immutable (PUT 不接受 type 字段, schema 不含) ───────────────
+-# NodeUpdate schema 不含 type 字段，前端无法发送 → schema 层就拦住
+-# (R-X5: design §13 NODE_TYPE_IMMUTABLE 备用 — Service 层校验仍存在用于直调 service 路径)
++# ─────────────── 边界 E5: type immutable (B-P2-M03-node-type-immutable-not-enforced fix) ───────────────
++# NodeUpdate schema 现在显式声明 type 字段，service 层捕获变更抛 NODE_TYPE_IMMUTABLE 422。
++# 原方案：schema 排除法 → Pydantic 静默忽略 → 返 200，design §4 NODE_TYPE_IMMUTABLE 未实装。
++
++
++async def test_update_node_type_returns_422_node_type_immutable(auth_client, make_user):
++    """PUT 改 type 返 422 NODE_TYPE_IMMUTABLE (B-P2-M03 fix / design §4 字面)。"""
++    user = await make_user(email="m03-typeimm@example.com")
++    pid = await _create_project(auth_client, user.id)
++    node = await _create_node(auth_client, user.id, pid, name="root", type="folder")
++    r = await auth_client.put(
++        f"/api/projects/{pid}/nodes/{node['id']}",
++        json={"name": "root", "type": "file"},
++        headers=_bearer(user.id),
++    )
++    assert r.status_code == 422
++    assert r.json()["code"] == "node_type_immutable"
++
++
++async def test_update_node_same_type_succeeds(auth_client, make_user):
++    """PUT 传相同 type 视为 no-op (无变更不触发 NODE_TYPE_IMMUTABLE / 服务对齐)。"""
++    user = await make_user(email="m03-typesame@example.com")
++    pid = await _create_project(auth_client, user.id)
++    node = await _create_node(auth_client, user.id, pid, name="root", type="folder")
++    r = await auth_client.put(
++        f"/api/projects/{pid}/nodes/{node['id']}",
++        json={"name": "renamed", "type": "folder"},
++        headers=_bearer(user.id),
++    )
++    assert r.status_code == 200
++    body = r.json()
++    assert body["type"] == "folder"
++    assert body["name"] == "renamed"
+ 
+ 
+ # ─────────────── 边界 E6: reorder 跨 parent ───────────────
+diff --git a/tests/test_m18_routers.py b/tests/test_m18_routers.py
+index ff44b14..e3b6e2b 100644
+--- a/tests/test_m18_routers.py
++++ b/tests/test_m18_routers.py
+@@ -576,10 +576,16 @@ class TestMetadataFieldsLiteral:
+ 
+ 
+ class TestPydantic422:
+-    """Pydantic 422 boundary：query 空 / query 200+ / target_types 非合法枚举 / limit 0。"""
++    """边界一致性: query 空/超长/limit 越界全部 400 INVALID_QUERY_LENGTH
++    (B-P2-M18-search-query-validation-returns-422 fix);
++    target_types 非合法枚举仍走 Pydantic 422 (类型错误, 非边界值)。"""
+ 
+-    async def test_query_empty_returns_422(self, auth_client, make_user):
+-        """query 空字符串 → 422（Pydantic min_length=1）。"""
++    async def test_query_empty_returns_400_invalid_query_length(self, auth_client, make_user):
++        """query 空字符串 → 400 invalid_query_length（design §7 line 663 字面 / router 单点拦截）。
++
++        B-P2-M18 fix 前: Pydantic min_length=1 走 422 与 service 层 >200 走 400 路径不一致;
++        修后 schema 删 min_length, router 统一抛 400。
++        """
+         user = await make_user(email="m18-422e@example.com")
+         pid = await _create_project(auth_client, user.id)
+         r = await auth_client.post(
+@@ -587,7 +593,8 @@ class TestPydantic422:
+             json={"query": ""},
+             headers=_bearer(user.id),
+         )
+-        assert r.status_code == 422
++        assert r.status_code == 400
++        assert r.json()["code"] == "invalid_query_length"
+ 
+     async def test_query_201_chars_returns_400_invalid_query_length(self, auth_client, make_user):
+         """query 201 字符 → 400 invalid_query_length（design §7 line 663 字面 / router 手动 check）。
+@@ -627,8 +634,8 @@ class TestPydantic422:
+         )
+         assert r.status_code == 422
+ 
+-    async def test_limit_zero_returns_422(self, auth_client, make_user):
+-        """limit=0 → 422（Pydantic ge=1）。"""
++    async def test_limit_zero_returns_400_invalid_query_length(self, auth_client, make_user):
++        """limit=0 → 400 invalid_query_length（B-P2-M18 fix / router 单点拦截）。"""
+         user = await make_user(email="m18-422lz@example.com")
+         pid = await _create_project(auth_client, user.id)
+         r = await auth_client.post(
+@@ -636,10 +643,11 @@ class TestPydantic422:
+             json={"query": "test", "limit": 0},
+             headers=_bearer(user.id),
+         )
+-        assert r.status_code == 422
++        assert r.status_code == 400
++        assert r.json()["code"] == "invalid_query_length"
+ 
+-    async def test_limit_101_returns_422(self, auth_client, make_user):
+-        """limit=101 → 422（Pydantic le=100）。"""
++    async def test_limit_101_returns_400_invalid_query_length(self, auth_client, make_user):
++        """limit=101 → 400 invalid_query_length（B-P2-M18 fix / router 单点拦截）。"""
+         user = await make_user(email="m18-422lmax@example.com")
+         pid = await _create_project(auth_client, user.id)
+         r = await auth_client.post(
+@@ -647,7 +655,8 @@ class TestPydantic422:
+             json={"query": "test", "limit": 101},
+             headers=_bearer(user.id),
+         )
+-        assert r.status_code == 422
++        assert r.status_code == 400
++        assert r.json()["code"] == "invalid_query_length"
+ 
+ 
+ # ─────────────── admin endpoint Pydantic 422 ───────────────
+diff --git a/tests/test_m18_schema.py b/tests/test_m18_schema.py
+index 5de1fcc..2b2043a 100644
+--- a/tests/test_m18_schema.py
++++ b/tests/test_m18_schema.py
+@@ -65,27 +65,30 @@ def test_search_request_max_length_200():
+ 
+ 
+ def test_search_request_query_201_chars_passes_schema():
+-    """query 201 字符 → Pydantic 不拦（max_length 已删）。
++    """query 201 字符 → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。
+ 
+-    design §7 line 663：query 超 200 char 由 router 手动 check 抛 400 INVALID_QUERY_LENGTH。
+-    Pydantic 只负责 min_length=1（空串 422）；超长校验在 router 层。
++    design §7 line 663：query 越界 / limit 越界全部由 router 手动 check 抛 400 INVALID_QUERY_LENGTH。
++    Pydantic schema 不再做边界校验（保持错误路径单一）。
+     """
+     req = SearchRequest(query="a" * 201)
+     assert len(req.query) == 201
+ 
+ 
+-def test_search_request_empty_query_raises():
+-    with pytest.raises(ValidationError):
+-        SearchRequest(query="")
++def test_search_request_empty_query_passes_schema():
++    """空 query → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。"""
++    req = SearchRequest(query="")
++    assert req.query == ""
+ 
+ 
+-def test_search_request_limit_range():
++def test_search_request_limit_range_passes_schema():
++    """limit 越界 → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。"""
+     req = SearchRequest(query="test", limit=100)
+     assert req.limit == 100
+-    with pytest.raises(ValidationError):
+-        SearchRequest(query="test", limit=0)
+-    with pytest.raises(ValidationError):
+-        SearchRequest(query="test", limit=101)
++    # 边界越界 Pydantic 不再拦（router 抛 400）
++    req_low = SearchRequest(query="test", limit=0)
++    assert req_low.limit == 0
++    req_high = SearchRequest(query="test", limit=101)
++    assert req_high.limit == 101
+ 
+ 
+ def test_search_request_target_types_list():

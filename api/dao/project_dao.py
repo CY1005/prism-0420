@@ -68,6 +68,15 @@ class ProjectDAO:
         await db.flush()
         return proj
 
+    async def delete_one(self, db: AsyncSession, project_id: UUID) -> int:
+        """物理删除项目（B-P2-M03-project-delete-endpoint-missing fix）。
+
+        FK ondelete="CASCADE" 兜底删 nodes/members/dimension_configs 等子表。
+        无 tenant 过滤——caller (ProjectService.delete_project) 已通过 require_owner 校验。
+        """
+        result = await db.execute(delete(Project).where(Project.id == project_id))
+        return result.rowcount or 0
+
 
 class ProjectMemberDAO:
     async def list_by_project(self, db: AsyncSession, project_id: UUID) -> Sequence[ProjectMember]:

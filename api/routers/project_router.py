@@ -1,10 +1,11 @@
 """M02 项目 + 成员 + 维度配置 router (design §7 + §8 权限三层).
 
-11 endpoints (design §7 表):
+12 endpoints (design §7 表 / DELETE /pid 由 B-P2-M03-project-delete-endpoint-missing fix 补):
     GET    /api/projects                      list_projects
     POST   /api/projects                      create_project
     GET    /api/projects/{pid}                get_project
     PUT    /api/projects/{pid}                update_project
+    DELETE /api/projects/{pid}                delete_project (B-P2-M03 fix / 物理删除 / 详 design-audit HIGH 冲突)
     POST   /api/projects/{pid}/archive        archive_project
     GET    /api/projects/{pid}/members        list_members
     POST   /api/projects/{pid}/members        invite_member
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.check_project_access import ProjectAccess, check_project_access
@@ -147,6 +148,27 @@ async def update_project(
     )
     await db.commit()
     return _project_response(proj)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    access: ProjectAccess = Depends(check_project_access(role="owner")),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """物理删除项目（B-P2-M03-project-delete-endpoint-missing fix）。
+
+    DB ON DELETE CASCADE 兜底删 nodes / project_members / dimension_configs / 等 17
+    个子表（详 ADR-005 §3.2 横切表清单 + api/models/* FK ondelete="CASCADE"）。
+
+    ⚠️ design §1/§4/§13 字面 "本期不支持物理删除" + ErrorCode
+    `PROJECT_DELETE_NOT_SUPPORTED`(422) 已注册。本 endpoint 按 P4 cluster-2 + E2E spec
+    期望实装真物理删除；HIGH design 冲突上报 CY 决策
+    （详 _handoff/dogfooding/04-bug-fixes/B-P4-cluster-2-M18-M03/design-audit.md）。
+    """
+    svc = ProjectService()
+    await svc.delete_project(db, project_id=access.project.id, actor_user_id=access.user.id)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{project_id}/archive", response_model=ProjectResponse)

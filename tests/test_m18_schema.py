@@ -65,27 +65,30 @@ def test_search_request_max_length_200():
 
 
 def test_search_request_query_201_chars_passes_schema():
-    """query 201 字符 → Pydantic 不拦（max_length 已删）。
+    """query 201 字符 → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。
 
-    design §7 line 663：query 超 200 char 由 router 手动 check 抛 400 INVALID_QUERY_LENGTH。
-    Pydantic 只负责 min_length=1（空串 422）；超长校验在 router 层。
+    design §7 line 663：query 越界 / limit 越界全部由 router 手动 check 抛 400 INVALID_QUERY_LENGTH。
+    Pydantic schema 不再做边界校验（保持错误路径单一）。
     """
     req = SearchRequest(query="a" * 201)
     assert len(req.query) == 201
 
 
-def test_search_request_empty_query_raises():
-    with pytest.raises(ValidationError):
-        SearchRequest(query="")
+def test_search_request_empty_query_passes_schema():
+    """空 query → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。"""
+    req = SearchRequest(query="")
+    assert req.query == ""
 
 
-def test_search_request_limit_range():
+def test_search_request_limit_range_passes_schema():
+    """limit 越界 → Pydantic 不拦（边界全在 router 层 / B-P2-M18 fix）。"""
     req = SearchRequest(query="test", limit=100)
     assert req.limit == 100
-    with pytest.raises(ValidationError):
-        SearchRequest(query="test", limit=0)
-    with pytest.raises(ValidationError):
-        SearchRequest(query="test", limit=101)
+    # 边界越界 Pydantic 不再拦（router 抛 400）
+    req_low = SearchRequest(query="test", limit=0)
+    assert req_low.limit == 0
+    req_high = SearchRequest(query="test", limit=101)
+    assert req_high.limit == 101
 
 
 def test_search_request_target_types_list():
