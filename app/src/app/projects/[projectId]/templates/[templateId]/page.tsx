@@ -52,10 +52,9 @@ export default function TemplateDetailPage() {
     const result = await updateTemplate(templateId, {
       name: editName,
       description: editDesc,
-      change_summary: "手动编辑名称/描述",
+      changeSummary: "手动编辑名称/描述",
     });
     if (result.success) {
-      setTemplate(result.data);
       setEditing(false);
       load();
     }
@@ -63,7 +62,7 @@ export default function TemplateDetailPage() {
 
   const handleRevert = async (versionNumber: number) => {
     if (!confirm(`确定回滚到 v${versionNumber}？`)) return;
-    const result = await revertTemplate(templateId, versionNumber);
+    const result = await revertTemplate(templateId, String(versionNumber));
     if (result.success) {
       load();
     }

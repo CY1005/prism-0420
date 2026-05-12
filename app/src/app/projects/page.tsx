@@ -11,12 +11,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { projectsStrings } from "@/lib/projects-data";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-import { getProjects } from "@/actions/projects";
+import { getProjects, type Project } from "@/actions/projects";
 import { useAuth } from "@/contexts/auth-context";
 import { isNextRedirectError } from "@/lib/errors";
-import type { components } from "@/types/api";
-
-type ProjectResponse = components["schemas"]["ProjectResponse"];
 
 const typeColorMap: Record<string, string> = {
   blue: "border-blue-200 text-blue-700 bg-blue-50",
@@ -44,7 +41,7 @@ type ProjectTab = "personal" | "team";
 export default function ProjectsPage() {
   const router = useRouter();
   const { user, isLoading, logout } = useAuth();
-  const [apiProjects, setApiProjects] = useState<ProjectResponse[] | null>(null);
+  const [apiProjects, setApiProjects] = useState<Project[] | null>(null);
   const [activeTab, setActiveTab] = useState<ProjectTab>("personal");
 
   useEffect(() => {
@@ -72,15 +69,15 @@ export default function ProjectsPage() {
   const displayProjects = (apiProjects ?? []).map((p) => ({
     id: p.id,
     title: p.name,
-    type: templateLabel[p.template_type] || p.template_type,
-    typeColor: templateColor[p.template_type] || "blue",
+    type: templateLabel[p.templateType] || p.templateType,
+    typeColor: templateColor[p.templateType] || "blue",
     description: p.description || "",
     stats: [
       { value: 0, label: "模块" },
       { value: 0, label: "功能项" },
       { value: "0%", label: "完善度" },
     ],
-    lastUpdated: new Date(p.created_at).toLocaleDateString("zh-CN"),
+    lastUpdated: new Date(p.createdAt).toLocaleDateString("zh-CN"),
     members: [userInitials],
   }));
 

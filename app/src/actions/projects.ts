@@ -23,17 +23,52 @@ type MemberListResponse = components["schemas"]["MemberListResponse"];
 type MemberResponse = components["schemas"]["MemberResponse"];
 type MemberRole = components["schemas"]["MemberRoleEnum"];
 
-export async function getProjects(): Promise<ProjectResponse[]> {
+// Prism 拷改前端的 camelCase 期望形态；ProjectResponse (API) 是 snake_case。
+// Phase 2.3 cleanup S4 收口：actions 层做 snake → camel 单点映射，避免逐文件渗透。
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "active" | "archived";
+  templateType: string;
+  hierarchyLabels: string[];
+  versionMode: string;
+  aiProvider: string | null;
+  ownerId: string;
+  teamId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toProject(r: ProjectResponse): Project {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    status: r.status,
+    templateType: r.template_type,
+    hierarchyLabels: r.hierarchy_labels,
+    versionMode: r.version_mode,
+    aiProvider: r.ai_provider,
+    ownerId: r.owner_id,
+    teamId: r.team_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export async function getProjects(): Promise<Project[]> {
   return withAuthRedirect(async () => {
     const data = await serverApiGet<ProjectListResponse>("/api/projects");
-    return data.items;
+    return data.items.map(toProject);
   });
 }
 
-export async function getProject(projectId: string): Promise<ProjectResponse | null> {
+export async function getProject(projectId: string): Promise<Project | null> {
   return withAuthRedirect(async () => {
     try {
-      return await serverApiGet<ProjectResponse>(`/api/projects/${projectId}`);
+      const raw = await serverApiGet<ProjectResponse>(`/api/projects/${projectId}`);
+      return toProject(raw);
     } catch (error) {
       if (error instanceof UnauthenticatedError) throw error;
       return null;

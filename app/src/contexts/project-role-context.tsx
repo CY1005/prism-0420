@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { getMyProjectRole } from "@/actions/projects";
 
-type ProjectRole = "admin" | "editor" | "viewer" | null;
+type ProjectRole = "owner" | "editor" | "viewer" | null;
 
 interface ProjectRoleContextValue {
   role: ProjectRole;
@@ -41,8 +41,8 @@ export function ProjectRoleProvider({
   const value: ProjectRoleContextValue = {
     role,
     isViewer: role === "viewer",
-    canEdit: role === "admin" || role === "editor",
-    canAdmin: role === "admin",
+    canEdit: role === "owner" || role === "editor",
+    canAdmin: role === "owner",
     loading,
   };
 

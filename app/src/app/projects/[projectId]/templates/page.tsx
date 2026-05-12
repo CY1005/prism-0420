@@ -26,7 +26,7 @@ export default function TemplatesPage() {
     setLoading(true);
     const result = await listTemplates(projectId, filter);
     if (result.success) {
-      setTemplates(result.data.templates);
+      setTemplates(result.data);
     }
     setLoading(false);
   };

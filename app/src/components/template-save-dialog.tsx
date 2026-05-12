@@ -40,7 +40,7 @@ export function TemplateSaveDialog({
     };
 
     const result = await createTemplate({
-      project_id: projectId,
+      projectId,
       name: name.trim(),
       description: description.trim() || undefined,
       category,
