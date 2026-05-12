@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-12 (**Phase 2.3 cleanup S1+S3+S4(partial) ✅ — #26 DONE / #25 PARTIAL tsc 88→74 / 揭露 Prism Drizzle→FastAPI shape 未真迁遗债 / S5-S7 + workspace 需独立 sprint**)
+last_updated: 2026-05-12 (**Phase 2.3 cleanup 全完** + **dogfooding P1 testpoint 全闸门** — 元发现 #9 新立：baseline-patch 时序契约累计 6 处升 P1 高耦合触发点)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -362,6 +362,39 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 - 量化：机械修复 fact-finding 程度高 → 9/9 不暴露；产品决策跳 design → 100% 暴露反向证据或工作量偏差 5-10 倍
 - 比 #6 严重一档：#6 是 phase 关闸模板覆盖率不足（机制层），#7 是决策行为本身跳 fact-finding（行为层）；机制可补但行为漏洞需要立"规则 + 触发条件"双层防御
 - **教训**：prism-0420 项目方法论是"设计前置 → AI 实现"。AI 给推荐时绕过 design 文档 = 方法论自我背叛
+
+---
+
+### #9 dogfooding sprint P1 cross-cutting 视角发现 baseline-patch 时序契约累计 6 处（2026-05-12 P1 闸门）
+
+**现象**：dogfooding P1 全闸门（21/21 模块 / 2327 testpoint）/ 批 5 cross-cutting subagent 跨 19 模块综合元发现暴露 **baseline-patch 时序契约 punt 累计 6 处堆积**：
+
+| # | 来源 | 描述 |
+|---|------|------|
+| 1 | M02 反向引用 | M20 / M18 反向引用未实装 baseline-patch |
+| 2 | M03 enqueue B | enqueue B 路径推迟 baseline-patch |
+| 3 | M04 enqueue B | enqueue B 路径推迟 baseline-patch（与 #2 同模式） |
+| 4 | M07 audit A7 | issue A7 退化路径未补 baseline-patch |
+| 5 | M13 audit B1 | M02/M03/M04/M07 baseline-patch 前置 / SSE 流式集成时同步堆积 |
+| 6 | M15 NULLABLE | activity_stream baseline-patch project_id NULLABLE / 全局事件跨模块 patch 风险 |
+
+**触发元发现 #1 自动升 P1 规则**：≥3 项 punt 同触发点 → 高耦合触发点。本批 6 项 **远超 ≥3 阈值**，**baseline-patch 时序契约**正式立为高耦合触发点。
+
+**根因**：baseline-patch 模式 = 上游模块（如 M02）需要下游模块（M18/M20）实装后才能反向打补丁。设计前置阶段 6 处显式 punt 到下游 sprint，但**实施期下游 sprint 关闸时未做反向 reconcile**，6 处累积在 P1 cross-cutting 才一次性 surface。
+
+**与 #1（M15-B1 锁住下游 8 项）区别**：#1 是单个高耦合 punt 阻塞下游；本条是**反向 patch 时序设计本身的堆积模式** / 每条 punt 单独看都"以后做"是合理决策，集中起来才是漂移。
+
+**立规**：
+1. **每模块 sprint 关闸 commit 必跑 baseline-patch reconcile pass**（查本模块是否有上游模块 punt 等本模块实装后回填 / 命中即立做或转入此触发点列表）
+2. **dogfooding sprint cross-cutting 视角必含 baseline-patch 时序契约专项**（已在 `_handoff/dogfooding/01-testpoints/_cross-cutting.md` 视角 10 落实 10 条 testpoint）
+3. **P2-P5 sprint 启动 reconcile pass 必查本条**（按本文件 policy "cold-start 必读" / 命中即纳入本 sprint 范围或显式 punt 升级 STILL_PUNT）
+
+**STAR 标签**：
+- 模式归类：设计前置阶段显式 punt 但实施期未追踪 → 跨 sprint 时序漂移
+- 严重度：medium（每条单独不阻塞 / 累计起来是设计前置方法论的"长期债"实证 / Phase 3 v0.4 STAR 数据点）
+- 量化：6 处 baseline-patch / 涉及 6 个不同模块 / 平均每模块 1 处 punt 反向 patch / cross-cutting 视角才一次性 surface
+- **教训**：设计前置不等于设计完成 / **反向 patch 时序需要专门的跨 sprint 追踪机制**（本元发现就是新机制）
+- **跟元发现 #1 联动**：#1 防"高耦合下游阻塞"，本条防"上游 punt 等下游反向回填漂移"，两个互补
 
 ---
 

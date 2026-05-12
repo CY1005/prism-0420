@@ -2,8 +2,8 @@
 title: prism-0420 全项目 Roadmap + 进度 Checklist
 status: living-doc
 owner: CY
-last_updated: 2026-05-12（**Phase 2.3 集成验证清债全完** / tsc 88→0 / next build PASS / pytest 1643 PASS / 6 sub-sprint 累计 S1+S3+S4+B+A+C+D / Phase 3 v0.3 关键 STAR 数据落地）
-current_phase: **Phase 2.3 集成验证完成 / Phase 3 v0.3 STAR 落地 / dogfooding 解锁**（2026-05-12 / 下一步：6/8+6/15 工作笔记导入 → Phase 3 完整报告 v1）
+last_updated: 2026-05-12（**Phase 2.3 集成验证清债全完** + **dogfooding P1 testpoint 全闸门**：21/21 模块 / 2327 testpoint / 跨 6 session / cost ~$23.0 / 22 元发现转化）
+current_phase: **Phase 2.3 集成验证完成 / Phase 3 v0.3 STAR 落地 / dogfooding P1 testpoint ✅ DONE**（2026-05-12 / 下一步：CY review 抽样 3-4 模块 → P2 case + 并行 6/8+6/15 工作笔记导入 → Phase 3 完整报告 v1）
 ---
 
 # prism-0420 全项目 Roadmap
