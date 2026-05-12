@@ -620,60 +620,54 @@ test.describe("M03 功能模块树 dogfooding", () => {
 
   // ─── API 旁路 §7 数据完整性 ───────────────────────────
 
-  test("[P0] nodes.project_id ON DELETE CASCADE — 删 project 后 GET /nodes 返 404 — API 旁路", async ({
+  test("[P0] DELETE /api/projects/{pid} 返 422 PROJECT_DELETE_NOT_SUPPORTED — design G2 软删除不可逆", async ({
     request,
   }) => {
-    // testpoint §7: nodes.project_id NOT NULL + ON DELETE CASCADE 删 project 行 nodes 全删
-    // 真 bug 探测：B-P2-M03-project-delete-endpoint-missing
-    // 实测（2026-05-12）：DELETE /api/projects/{id} 返 405（端点不存在）
-    // OpenAPI spec 确认 /api/projects/{project_id} 只有 GET + PUT / 无 DELETE endpoint
-    // design §7 声称 nodes.project_id ON DELETE CASCADE 但无法通过 API 验证（无删除项目端点）
+    // testpoint §7 重定向：design M02 §1 L117 + §4 L503 + §13 G2 决策
+    //   "归档为不可逆终态 / 不物理删除 / 抛 PROJECT_DELETE_NOT_SUPPORTED (422)"
+    // ErrorCode + ProjectDeleteNotSupportedError(http_status=422) 已在 design §13 注册等实装。
+    // 用户应走 POST /api/projects/{pid}/archive 而非 DELETE。
+    //
+    // P4-cluster-2-revert 历史：commit 0992dc8 错装物理删除返 204（误把"endpoint 漏写"
+    // 误解为"需要实装物理删除"）/ 此 fix 改回 design 真相 422。
+    //
+    // nodes.project_id ON DELETE CASCADE schema 约束仍有效（design §7 表声明），
+    // 由 DB 兜底 / 不通过 API 触发（不支持物理删除路径）。
     const { accessToken } = await loginE2EAdmin(request);
     const auth = { Authorization: `Bearer ${accessToken}` };
 
     // 创建临时项目
     const projRes = await request.post(`${API_BASE}/api/projects`, {
       headers: auth,
-      data: { name: `CascadeTest ${Date.now()}`, description: "", template_type: "custom" },
+      data: { name: `DeleteTest ${Date.now()}`, description: "", template_type: "custom" },
     });
     expect(projRes.status()).toBe(201);
     const proj = await projRes.json();
 
-    // 在项目里建节点（确认节点创建成功）
+    // 创建子节点（确认 fixtures 完整）
     const nodeRes = await request.post(`${API_BASE}/api/projects/${proj.id}/nodes`, {
       headers: auth,
-      data: { name: "To be cascaded", type: "file" },
+      data: { name: "Child node", type: "file" },
     });
     expect(nodeRes.status()).toBe(201);
     const nodeId = (await nodeRes.json()).id;
 
-    // 尝试删除项目 — 探测 DELETE endpoint 是否存在
-    const delProjRes = await request.delete(`${API_BASE}/api/projects/${proj.id}`, {
+    // DELETE 应返 422 PROJECT_DELETE_NOT_SUPPORTED（design 真相）
+    const delRes = await request.delete(`${API_BASE}/api/projects/${proj.id}`, { headers: auth });
+    expect(delRes.status()).toBe(422);
+    const body = await delRes.json();
+    expect(body.code).toBe("project_delete_not_supported");
+
+    // 项目仍存在（未被物理删除 / 也未被自动归档 / status 应保持 active）
+    const getProjRes = await request.get(`${API_BASE}/api/projects/${proj.id}`, { headers: auth });
+    expect(getProjRes.status()).toBe(200);
+    expect((await getProjRes.json()).status).toBe("active");
+
+    // 子节点仍存在
+    const getNodeRes = await request.get(`${API_BASE}/api/projects/${proj.id}/nodes/${nodeId}`, {
       headers: auth,
     });
-
-    if (delProjRes.status() === 405) {
-      // 真 bug：DELETE /api/projects/{id} 端点不存在
-      // bug 入队 B-P2-M03-project-delete-endpoint-missing（见 03-bug-queue.md）
-      console.log(
-        `[bug] B-P2-M03-project-delete-endpoint-missing: DELETE /api/projects/{id} 返 405 / 端点未实现`,
-      );
-      // CASCADE 无法通过 API 验证，记录节点仍存在（DB 层 CASCADE 逻辑本身可能正确，但无 API 入口）
-      const getNodeRes = await request.get(`${API_BASE}/api/projects/${proj.id}/nodes/${nodeId}`, {
-        headers: auth,
-      });
-      // 项目未删除，节点仍然存在
-      expect(getNodeRes.status()).toBe(200);
-    } else if ([200, 204].includes(delProjRes.status())) {
-      // 删除成功：验证 cascade 删除节点
-      const getNodeRes = await request.get(`${API_BASE}/api/projects/${proj.id}/nodes/${nodeId}`, {
-        headers: auth,
-      });
-      expect([404, 403]).toContain(getNodeRes.status());
-    } else {
-      // 其他错误状态
-      expect([200, 204, 405]).toContain(delProjRes.status());
-    }
+    expect(getNodeRes.status()).toBe(200);
   });
 
   test("[P0] DELETE 子节点 node path 结构正确，parent path 含自身 id — API 旁路", async ({

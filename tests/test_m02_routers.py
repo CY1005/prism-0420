@@ -119,6 +119,53 @@ async def test_archive_then_again_returns_409(auth_client, make_user):
     assert r2.json()["code"] == "project_already_archived"
 
 
+# ─────────────── delete (design M02 §1 §4 §13 G2: 软删除不可逆 / 物理删除拒) ───────────────
+
+
+async def test_delete_project_returns_422_project_delete_not_supported(auth_client, make_user):
+    """DELETE /api/projects/{pid} 返 422 PROJECT_DELETE_NOT_SUPPORTED.
+
+    design M02 §1 L117 + §4 L503 G2 决策：归档=软删除不可逆 / 不物理删除。
+    ErrorCode + ProjectDeleteNotSupportedError 已在 design §13 注册（http_status=422）。
+    （P4-cluster-2-revert: cluster-2 commit 0992dc8 错装物理删除 / 此 fix 改回 design 真相）
+    """
+    owner = await make_user(email="p-del-422@example.com")
+    cr = await auth_client.post("/api/projects", json={"name": "DelP"}, headers=_bearer(owner.id))
+    assert cr.status_code == 201
+    pid = cr.json()["id"]
+
+    r = await auth_client.delete(f"/api/projects/{pid}", headers=_bearer(owner.id))
+    assert r.status_code == 422
+    assert r.json()["code"] == "project_delete_not_supported"
+
+    # 项目仍存在（未被物理删除 / 也未被自动归档）
+    get_r = await auth_client.get(f"/api/projects/{pid}", headers=_bearer(owner.id))
+    assert get_r.status_code == 200
+    assert get_r.json()["status"] == "active"
+
+
+async def test_delete_project_non_owner_returns_403(auth_client, make_user):
+    """DELETE 非 owner 应被 check_project_access(role=owner) 拦在 422 之前.
+
+    顺序：check_project_access(role=owner) Depends 先跑 → 非 owner 直接 403
+    （此场景 422 永远不可达 / 防御深度自检）。
+    """
+    owner = await make_user(email="p-del-owner@example.com")
+    viewer = await make_user(email="p-del-viewer@example.com")
+    cr = await auth_client.post(
+        "/api/projects", json={"name": "DelViewerP"}, headers=_bearer(owner.id)
+    )
+    pid = cr.json()["id"]
+    # 邀 viewer
+    await auth_client.post(
+        f"/api/projects/{pid}/members",
+        json={"user_id": str(viewer.id), "role": "viewer"},
+        headers=_bearer(owner.id),
+    )
+    r = await auth_client.delete(f"/api/projects/{pid}", headers=_bearer(viewer.id))
+    assert r.status_code == 403
+
+
 # ─────────────── members ───────────────
 
 

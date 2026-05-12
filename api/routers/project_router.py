@@ -1,11 +1,11 @@
 """M02 项目 + 成员 + 维度配置 router (design §7 + §8 权限三层).
 
-12 endpoints (design §7 表 / DELETE /pid 由 B-P2-M03-project-delete-endpoint-missing fix 补):
+12 endpoints (design §7 表 / DELETE /pid 返 422 PROJECT_DELETE_NOT_SUPPORTED — design G2):
     GET    /api/projects                      list_projects
     POST   /api/projects                      create_project
     GET    /api/projects/{pid}                get_project
     PUT    /api/projects/{pid}                update_project
-    DELETE /api/projects/{pid}                delete_project (B-P2-M03 fix / 物理删除 / 详 design-audit HIGH 冲突)
+    DELETE /api/projects/{pid}                delete_project (raise 422 / design §1 §4 §13 G2 软删除不可逆)
     POST   /api/projects/{pid}/archive        archive_project
     GET    /api/projects/{pid}/members        list_members
     POST   /api/projects/{pid}/members        invite_member
@@ -150,25 +150,25 @@ async def update_project(
     return _project_response(proj)
 
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{project_id}")
 async def delete_project(
     access: ProjectAccess = Depends(check_project_access(role="owner")),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """物理删除项目（B-P2-M03-project-delete-endpoint-missing fix）。
+    """物理删除拒绝 (design M02 §1 L117 + §4 L503 + §13 G2: 软删除不可逆 / 不物理删除).
 
-    DB ON DELETE CASCADE 兜底删 nodes / project_members / dimension_configs / 等 17
-    个子表（详 ADR-005 §3.2 横切表清单 + api/models/* FK ondelete="CASCADE"）。
+    用户应走 POST /api/projects/{pid}/archive endpoint。
+    service.delete_project raise ProjectDeleteNotSupportedError → middleware 渲染 422
+    {"code": "project_delete_not_supported"}（design §13 已注册 ErrorCode 等实装）。
 
-    ⚠️ design §1/§4/§13 字面 "本期不支持物理删除" + ErrorCode
-    `PROJECT_DELETE_NOT_SUPPORTED`(422) 已注册。本 endpoint 按 P4 cluster-2 + E2E spec
-    期望实装真物理删除；HIGH design 冲突上报 CY 决策
-    （详 _handoff/dogfooding/04-bug-fixes/B-P4-cluster-2-M18-M03/design-audit.md）。
+    P4-cluster-2-revert 实证：cluster-2 (commit 0992dc8) 错装物理删除 + 204 / 此 endpoint
+    改回 design 真相 422。endpoint 保留是为了 OpenAPI 显式声明拒绝语义（而非 405），
+    前端 codegen 能看到 422 契约。
     """
     svc = ProjectService()
+    # raise ProjectDeleteNotSupportedError → middleware 422 / 永不到 return
     await svc.delete_project(db, project_id=access.project.id, actor_user_id=access.user.id)
-    await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response()  # unreachable but FastAPI 类型契约需要
 
 
 @router.post("/{project_id}/archive", response_model=ProjectResponse)
