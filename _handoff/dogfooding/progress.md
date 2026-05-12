@@ -104,7 +104,21 @@ status: NORMAL / 自然 checkpoint / 切新 session
 
 ### 单次 subagent prompt 模板
 
-复制 M01 pilot prompt（见本 session git log）/ 替换 `M01 user-account` → 当前模块 / 调整 design path / output path。
+**直接读** `_handoff/dogfooding/prompts/phase1-testpoint-invocation-template.md`：
+- 含完整 prompt 模板（基于 M01 pilot 实际派的 / 含 briefing + 8 项 input contract + Forbidden + Self-check + Cost cap）
+- 含 6 个变量替换清单（MODULE_ID / MODULE_NAME / SHORT_NAME / COMPLEXITY / DESIGN_PATH / TESTS_PATH / OUTPUT_PATH）
+- 含 18 模块 → name 映射
+- 含 4 并发 Agent tool invoke 示例
+
+主 agent cold-start 流程：
+1. `cat _handoff/dogfooding/prompts/phase1-testpoint-invocation-template.md`
+2. 拿到当前批次 4 个模块的变量值（如批 1: M11/M14/M19/M20）
+3. 在单 user message 里发 4 个 Agent tool call 并行
+4. 等 4 个 subagent 都返回（约 3-5 min）
+5. 抽样验证输出格式（grep H2 视角清单 / grep Forbidden 内容 / wc -l）
+6. 一次性 commit `dogfooding P1 batch<N> — 4 modules / <total> testpoints`
+7. 更新本 progress.md（M11-M20 列表对应 ✅ + 总数）
+8. cost 节流：若本 session 已用 >$8 / 退出 / 下一 session 跑下一批
 
 ### Cost 估算（P1 剩余）
 

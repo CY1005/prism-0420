@@ -108,7 +108,8 @@ references: design/02-modules/M<NN>/00-design.md
 
 - 缺 design 文档 / 找不到 M<NN>/00-design.md → 中止上报主 agent
 - design 内部矛盾（§3 SQLAlchemy 跟 §7 API 不一致）→ 在 testpoint 文件顶部写 "⚠️ design 内部不一致 / 已记 design-audit candidates" 段，继续跑
-- testpoint 数 ≥30（异常多）→ commit 当前进度 + 拆 P0/P1 优先级 + 上报
+- testpoint 数 ≥100（auth pilot 级 / 真的异常多）→ commit 当前进度 + 拆 P0/P1 优先级 + 报告（不阻塞主 agent / 仅 surface）
+- testpoint 数 <10（覆盖不足）→ 重做 / self-check 第 1 项
 
 ## 完成后
 
