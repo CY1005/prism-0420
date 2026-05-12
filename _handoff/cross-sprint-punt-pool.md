@@ -247,6 +247,29 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 红线，建议 M05+ 每次 sprint R1 spec subagent 显式扫"design §3 SQLAlchemy block 是否
 同步实装字段"作为标准 review 检查项。
 
+### #6 双栈迁移半完成 / 编译绿但运行 broken（2026-05-12 Phase 2.3 cleanup S3+S4 揭露）
+
+**现象**：Phase 2.2 前端继承 9 子片全 ✅ 标 100% 完成，但 Phase 2.3 cleanup 跑真 tsc + 读 consumer 真实代码后发现 70+ 处数据形态漂移：
+
+- workspace.tsx 33 错 / NodeData camelCase 期望 vs API snake_case
+- consumer 层 32 错（overview/settings/page/issues/features/import/modules）/ 同 prism shape gap
+- legacy search 7 错 / services/search.ts 指向不存在的 analyzer:8001
+- 后端契约缺口：DimensionTypeRef 缺 description+field_schema / DimensionConfigResponse 扁平 vs 前端期望嵌套
+
+**根因**：Phase 2.2 子片 audit 只验"导入 prism web 代码 + 替换 auth + 改 actions 调用 API"，未验**数据形态迁移完整性**。Drizzle（camelCase 字段约定）→ SQLAlchemy+Pydantic（snake_case 默认）字段名重映射全在编译期"宽松通过"——TS 不报错（用 `any` / `unknown` / loose typing），运行期返 `undefined`。CI 当时未接通 tsc 检查也是次因。
+
+**与 #4 区别**：#4 是"分散小修被默默吸收 / 跟踪噪声"——已修但没记录；#6 是"未修 / 标 ✅ 但实际未完成"——更严重，破坏 phase 完成度信号本身。
+
+**立规已落**：
+1. `design/00-phase-gate.md` 关闸盲区 #2 段（2026-05-12 落地）— 未来"前端继承 / 后端栈切换"类 phase 必跑 (a) 旧栈字段名 grep / (b) consumer 抽样字段对照 codegen / (c) 后端 schema 与前端期望对齐 grep / (d) tsc 0 错
+2. **"继承 ≠ 运行" 红线**：拷贝后必跑 happy path 真操作流程（至少 1 个核心 page UI 点击到 API 收响应），不能只看 `next build` 编译通过
+3. **adapter 单点 vs consumer 全量**：consumer 端访问 ≥5 文件 → actions 层加 `toX` mapper / <5 → 直接 rename consumer
+
+**STAR 标签**：
+- 模式归类：契约漂移 28% 模式 / 子类"双栈迁移半完成 / 编译绿但运行 broken"
+- 严重度：比关闸盲区 #1（删 export 未扫调用方 / 编译 broken）更高一档——前者 CI 红会暴露，后者编译过 = 永远不会被 audit 自动发现，需要人工 + 真跑才能识别
+- 量化：Phase 2.2 子片关闸模板覆盖率 ≈ 80%（缺数据形态迁移完整性扫这一项），漏检 70+ 错
+
 ---
 
 ## 完整 punt 池（按原 sprint 分组）
