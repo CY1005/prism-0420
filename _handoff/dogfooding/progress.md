@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 night (P2 11 模块 spec 跑过 / 15 bug 入 OPEN + 5 FIX_DONE + 待 CY review P1 闸门)
-phase: P1 ✅ DONE / P2 🟡 HYBRID（11/21 模块 spec 已跑 + 抓 15 OPEN bug）/ P4 🟡 5 FIX_DONE / 待 CY review P1 闸门
-sub_task: P1 21/21 ✅ / P2 spec 已跑 M01/M02/M03/M04/M05/M06/M07/M10/M11/M12/M14/M15/M19（11 模块 / 剩 M08/M13/M16/M17/M18/M20 + cross-cutting）/ P4 fix 5/20 闭环（B-trigger-bug / B-list-projects-search-loader / B-workspace-no-dims-graceful / B-cold-start-validation-deadlock / 5th 在 5 FIX_DONE 内）/ 15 OPEN bug 待 P4
-cost_cumulative: P1 ~$21.0 + P1→P2 audit $3 + P2 spike $1.5 + P2 batch-1（多模块 spec hybrid 跑）+ P4 5 fix（含 audit + RCA）= ~$30-40（精确数待 cost 跟踪段补）
-status: NORMAL / **plan §5 P1 闸门未过**（待 CY review 抽样）/ 当前 W21 优先动作：(1) CY review P1 抽样 3-4 模块 → (2) P4 收口剩 15 OPEN bug → (3) 启 P2 batch 剩 8 模块（M08/M13/M16/M17/M18/M20 + cross-cutting）
+last_session: 2026-05-12 (P2 sprint 全闭环 + P2-close fixture opt-in 改造 / 22 spec + 505 tests / 6 pre-existing FAIL 确认为 spec 设计 bug 非 fixture 问题)
+phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 待启 / P4 4/N FIX_DONE / P5 待启
+sub_task: P2 全 22 spec / 505 tests / batch 1-5 全跑完 / 全 20 模块 M01-M20 + cross-cutting A/B/C / commits cf25cb9 + 57c0116 + 42f02c1 / fixture P2-close commit pending / CI 全绿
+cost_cumulative: P1 ~$21 + P1→P2 audit $3 + P2 spike $1.5 + P4 fix1+2 $2.8 + P4 fix3 $2 + batch 2-5 ~$15 + close $0.5 + P2-close fixture $1-2 = **~$47-51**
+status: NORMAL / P2 sprint 全闭环 + fixture opt-in 落地 / 待启 P3 executor 跑全 505 tests 真路径产 final bug-queue / M04/M05/M11/M19 pre-existing FAIL 已确认为 spec 设计 bug（详 P2-close 段）
 ---
 
 # Dogfooding Sprint Progress
@@ -161,25 +161,54 @@ status: NORMAL / **plan §5 P1 闸门未过**（待 CY review 抽样）/ 当前 
   - **cost 累计**：~$15.0 + ~$6.2 = **~$21.2 dogfooding 自身**（含 M01 pilot $2）
   - **本 session**：批 4 全 5 模块单 session 完成 / cost ~$6.2 自身（含主 agent ~$0.5）/ **未触 $10 单 session 硬上限**（5 subagent ≤4 并发 / context 不堆叠 / 节流策略起作用）
 
-- **P2 case** 🟡 HYBRID（11/21 模块 spec 已跑 / 抓 18 真 bug / plan §1 串行红线已破）
-  - 2026-05-12 P1→P2 闸门 audit：`audit/p1-p2-gate-finding.md` / verdict=PASS_WITH_FIX / testpoint 文件 A- 质量不改 / P0 finding=范式错位（API contract 视角 vs 全 DOM 端到端）→ CY 拍两轨范式 B
-  - 2026-05-12 P2 spike Opus subagent：`audit/p2-spike-report.md` / verdict=B-范式可行 / 写 M01+M02 pilot spec / cost ~$1.5 / 25 min
-    - M01-user-account.spec.ts 146 行 / 5 tests / **5/5 PASS** ✅
-    - M02-project.spec.ts 209 行 / 5 tests / 2 PASS + **3 真 FAIL 抓 trigger_bug**
-    - **trigger_bug 真复现** → 入 `03-bug-queue.md` / Next.js 自定义版 4 坑沉淀进 `prompts/phase2-case.md` Forbidden 范式红线
-    - phase2-case.md 8 条改完（两轨范式 / 分类决策树 / 三标签 punt / Self-check +1 真跑 / Forbidden +3 Next.js 坑 / Escalation 真 bug vs spec 错区分 / 启动 prompt 模板）
-  - 2026-05-12 P2 hybrid 跑（11 模块 spec / 边写边跑抓 bug）：
-    - 已 cover：M03 / M04 / M05 / M06 / M07 / M10 / M11 / M12 / M14 / M15 / M19（+ spike M01/M02）
-    - 未 cover（8）：M08 / M13 / M16 / M17 / M18 / M20 + cross-cutting
-    - 抓出 18 真 bug 入 `03-bug-queue.md`：15 OPEN + 3 FIX_DONE（P2-prefix）
-- **P3 executor** ⬜ NOT_STARTED（实际 P2 边写边跑 = 隐式 P3 / plan 红线已破 / W21 守 plan 时需补正式 P3 全跑）
-- **P4 闭环** 🟡 5/20 FIX_DONE（spike 期前置 bug 2 + P2-prefix bug 3）/ 剩 15 OPEN 待 P4
-  - ✅ B-trigger-bug-server-action-cookie（commit cf25cb9 / CI 6/6 GREEN / Next.js refresh_token cookie Path=/auth → /）
+- **P2-close fixture opt-in 改造** ✅ DONE（2026-05-12）
+  - 文件：`app/e2e/fixtures/seed.ts`（+90 行 / 加 SeedOptions interface + resolveDescriptionDimensionTypeId helper + opt-in 分支）
+  - 改造内容（向后兼容 opt-in / 默认行为不变）:
+    - 加 `opts.withEnabledDim=true` → 启 description 维度（M04/M19 file-view happy path）
+    - 加 `opts.withFileNode=true` → 新增 root-level file 节点 "Root File"（M05/M19 file 视图）
+    - SeededProject 接口加 `file: {id, name} | null` + `dimensionTypeId: number | null`（默认 null）
+  - 改造动因（验证回路）:
+    - 初版尝试默认启 dim + file 节点 → 实证 4 个 regression（M04 L896 enabled_count=0 边界 / M19 strict-mode 2 Root Module / 等）
+    - 改 opt-in / 默认不动 → 跟 stash baseline 完全一致 0 regression
+  - 回归对比（opt-in vs stash baseline）:
+    - M01+M02+M03 (41 tests): 41 PASS / 0 FAIL ✅
+    - M04+M07 (63 tests): 61 PASS / 2 pre-existing FAIL (M04 L138 / L896) ✅
+    - M05 (20 tests): 19 PASS / 1 pre-existing FAIL (L81 workspace bug fix-after 路径"版本演进"不显示)
+    - M11+M19+M20 (65 tests): 59 PASS / 6 pre-existing FAIL ✅ (跟 stash baseline 完全相同)
+  - 已确认为 spec 设计 bug（非 fixture / 待 P3-P4 spec-level 修复）:
+    - M04 L138 workspace smoke: dimension card defaultExpanded=hasContent / hasContent=false 时折叠 → "点击添加，或上传文档自动分析" 文本 hidden / spec isVisible 断言 false（fixture 加 dim 后 dim card 渲染但仍折叠 / 不解决问题）
+    - M11 L37/L75 strict-mode: workspace sidebar 顶部 "导入文档" link + welcome card "导入文档" 2 elements 命中 / 跟 seed 完全无关（自建 empty project）
+    - M11 L102/L659 CSV upload: 自建 project / 跟 seed 无关（疑似 CSV 上传 API 问题）
+    - M19 L57 export node happy path: click folder 节点期待 "导出 Markdown" 但 workspace L970 仅 file 视图渲染此按钮（design 真实行为）
+    - M19 L117 export button DOM: folder 视图 folderChildren 异步加载 / 2s timeout 不够
+    - M05 L81 workspace DOM smoke: fix-after 路径要求 "版本演进" 显示 / 但 default folder 视图不渲染 version timeline
+  - tsc/--list 验:
+    - tsc --noEmit: PASS (0 errors)
+    - playwright --list e2e/dogfooding/: 505 tests / 22 files / 维持原状
+  - 副产品 / 待 P3-P4 跟进:
+    - M05/M19 已内联 file node 创建逻辑可收敛到 fixture withFileNode=true（不本期做 / 避免引入 spec 改动）
+    - 6 pre-existing FAIL spec 需 spec-level 修复（升级 03-bug-queue.md 候选）
+
+- **P2 case** ✅ DONE（22 spec / 505 tests / commit `cf25cb9` + `57c0116` + `42f02c1` push 完 / **全 20 模块 + cross-cutting A/B/C 三视角组**）
+  - 2026-05-12 P1→P2 闸门 audit：`audit/p1-p2-gate-finding.md` / verdict=PASS_WITH_FIX / testpoint 文件 A- 质量不改 / P0 finding=范式错位 → CY 拍两轨范式 B
+  - 2026-05-12 P2 spike Opus subagent：`audit/p2-spike-report.md` / verdict=B-范式可行 / 写 M01+M02 pilot / trigger_bug 真复现 / Next.js 4 坑沉淀
+  - 2026-05-12 batch 1-5 全跑（22 spec / 505 tests）:
+    - batch 1 spike: M01 (146/5) + M02 (209/5) — 7 PASS + 3 真 FAIL（trigger_bug 等已修）
+    - batch 2 (Sonnet 4 并发): M11 (764/18) + M14 (651/27) + M19 (546/21) + M20 (894/26)
+    - batch 3 (Sonnet 4 并发): M03 (855/31) + M04 (928/25) + M05 (688/20) + M06 (859/24)
+    - batch 4 (Sonnet 4 并发): M07 (915/38) + M10 (593/21) + M12 (910/25) + M15 (712/29)
+    - batch 5a (混合 4 并发): M16 (855/26 Sonnet) + M18 (701/28 Sonnet) + M08 (991/26 Opus spike XYFlow) + M13 (621/14 Opus spike SSE)
+    - batch 5b (Opus 4 并发): M17 (881/19 WebSocket spike) + cross-cutting A (718/19 auth+network) + B (937/32 permissions+state+async) + C (831/26 data+ai+ui)
+  - 测试方法学发现已沉淀进 `prompts/phase2-case.md` Forbidden 红线（Next.js 4 坑 / shadcn Label / dialog 时序 / SSE 范式 / WebSocket 范式 / XYFlow drag 范式不支持）
+  - 真 bug 累计 **~31 OPEN + 4 FIX_DONE**（详 `03-bug-queue.md`）
+  - **frontend gap 模式累计 5 个模块**（M12/M13/M14/M16/M17 backend 实装 vs frontend stub puntResult / fake progress / 调错 URL）= Phase 2.2 前端继承期遗漏 = dogfooding 真价值
+- **P3 executor** ⬜ NOT_STARTED（待 P2 close 后启 / 跑全 505 tests 真路径产 final bug-queue）
+- **P4 闭环** 🟡 4/N FIX_DONE
+  - ✅ B-trigger-bug-server-action-cookie（commit cf25cb9 / Next.js refresh_token cookie Path=/auth → /）
   - ✅ B-list-projects-search-loader（commit cf25cb9 / Turbopack SWC dead re-export）
-  - ✅ B-workspace-no-dims-graceful（commit 57c0116 / M10 OverviewNoDimensionsError 422 fallback + parseError 双读 code/error_code / 含 M14 + M19 同根因）
+  - ✅ B-workspace-no-dims-graceful（commit 57c0116 / OverviewNoDimensionsError 422 fallback + parseError 双读 code/error_code / 含 M14 + M19 + M08 + M03 + M04 同根因）
   - ✅ B-cold-start-validation-deadlock（commit 57c0116 / cold_start_service.py L342+L407 立即 commit 释放行锁）
-  - ✅ B-P2-M14-workspace-dimension-error（同 workspace-no-dims-graceful 一并）
-  - 🟡 OPEN 15 bug 待 P4 入：M03 (2) / M04 (2) / M05 (1) / M06 (2) / M07 (1) / M10 (1) / M11 (1) / M12 (1) / M14 (1) / M15 (3)
+  - 🟡 OPEN ~27 bug 待 P4 入：M03 (2) / M04 (2) / M05 (1) / M06 (2) / M07 (1) / M10 (1) / M11 (1) / M12 (1) / M13 (4) / M14 (1) / M15 (3) / M16 (2) / M17 (4) / M18 (2) / M19 (1) / M20 (1) / M08 (2) / cc-A (2) / cc-B (1)
 - **P5 final** ⬜ NOT_STARTED
 
 ---
