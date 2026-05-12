@@ -23,6 +23,16 @@ purpose: 上一 session 留给下一 session 的"接着做什么 + 怎么做"—
 
 ---
 
+**🔴 下一阶段 sprint prompts: Phase 2.3 集成验证清债（S1-S10 / 10 子片）**
+
+- 文件: `_handoff/phase23-integration-cleanup-prompts.md`（2026-05-12 落地）
+- 目标: 让 prism-0420 到达"测试通过 / 可上线"等价水位，跑 Phase 3 数据完整对照
+- 顺序: S1 (M01 seed 修 / 5 min 小胜) → S2 (backend-test 全绿) → S3 (permission.service.ts) → S4 (project-role-context + 高密度) → S5/S6/S7 (tsc 88→0 按 module 分批) → S8 (build 全绿 + v0.2 重跑) → S9 (e2e Playwright / 大 / 可跳) → S10 (Phase 3 报告 v0.1 草稿)
+- 累计估: $19-32 / 9-13 天 / 单 session 上限 $10
+- 每子片 cold-start friendly（CY 直接复制对应代码块 paste 到新 Claude session）
+
+---
+
 ## 0. 状态快照（更新于 2026-05-10 post-Sprint-4C.3-SR-DETACH-1 跨模块立修完成）
 
 **Post-Phase-2.3 Cleanup 计划进度**（plan 在 `_handoff/post-phase23-cleanup-plan.md`）：
