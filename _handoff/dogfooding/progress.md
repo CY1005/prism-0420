@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-13 (P5a regression executor / 22 spec 全量重跑 / 502/505=99.4% / +14 vs P3 init 488/505=96.6%)
-phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 ✅ DONE / P4 cluster-1~6 全 ✅ DONE / P5a ✅ DONE
-sub_task: P5a regression / 7 批分批（cc-A 独立）/ unlock e2e admin 每批前跑 / 502/505 PASS / 3 残留 M18 transient
-cost_cumulative: P1 ~$21 + audit/spike $4 + P4 cluster-1+2 ~$5 + batch 2-5 ~$15 + close + P2-close ~$2 + P3 $2 + cluster-3 主 agent ~$3 + cluster-4+5+6 ~$8 + P5a ~$2 = **~$62**
-status: NORMAL / P5a DONE / 下一步 P5b STAR 报告（D1 数据已在 05-regression-results.md）
+last_session: 2026-05-13 (P5b final close / STAR 报告 + Phase 3 v0.4 + bug-queue final close / sprint 全闭环)
+phase: P1 ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE
+sub_task: 全 phase 闭环 / 05-final-report.md 写完 / phase3-data-baseline.md v0.4 段更新 / 03-bug-queue.md final verdict / progress.md final close
+cost_cumulative: P1 ~$21 + audit/spike $4 + P4 cluster-1+2 ~$5 + batch 2-5 ~$15 + close + P2-close ~$2 + P3 $2 + cluster-3 主 agent ~$3 + cluster-4+5+6 ~$8 + P5a ~$2 + P5b ~$3-5 = **~$65-67 (final)**
+status: COMPLETE / dogfooding sprint 全闭环 / Phase 3 v0.4 已落 / Phase 2.x M-frontend 推下 sprint
 ---
 
 # Dogfooding Sprint Progress
@@ -227,7 +227,24 @@ status: NORMAL / P5a DONE / 下一步 P5b STAR 报告（D1 数据已在 05-regre
   - 新 FAIL: 0（cluster 1-6 全覆盖 / 无新发现）
   - 输出: `_handoff/dogfooding/05-regression-results.md`（覆盖 P3 init 版 / 加 after-fix 段 / D1 数据完整）
   - regression data: P3 488/505=96.6% → P5a 502/505=99.4% / 净 +14 tests / +2.8pp
-- **P5b STAR 报告** ⬜ NOT_STARTED
+- **P5b STAR 报告** ✅ DONE（2026-05-13 / Opus subagent / cost ~$3-5）
+  - 输出：`_handoff/dogfooding/05-final-report.md`（STAR S/T/A/R 完整 / D1-D4 4 维度数据 / 失败案例不掩盖 / Punt 池总览）
+  - 同步更新：`design/99-comparison/phase3-data-baseline.md` v0.4 段（4 维度数据 + 跟 v0.3 对照 + 4 条新结论）
+  - 03-bug-queue.md final verdict：17 真 bug FIX + 1 VERIFIED + 10 SYNCED + 7 spec-fix + 12 PUNT + 2 OPEN = 49 状态条目 / 47 独立 ID
+  - **dogfooding sprint 全闭环 COMPLETE**
+  - commit: <P5b-hash 见下>
+
+---
+
+## Sprint 全闭环 verdict (2026-05-13)
+
+**5-phase plan 全 ✅**：P0 + P1 + P2 + P3 + P4 (cluster-1~6 + revert) + P5a + P5b 全 DONE
+**最终 commit chain**：cf25cb9 → 57c0116 → 42f02c1 → fb496e2 → 52f4530 → 033ea64 → 0992dc8 → feca350 → 419ac07 → 7deb5ff → 72317cf → 596b59d → 991796f → P5b-hash
+**CI**：main 全绿
+**Phase 3 v0.4 数据**：已落 design/99-comparison/phase3-data-baseline.md
+**STAR 报告**：05-final-report.md（简历级素材 / 跳槽 PRISM 代表作 v0.4）
+**总 cost**：~$80-85（2 天 / 5-phase 全跑 / 多 agent 协作）
+**下一 sprint**：Phase 2.x M-frontend 实装（M14/M12/M16/M17/M13 / Opus × 5 / cap $32-48）
 
 ---
 

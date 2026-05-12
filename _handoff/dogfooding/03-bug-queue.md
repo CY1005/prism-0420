@@ -146,3 +146,32 @@ sources:
 - M07 §8 UI testpoint vs page.tsx 漂移（design 声称 status badge / filter / 转换按钮 / 详情页 / 节点关联 UI 但实现缺）→ design-gap candidate / 不入 bug queue（功能缺失非 bug）
 - AddIssueDialog title 字段是否真在 dialog 表单（page.tsx L322 引用 / 未读细节）→ M07 P2 期自查
 - Next.js 自定义版坑清单（4 坑 / spike-report §"坑清单"）→ 沉淀候选 / 简历级 STAR 素材
+
+---
+
+## P5b sprint close 2026-05-13
+
+**dogfooding sprint 全闭环 verdict**：47 个独立 bug ID 入队 / 分布如下：
+
+| 池 | 数 | 状态 |
+|----|----|----|
+| FIX_DONE 真 bug（产品代码修） | 17 | cluster-1~5 + P3 prelim 真修 |
+| VERIFIED（cluster-2-revert 修正物理删除） | 1 | M03 DELETE 改 422 跟 design G2 一致 |
+| SYNCED（design doc sync / 实装 0 改） | 10 | cluster-6 design-gap 注 dogfooding 实证段 |
+| spec-design-fix（cluster-6 / 改 spec 不改产品） | 7 | M04+M05+M11×4+M19×2 |
+| PUNT frontend gap → Phase 2.x M-frontend | 12 | M12×1 + M13×4 + M14×1 + M16×2 + M17×4 |
+| OPEN 残留 → Phase 2.x M-frontend（M08）| 2 | relation-graph workspace + XYFlow drag |
+
+**汇总公式**：`17 真 bug FIX + 1 VERIFIED + 10 SYNC + 12 PUNT + 7 spec-fix + 2 OPEN = 49 状态条目`（部分 ID 跨池跳轨 / 去重后 47 独立 ID）
+
+**回归数据**（详 05-regression-results.md）：
+- P3 init 488/505 = 96.6% / 17 FAIL
+- P5a after-fix 502/505 = **99.4%** / 3 残留 transient
+- 净 +14 tests / +2.8pp
+
+**STAR 报告**：`_handoff/dogfooding/05-final-report.md`（含 D1-D4 4 维度数据 + STAR S/T/A/R 完整 + 失败案例 + Punt 池总览）
+**Phase 3 v0.4 baseline**：`design/99-comparison/phase3-data-baseline.md` v0.4 段更新
+
+---
+
+last_updated: 2026-05-13 / P5b final close
