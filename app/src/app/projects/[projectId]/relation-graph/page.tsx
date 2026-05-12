@@ -69,13 +69,16 @@ export default function RelationGraphPage() {
     setFilters((prev) => ({ ...prev, [type]: !prev[type] }));
   };
 
-  const handleExpandModule = useCallback(async (moduleId: string) => {
-    const result = await getModuleRelationDetail(moduleId);
-    if (result.success) {
-      return result.data;
-    }
-    return { features: [], relations: [] };
-  }, []);
+  const handleExpandModule = useCallback(
+    async (moduleId: string) => {
+      const result = await getModuleRelationDetail(moduleId, projectId);
+      if (result.success) {
+        return result.data;
+      }
+      return { features: [], relations: [] };
+    },
+    [projectId],
+  );
 
   if (loading) {
     return (

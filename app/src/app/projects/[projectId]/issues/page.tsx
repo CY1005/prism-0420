@@ -61,7 +61,7 @@ export default function IssuesPage() {
     try {
       if (filterCategory !== "all") {
         const data = await listIssuesByCategory(projectId, filterCategory);
-        setIssues(data as Issue[]);
+        setIssues(data);
       } else {
         // Load all categories
         const results = await Promise.all(
@@ -69,7 +69,7 @@ export default function IssuesPage() {
             listIssuesByCategory(projectId, cat),
           ),
         );
-        setIssues(results.flat() as Issue[]);
+        setIssues(results.flat());
       }
     } catch {
       // ignore
@@ -81,12 +81,18 @@ export default function IssuesPage() {
     loadIssues();
   }, [projectId, filterCategory]);
 
-  const handleSave = (data: { category: string; description: string; tags: string[] }) => {
+  const handleSave = (data: {
+    category: string;
+    description: string;
+    tags: string[];
+    title?: string;
+  }) => {
     startTransition(async () => {
       await createIssue({
         projectId,
         nodeId: null,
         category: data.category as "bug" | "tech_debt" | "design_flaw" | "performance",
+        title: data.title || data.description.slice(0, 60),
         description: data.description,
         tags: data.tags,
       });
@@ -96,7 +102,7 @@ export default function IssuesPage() {
 
   const handleDelete = async (issueId: string) => {
     if (!confirm("确认删除该问题？")) return;
-    await deleteIssue(issueId);
+    await deleteIssue(projectId, issueId);
     await loadIssues();
   };
 
@@ -288,7 +294,7 @@ export default function IssuesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
-                          {new Date(issue.createdAt).toLocaleDateString("zh-CN")}
+                          {new Date(issue.created_at).toLocaleDateString("zh-CN")}
                         </TableCell>
                         <TableCell>
                           <Button

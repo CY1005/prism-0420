@@ -81,21 +81,23 @@ function getStatusColor(percent: number) {
 function treeToLayers(tree: TreeNodeOverview[]) {
   return tree.map((node) => ({
     name: node.name,
-    completion: Math.round(node.completion_percent),
+    completion: Math.round(node.completion_rate * 100),
     modules: node.children.map((child) => ({
       name: child.name,
-      completion: Math.round(child.completion_percent),
+      completion: Math.round(child.completion_rate * 100),
     })),
   }));
 }
 
 function RecentUpdatesSidebar({ projectId }: { projectId: string }) {
-  const [logs, setLogs] = useState<{ id: string; summary: string; createdAt: string | Date }[]>([]);
+  // Phase 2.3 cleanup D: 直接用 ActivityLogItem codegen 类型（snake_case）
+  type LogItem = import("@/types/api").components["schemas"]["ActivityLogItem"];
+  const [logs, setLogs] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getActivityLogs(projectId, 1, 5).then((r) => {
-      setLogs(r.logs as typeof logs);
+      setLogs(r.logs);
       setLoading(false);
     });
   }, [projectId]);
@@ -113,8 +115,7 @@ function RecentUpdatesSidebar({ projectId }: { projectId: string }) {
       ) : (
         <div className="space-y-0">
           {logs.map((log, index) => {
-            const time =
-              typeof log.createdAt === "string" ? new Date(log.createdAt) : log.createdAt;
+            const time = new Date(log.created_at);
             const timeStr =
               time instanceof Date && !isNaN(time.getTime())
                 ? time.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })
@@ -164,15 +165,9 @@ export default function ProjectOverviewPage() {
 
   // F15: Activity log state
   const [showActivityLog, setShowActivityLog] = useState(false);
+  // Phase 2.3 cleanup D: 直接用 ActivityLogItem codegen 类型（snake_case）
   const [activityLogs, setActivityLogs] = useState<
-    {
-      id: string;
-      actionType: string;
-      targetType: string;
-      summary: string;
-      createdAt: string | Date;
-      metadata: Record<string, unknown> | null;
-    }[]
+    import("@/types/api").components["schemas"]["ActivityLogItem"][]
   >([]);
   const [activityPage, setActivityPage] = useState(1);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -296,9 +291,9 @@ export default function ProjectOverviewPage() {
     try {
       const result = await getActivityLogs(projectId, page, 20);
       if (page === 1) {
-        setActivityLogs(result.logs as typeof activityLogs);
+        setActivityLogs(result.logs);
       } else {
-        setActivityLogs((prev) => [...prev, ...(result.logs as typeof activityLogs)]);
+        setActivityLogs((prev) => [...prev, ...result.logs]);
       }
       setActivityPage(page);
     } finally {
@@ -314,13 +309,17 @@ export default function ProjectOverviewPage() {
   }, [showActivityLog]);
 
   // Stats: real data only; show loading/error states in render
+  // Phase 2.3 cleanup D: OverviewStats schema 字段 = total_nodes / file_nodes /
+  // avg_completion_rate / fully_complete_nodes / empty_nodes / enabled_dimension_count
+  // 旧 total_folders = total_nodes - file_nodes（文件夹 = 总节点 - 文件节点）
+  // 旧 avg_completion_percent = avg_completion_rate × 100
   const statsData = realStats
     ? {
-        line1: `${realStats.total_folders} 个`,
-        line2: `${realStats.total_folders + realStats.total_files} 个`,
-        line3: `${realStats.total_files} 个`,
-        line4: `${Math.round(realStats.avg_completion_percent)}%`,
-        avgPercent: Math.round(realStats.avg_completion_percent),
+        line1: `${realStats.total_nodes - realStats.file_nodes} 个`,
+        line2: `${realStats.total_nodes} 个`,
+        line3: `${realStats.file_nodes} 个`,
+        line4: `${Math.round(realStats.avg_completion_rate * 100)}%`,
+        avgPercent: Math.round(realStats.avg_completion_rate * 100),
       }
     : null;
 
@@ -859,7 +858,7 @@ export default function ProjectOverviewPage() {
               <div className="space-y-0">
                 {activityLogs.map((log) => {
                   const time =
-                    typeof log.createdAt === "string" ? new Date(log.createdAt) : log.createdAt;
+                    typeof log.created_at === "string" ? new Date(log.created_at) : log.created_at;
                   return (
                     <div
                       key={log.id}
@@ -872,9 +871,9 @@ export default function ProjectOverviewPage() {
                         <p className="text-sm">{log.summary}</p>
                         <div className="mt-0.5 flex items-center gap-2">
                           <Badge variant="secondary" className="text-xs">
-                            {log.actionType}
+                            {log.action_type}
                           </Badge>
-                          <span className="text-muted-foreground text-xs">{log.targetType}</span>
+                          <span className="text-muted-foreground text-xs">{log.target_type}</span>
                         </div>
                       </div>
                       <span className="text-muted-foreground shrink-0 text-xs">
@@ -885,7 +884,7 @@ export default function ProjectOverviewPage() {
                               hour: "2-digit",
                               minute: "2-digit",
                             })
-                          : String(log.createdAt)}
+                          : String(log.created_at)}
                       </span>
                     </div>
                   );

@@ -178,14 +178,15 @@ export async function getRelationGraph(
   }
 }
 
-interface FeatureNode {
+// Phase 2.3 cleanup D: export 给 relation-graph.tsx 组件复用，避免双定义类型冲突
+export interface FeatureNode {
   id: string;
   name: string;
   type: string;
   completionPercent: number;
 }
 
-interface FeatureRelation {
+export interface FeatureRelation {
   id: string;
   sourceNodeId: string;
   targetNodeId: string;

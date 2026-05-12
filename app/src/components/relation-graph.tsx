@@ -27,20 +27,9 @@ interface ModuleEdge {
   count: number;
 }
 
-interface FeatureNode {
-  id: string;
-  name: string;
-  type: string;
-  completionPercent: number;
-}
-
-interface FeatureRelation {
-  id: number;
-  sourceNodeId: string;
-  targetNodeId: string;
-  relationType: string;
-  description: string | null;
-}
+// Phase 2.3 cleanup D: 使用 actions/relations 的类型，避免双定义冲突
+// （之前 component 里 FeatureRelation.id 写成 number，跟后端 string 漂移）
+import type { FeatureNode, FeatureRelation } from "@/actions/relations";
 
 export interface RelationGraphProps {
   projectId: string;

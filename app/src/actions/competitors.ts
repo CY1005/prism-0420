@@ -29,7 +29,9 @@ export interface Competitor {
   createdAt: string;
 }
 
-export function toCompetitor(r: CompetitorResponse): Competitor {
+// Phase 2.3 cleanup D: 不能 export 同步 function from "use server" 文件
+// （Next.js 限制：use server 只允许 export async function + type / 不允许 sync helper）
+function toCompetitor(r: CompetitorResponse): Competitor {
   return {
     id: r.id,
     projectId: r.project_id,

@@ -96,25 +96,11 @@ type TabType =
   | "export"
   | "team";
 
-type ProjectData = {
-  id: string;
-  name: string;
-  description: string | null;
-  templateType: string;
-  hierarchyLabels: string[];
-  versionMode: string;
-  aiProvider: string | null;
-  aiApiKeyEnc: string | null;
-};
-
-type MemberData = {
-  id: string;
-  userId: string;
-  role: string;
-  createdAt: Date;
-  userName: string;
-  userEmail: string;
-};
+// Phase 2.3 cleanup D: 用 actions/projects Project + actions MemberResponse 直接
+// （删 local ProjectData / MemberData，对齐 codegen 类型）
+import type { Project } from "@/actions/projects";
+import type { components } from "@/types/api";
+type MemberData = components["schemas"]["MemberResponse"];
 
 const ROLE_BADGE: Record<string, { label: string; variant: string }> = {
   admin: { label: "管理员", variant: "default" },
@@ -130,7 +116,7 @@ export default function ProjectSettingsPage({
   const { projectId } = use(params);
   const { canAdmin } = useProjectRole();
   const [activeTab, setActiveTab] = useState<TabType>("dimensions");
-  const [project, setProject] = useState<ProjectData | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [dimensionConfigs, setDimensionConfigs] = useState<DimensionConfigRow[]>([]);
   const [projectName, setProjectName] = useState("");
@@ -142,7 +128,7 @@ export default function ProjectSettingsPage({
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiKeyConfigured, setAiKeyConfigured] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("viewer");
+  const [inviteRole, setInviteRole] = useState<"owner" | "editor" | "viewer">("viewer");
   const [saving, setSaving] = useState(false);
   const { user, logout } = useAuth();
   const userName = user?.name ?? "";
@@ -174,7 +160,7 @@ export default function ProjectSettingsPage({
   useEffect(() => {
     getProject(projectId).then((p) => {
       if (p) {
-        setProject(p as ProjectData);
+        setProject(p);
         setProjectName(p.name);
         setProjectDescription(p.description || "");
         const labels = p.hierarchyLabels as string[];
@@ -197,7 +183,7 @@ export default function ProjectSettingsPage({
   const loadMembers = async () => {
     try {
       const m = await getProjectMembers(projectId);
-      setMembers(m as MemberData[]);
+      setMembers(m);
     } catch {
       // ignore
     }
@@ -215,7 +201,7 @@ export default function ProjectSettingsPage({
   const loadCompetitors = async () => {
     try {
       const comps = await getCompetitorsByProject(projectId);
-      setCompetitorsList(comps as Competitor[]);
+      setCompetitorsList(comps);
     } catch {
       // ignore
     }
@@ -265,12 +251,12 @@ export default function ProjectSettingsPage({
     id: string,
     data: { name?: string; website?: string; description?: string },
   ) => {
-    const result = await updateCompetitor(id, data);
+    const result = await updateCompetitor(projectId, id, data);
     if (result.success) await loadCompetitors();
   };
 
   const handleDeleteCompetitor = async (id: string) => {
-    const result = await deleteCompetitor(id);
+    const result = await deleteCompetitor(projectId, id);
     if (result.success) await loadCompetitors();
   };
 
@@ -645,7 +631,10 @@ export default function ProjectSettingsPage({
                     onChange={(e) => setInviteEmail(e.target.value)}
                     className="w-48"
                   />
-                  <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+                  <Select
+                    value={inviteRole}
+                    onValueChange={(v) => v && setInviteRole(v as "owner" | "editor" | "viewer")}
+                  >
                     <SelectTrigger className="w-24">
                       <SelectValue />
                     </SelectTrigger>
@@ -689,13 +678,13 @@ export default function ProjectSettingsPage({
                           <TableCell>
                             <Avatar className="h-8 w-8">
                               <AvatarFallback className="bg-muted text-sm">
-                                {member.userName?.charAt(0) || "?"}
+                                {member.user_name?.charAt(0) || "?"}
                               </AvatarFallback>
                             </Avatar>
                           </TableCell>
-                          <TableCell className="font-medium">{member.userName}</TableCell>
+                          <TableCell className="font-medium">{member.user_name}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            {member.userEmail}
+                            {member.user_email}
                           </TableCell>
                           <TableCell>
                             {roleInfo.variant === "green" ? (
@@ -711,7 +700,7 @@ export default function ProjectSettingsPage({
                           <TableCell>
                             <button
                               className="text-destructive text-sm hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                              onClick={() => canAdmin && handleRemoveMember(member.userId)}
+                              onClick={() => canAdmin && handleRemoveMember(member.user_id)}
                               disabled={!canAdmin}
                               title={!canAdmin ? "查看者无编辑权限" : undefined}
                             >

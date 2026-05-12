@@ -34,6 +34,9 @@ export interface Project {
   hierarchyLabels: string[];
   versionMode: string;
   aiProvider: string | null;
+  // Phase 2.3 cleanup D: backend ProjectResponse 不返 ai_api_key_enc（secret 不 expose）
+  // 前端通过 updateProjectAIConfig 单独提交 key / 是否已配置由 UI 自己跟踪
+  aiApiKeyEnc: null;
   ownerId: string;
   teamId: string | null;
   createdAt: string;
@@ -50,6 +53,7 @@ function toProject(r: ProjectResponse): Project {
     hierarchyLabels: r.hierarchy_labels,
     versionMode: r.version_mode,
     aiProvider: r.ai_provider,
+    aiApiKeyEnc: null, // backend 不返 secret，前端 UI 跟踪
     ownerId: r.owner_id,
     teamId: r.team_id,
     createdAt: r.created_at,

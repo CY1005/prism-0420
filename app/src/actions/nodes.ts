@@ -72,7 +72,7 @@ export interface DimensionConfig {
   };
 }
 
-export function toDimensionConfig(r: DimensionConfigResponse): DimensionConfig {
+function toDimensionConfig(r: DimensionConfigResponse): DimensionConfig {
   const meta = DIMENSION_META_MAP[r.dimension_type_key];
   return {
     config: { id: r.id, dimensionTypeId: r.dimension_type_id, sortOrder: r.sort_order },
