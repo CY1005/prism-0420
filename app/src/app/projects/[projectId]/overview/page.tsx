@@ -50,7 +50,7 @@ import {
 import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama";
 import { getActivityLogs } from "@/actions/activity-log";
 import { getProject } from "@/actions/projects";
-import { getSessionUser } from "@/actions/auth";
+import { useAuth } from "@/contexts/auth-context";
 import {
   getFeedItems,
   getFeedSources,
@@ -152,8 +152,9 @@ export default function ProjectOverviewPage() {
   > | null>(null);
   const [panoramaLoading, setPanoramaLoading] = useState(true);
   const [projectName, setProjectName] = useState("");
-  const [userName, setUserName] = useState("");
-  const [userInitials, setUserInitials] = useState("");
+  const { user } = useAuth();
+  const userName = user?.name ?? "";
+  const userInitials = user?.name?.charAt(0) ?? "";
   const [panoramaStats, setPanoramaStatsData] = useState<{
     totalModules: number;
     totalFeatures: number;
@@ -261,12 +262,6 @@ export default function ProjectOverviewPage() {
     // Load project name and user info
     getProject(projectId).then((p) => {
       if (p) setProjectName(p.name);
-    });
-    getSessionUser().then((u) => {
-      if (u) {
-        setUserName(u.name);
-        setUserInitials(u.name.charAt(0));
-      }
     });
 
     setStatsLoading(true);

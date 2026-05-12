@@ -66,7 +66,7 @@ import {
   updateDimensionConfig,
   type DimensionConfigRow,
 } from "@/actions/project-settings";
-import { logout, getSessionUser } from "@/actions/auth";
+import { useAuth } from "@/contexts/auth-context";
 import { useProjectRole } from "@/contexts/project-role-context";
 import {
   getCompetitorsByProject,
@@ -144,8 +144,9 @@ export default function ProjectSettingsPage({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
   const [saving, setSaving] = useState(false);
-  const [userName, setUserName] = useState("");
-  const [userInitials, setUserInitials] = useState("");
+  const { user, logout } = useAuth();
+  const userName = user?.name ?? "";
+  const userInitials = user?.name?.charAt(0) ?? "";
   const [competitorsList, setCompetitorsList] = useState<Competitor[]>([]);
   const [feedSourcesList, setFeedSourcesList] = useState<
     {
@@ -191,12 +192,6 @@ export default function ProjectSettingsPage({
     loadCompetitors();
     loadFeedSourcesList();
     getTeams().then((t) => setTeamsList(t as typeof teamsList));
-    getSessionUser().then((user) => {
-      if (user) {
-        setUserName(user.name);
-        setUserInitials(user.name.charAt(0));
-      }
-    });
   }, [projectId]);
 
   const loadMembers = async () => {
