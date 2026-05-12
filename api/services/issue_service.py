@@ -275,10 +275,11 @@ class IssueService:
             raise IssueClosedError(issue_id=str(issue_id))
 
         if target_status not in _ALLOWED_TRANSITIONS.get(old_status, set()):
+            # design §13 + tests.md ER2: details 用 current/target（dogfooding cluster-3 sync）
             raise IssueTransitionInvalidError(
                 issue_id=str(issue_id),
-                from_status=old_status,
-                to_status=target_status,
+                current=old_status,
+                target=target_status,
             )
 
         fields: dict[str, Any] = {"status": target_status}

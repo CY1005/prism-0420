@@ -1,0 +1,247 @@
+diff --git a/api/routers/dimension_router.py b/api/routers/dimension_router.py
+index 0eecce0..b21d926 100644
+--- a/api/routers/dimension_router.py
++++ b/api/routers/dimension_router.py
+@@ -106,7 +106,9 @@ async def list_by_node(
+ ) -> DimensionListResponse:
+     """档案页主查询：已有维度记录 + 项目启用类型清单。"""
+     svc = DimensionService()
+-    # service 内部不校验 node 归属（只读不写也是个 P3 — 但越权读返回空 list 也安全）
++    # design §8 R8-1 第三层防御：跨 project node_id 必须 404 不暴露空 list
++    # （dogfooding B-P2-M04-cross-node-tenant-read-gap / cluster-3 fix）
++    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
+     items = await svc.list_by_node(db, project_id=access.project.id, node_id=node_id)
+     types = await _list_enabled_types(db, access.project.id)
+     return DimensionListResponse(
+@@ -123,6 +125,7 @@ async def get_one(
+     db: AsyncSession = Depends(get_db),
+ ) -> DimensionResponse:
+     svc = DimensionService()
++    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
+     rec = await svc.get_one_record(
+         db,
+         project_id=access.project.id,
+@@ -145,6 +148,8 @@ async def completion(
+     """
+     from sqlalchemy import func
+ 
++    svc = DimensionService()
++    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
+     count_result = await db.execute(
+         select(func.count(ProjectDimensionConfig.id)).where(
+             ProjectDimensionConfig.project_id == access.project.id,
+@@ -152,7 +157,6 @@ async def completion(
+         )
+     )
+     enabled_count = int(count_result.scalar_one() or 0)
+-    svc = DimensionService()
+     result = await svc.completion(
+         db,
+         project_id=access.project.id,
+@@ -173,6 +177,7 @@ async def create_dimension(
+     db: AsyncSession = Depends(get_db),
+ ) -> DimensionResponse:
+     svc = DimensionService()
++    # write paths 的 _check_node_belongs_to_project 由 service.create 内部已调（L301 等）
+     rec = await svc.create(
+         db,
+         project_id=access.project.id,
+diff --git a/api/services/issue_service.py b/api/services/issue_service.py
+index 14dedc4..7e8de7b 100644
+--- a/api/services/issue_service.py
++++ b/api/services/issue_service.py
+@@ -275,10 +275,11 @@ class IssueService:
+             raise IssueClosedError(issue_id=str(issue_id))
+ 
+         if target_status not in _ALLOWED_TRANSITIONS.get(old_status, set()):
++            # design §13 + tests.md ER2: details 用 current/target（dogfooding cluster-3 sync）
+             raise IssueTransitionInvalidError(
+                 issue_id=str(issue_id),
+-                from_status=old_status,
+-                to_status=target_status,
++                current=old_status,
++                target=target_status,
+             )
+ 
+         fields: dict[str, Any] = {"status": target_status}
+diff --git a/app/e2e/dogfooding/M07-issue.spec.ts b/app/e2e/dogfooding/M07-issue.spec.ts
+index f239133..b4a83a6 100644
+--- a/app/e2e/dogfooding/M07-issue.spec.ts
++++ b/app/e2e/dogfooding/M07-issue.spec.ts
+@@ -577,13 +577,12 @@ test.describe("M07 问题沉淀 dogfooding", () => {
+     expect(errorCode).toMatch(/ISSUE_NOT_FOUND|NOT_FOUND/i);
+   });
+ 
+-  test("[P0] API 旁路: 错误响应格式 含 details 字段（design §13 要求 current+target / 实测 from_status+to_status）", async ({
++  test("[P0] API 旁路: 错误响应格式 含 details.current + details.target（design §13 + tests.md ER2）", async ({
+     request,
+   }) => {
+     // testpoint §3 "错误响应格式 含 details 含 current/target"（tests.md ER2）
+-    // 🔴 真 bug：实测 details 包含 from_status/to_status 而非 design §13 要求的 current/target
+-    // → 已入 03-bug-queue.md B-P2-M07-error-details-field-naming / status=OPEN
+-    // spec 验实际行为：422 + details 含 from_status/to_status（不用 current/target 以免 false fail）
++    // dogfooding cluster-3 fix B-P2-M07-error-details-field-naming：
++    // issue_service.py 已改 kwargs from_status/to_status → current/target / 对齐 design §13
+     const { accessToken, project, issue } = await seedFullProject(request);
+     const auth = { Authorization: `Bearer ${accessToken}` };
+ 
+@@ -593,13 +592,8 @@ test.describe("M07 问题沉淀 dogfooding", () => {
+     );
+     expect(res.status()).toBe(422);
+     const body = await res.json();
+-    // 验 details 存在（design §13 要求含 details 不管字段名）
+     const details = body.error?.details ?? body.details ?? body;
+-    // 实测：details 有 from_status + to_status（与 design 漂移 / 见 bug queue）
+-    // 验 details 非空 + 含状态相关字段（宽松验：不硬断 current/target）
+-    expect(Object.keys(details).length).toBeGreaterThan(0);
+-    // 实测字段名为 from_status + to_status，不是 design §13 要求的 current + target
+-    // — 真 bug 已入 B-P2-M07-error-details-field-naming
++    expect(details).toMatchObject({ current: "open", target: "closed" });
+   });
+ 
+   test("[P0] API 旁路: 未登录调 GET /issues 返 401 UNAUTHENTICATED", async ({ request }) => {
+diff --git a/design/02-modules/M04-feature-archive/00-design.md b/design/02-modules/M04-feature-archive/00-design.md
+index c5ff85e..7669d95 100644
+--- a/design/02-modules/M04-feature-archive/00-design.md
++++ b/design/02-modules/M04-feature-archive/00-design.md
+@@ -469,11 +469,13 @@ class DimensionDAO:
+ 
+ | action_type | target_type | target_id | summary | metadata |
+ |-------------|-------------|-----------|---------|----------|
+-| `create` | `dimension_record` | `<dim_record_id>` | 创建维度：{type_name} | `{node_id, type_id, content_size}` |
+-| `update` | `dimension_record` | `<dim_record_id>` | 更新维度：{type_name} | `{node_id, type_id, old_version, new_version}` |
+-| `delete` | `dimension_record` | `<dim_record_id>` | 删除维度：{type_name} | `{node_id, type_id}` |
++| `dimension_record_created` | `dimension_record` | `<dim_record_id>` | 创建维度：{type_name} | `{node_id, type_id, content_size}` |
++| `dimension_record_updated` | `dimension_record` | `<dim_record_id>` | 更新维度：{type_name} | `{node_id, type_id, old_version, new_version}` |
++| `dimension_record_deleted` | `dimension_record` | `<dim_record_id>` | 删除维度：{type_name} | `{node_id, type_id}` |
+ 
+-**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条新建的 dimension_record 写独立 `create` 事件（target_id = dim_record_id）；`delete_by_node_id` 调用时每条被删的 dimension_record 写独立 `delete` 事件。批量刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性。
++**命名约定（dogfooding cluster-3 sync）**：与 frontmatter `produces_action_types` + 实装一致采用 `{target_type}_{past_tense}` 复合命名（M14/M15/M16 等模块同范式 / R14 命名规约）。
++
++**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条新建的 dimension_record 写独立 `dimension_record_created` 事件（target_id = dim_record_id）；`delete_by_node_id` 调用时每条被删的 dimension_record 写独立 `dimension_record_deleted` 事件。批量刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性。
+ 
+ ### 实现位置
+ 
+diff --git a/design/02-modules/M04-feature-archive/tests.md b/design/02-modules/M04-feature-archive/tests.md
+index eae850a..a051287 100644
+--- a/design/02-modules/M04-feature-archive/tests.md
++++ b/design/02-modules/M04-feature-archive/tests.md
+@@ -18,10 +18,10 @@ module_id: M04
+ 
+ | ID | 场景 | 步骤 | 期望 |
+ |----|------|------|------|
+-| G1 | 创建首条维度 | 编辑者 → POST `/dimensions` 含 type_id=1, content={...} | 201 + version=1 + activity_log 一条 `create` |
++| G1 | 创建首条维度 | 编辑者 → POST `/dimensions` 含 type_id=1, content={...} | 201 + version=1 + activity_log 一条 `dimension_record_created` |
+ | G2 | 读取节点所有维度 | 编辑者 → GET `/dimensions` | 200 + items 含已填 + enabled_dimension_types 含未填 |
+-| G3 | 更新维度（乐观锁正常） | 拉取 → 改 content → PUT 带 expected_version=1 | 200 + version=2 + activity_log 一条 `update` 含 old/new version |
+-| G4 | 删除维度 | DELETE `/dimensions/{type_id}` | 204 + activity_log 一条 `delete` |
++| G3 | 更新维度（乐观锁正常） | 拉取 → 改 content → PUT 带 expected_version=1 | 200 + version=2 + activity_log 一条 `dimension_record_updated` 含 old/new version |
++| G4 | 删除维度 | DELETE `/dimensions/{type_id}` | 204 + activity_log 一条 `dimension_record_deleted` |
+ | G5 | 完善度计算 | GET `/completion` | enabled_count=N, filled_count=K, completion_rate=K/N |
+ 
+ ---
+diff --git a/tests/test_m02_routers.py b/tests/test_m02_routers.py
+index c7a0275..2c87e3e 100644
+--- a/tests/test_m02_routers.py
++++ b/tests/test_m02_routers.py
+@@ -119,6 +119,55 @@ async def test_archive_then_again_returns_409(auth_client, make_user):
+     assert r2.json()["code"] == "project_already_archived"
+ 
+ 
++# ─────────────── delete (design M02 §1 §4 §13 G2: 软删除不可逆 / 物理删除拒) ───────────────
++
++
++async def test_delete_project_returns_422_project_delete_not_supported(auth_client, make_user):
++    """DELETE /api/projects/{pid} 返 422 PROJECT_DELETE_NOT_SUPPORTED.
++
++    design M02 §1 L117 + §4 L503 G2 决策：归档=软删除不可逆 / 不物理删除。
++    ErrorCode + ProjectDeleteNotSupportedError 已在 design §13 注册（http_status=422）。
++    （P4-cluster-2-revert: cluster-2 commit 0992dc8 错装物理删除 / 此 fix 改回 design 真相）
++    """
++    owner = await make_user(email="p-del-422@example.com")
++    cr = await auth_client.post(
++        "/api/projects", json={"name": "DelP"}, headers=_bearer(owner.id)
++    )
++    assert cr.status_code == 201
++    pid = cr.json()["id"]
++
++    r = await auth_client.delete(f"/api/projects/{pid}", headers=_bearer(owner.id))
++    assert r.status_code == 422
++    assert r.json()["code"] == "project_delete_not_supported"
++
++    # 项目仍存在（未被物理删除 / 也未被自动归档）
++    get_r = await auth_client.get(f"/api/projects/{pid}", headers=_bearer(owner.id))
++    assert get_r.status_code == 200
++    assert get_r.json()["status"] == "active"
++
++
++async def test_delete_project_non_owner_returns_403(auth_client, make_user):
++    """DELETE 非 owner 应被 check_project_access(role=owner) 拦在 422 之前.
++
++    顺序：check_project_access(role=owner) Depends 先跑 → 非 owner 直接 403
++    （此场景 422 永远不可达 / 防御深度自检）。
++    """
++    owner = await make_user(email="p-del-owner@example.com")
++    viewer = await make_user(email="p-del-viewer@example.com")
++    cr = await auth_client.post(
++        "/api/projects", json={"name": "DelViewerP"}, headers=_bearer(owner.id)
++    )
++    pid = cr.json()["id"]
++    # 邀 viewer
++    await auth_client.post(
++        f"/api/projects/{pid}/members",
++        json={"user_id": str(viewer.id), "role": "viewer"},
++        headers=_bearer(owner.id),
++    )
++    r = await auth_client.delete(f"/api/projects/{pid}", headers=_bearer(viewer.id))
++    assert r.status_code == 403
++
++
+ # ─────────────── members ───────────────
+ 
+ 
+diff --git a/tests/test_m04_routers.py b/tests/test_m04_routers.py
+index b9b832e..3a50a15 100644
+--- a/tests/test_m04_routers.py
++++ b/tests/test_m04_routers.py
+@@ -155,6 +155,23 @@ async def test_list_dimensions_returns_items_and_enabled_types(
+     assert "lst1" in keys and "lst2" in keys
+ 
+ 
++async def test_list_dimensions_cross_node_tenant_returns_404(auth_client, make_user):
++    """dogfooding cluster-3 B-P2-M04-cross-node-tenant-read-gap:
++    GET /dimensions 用 projectA URL + projectB nodeId → 404 NODE_NOT_IN_PROJECT
++    （design §8 R8-1 第三层防御 / router 已加 svc._check_node_belongs_to_project）。
++    """
++    user = await make_user(email="m04-cross-node@example.com")
++    pid_a = await _create_project(auth_client, user.id, name="P_A")
++    pid_b = await _create_project(auth_client, user.id, name="P_B")
++    nid_b = await _create_node(auth_client, user.id, pid_b, name="nB")
++
++    r = await auth_client.get(
++        f"/api/projects/{pid_a}/nodes/{nid_b}/dimensions", headers=_bearer(user.id)
++    )
++    assert r.status_code == 404
++    assert r.json()["code"] == "dimension_not_found"
++
++
+ # ─────────────── G3: get_one + 404 ───────────────
+ 
+ 
+diff --git a/tests/test_m07_routers.py b/tests/test_m07_routers.py
+index ce43d2d..4be05dd 100644
+--- a/tests/test_m07_routers.py
++++ b/tests/test_m07_routers.py
+@@ -157,7 +157,11 @@ async def test_transition_open_to_closed_returns_422(auth_client, make_user):
+         headers=_bearer(user.id),
+     )
+     assert r.status_code == 422
+-    assert r.json()["code"] == "issue_transition_invalid"
++    body = r.json()
++    assert body["code"] == "issue_transition_invalid"
++    # dogfooding cluster-3 fix: design §13 + tests.md ER2 要求 details.current + details.target
++    assert body["details"]["current"] == "open"
++    assert body["details"]["target"] == "closed"
+ 
+ 
+ async def test_transition_closed_cannot_reopen_returns_422(auth_client, make_user):

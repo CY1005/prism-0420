@@ -577,13 +577,12 @@ test.describe("M07 问题沉淀 dogfooding", () => {
     expect(errorCode).toMatch(/ISSUE_NOT_FOUND|NOT_FOUND/i);
   });
 
-  test("[P0] API 旁路: 错误响应格式 含 details 字段（design §13 要求 current+target / 实测 from_status+to_status）", async ({
+  test("[P0] API 旁路: 错误响应格式 含 details.current + details.target（design §13 + tests.md ER2）", async ({
     request,
   }) => {
     // testpoint §3 "错误响应格式 含 details 含 current/target"（tests.md ER2）
-    // 🔴 真 bug：实测 details 包含 from_status/to_status 而非 design §13 要求的 current/target
-    // → 已入 03-bug-queue.md B-P2-M07-error-details-field-naming / status=OPEN
-    // spec 验实际行为：422 + details 含 from_status/to_status（不用 current/target 以免 false fail）
+    // dogfooding cluster-3 fix B-P2-M07-error-details-field-naming：
+    // issue_service.py 已改 kwargs from_status/to_status → current/target / 对齐 design §13
     const { accessToken, project, issue } = await seedFullProject(request);
     const auth = { Authorization: `Bearer ${accessToken}` };
 
@@ -593,13 +592,8 @@ test.describe("M07 问题沉淀 dogfooding", () => {
     );
     expect(res.status()).toBe(422);
     const body = await res.json();
-    // 验 details 存在（design §13 要求含 details 不管字段名）
     const details = body.error?.details ?? body.details ?? body;
-    // 实测：details 有 from_status + to_status（与 design 漂移 / 见 bug queue）
-    // 验 details 非空 + 含状态相关字段（宽松验：不硬断 current/target）
-    expect(Object.keys(details).length).toBeGreaterThan(0);
-    // 实测字段名为 from_status + to_status，不是 design §13 要求的 current + target
-    // — 真 bug 已入 B-P2-M07-error-details-field-naming
+    expect(details).toMatchObject({ current: "open", target: "closed" });
   });
 
   test("[P0] API 旁路: 未登录调 GET /issues 返 401 UNAUTHENTICATED", async ({ request }) => {

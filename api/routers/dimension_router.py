@@ -106,7 +106,9 @@ async def list_by_node(
 ) -> DimensionListResponse:
     """档案页主查询：已有维度记录 + 项目启用类型清单。"""
     svc = DimensionService()
-    # service 内部不校验 node 归属（只读不写也是个 P3 — 但越权读返回空 list 也安全）
+    # design §8 R8-1 第三层防御：跨 project node_id 必须 404 不暴露空 list
+    # （dogfooding B-P2-M04-cross-node-tenant-read-gap / cluster-3 fix）
+    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
     items = await svc.list_by_node(db, project_id=access.project.id, node_id=node_id)
     types = await _list_enabled_types(db, access.project.id)
     return DimensionListResponse(
@@ -123,6 +125,7 @@ async def get_one(
     db: AsyncSession = Depends(get_db),
 ) -> DimensionResponse:
     svc = DimensionService()
+    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
     rec = await svc.get_one_record(
         db,
         project_id=access.project.id,
@@ -145,6 +148,8 @@ async def completion(
     """
     from sqlalchemy import func
 
+    svc = DimensionService()
+    await svc._check_node_belongs_to_project(db, node_id, access.project.id)
     count_result = await db.execute(
         select(func.count(ProjectDimensionConfig.id)).where(
             ProjectDimensionConfig.project_id == access.project.id,
@@ -152,7 +157,6 @@ async def completion(
         )
     )
     enabled_count = int(count_result.scalar_one() or 0)
-    svc = DimensionService()
     result = await svc.completion(
         db,
         project_id=access.project.id,
@@ -173,6 +177,7 @@ async def create_dimension(
     db: AsyncSession = Depends(get_db),
 ) -> DimensionResponse:
     svc = DimensionService()
+    # write paths 的 _check_node_belongs_to_project 由 service.create 内部已调（L301 等）
     rec = await svc.create(
         db,
         project_id=access.project.id,

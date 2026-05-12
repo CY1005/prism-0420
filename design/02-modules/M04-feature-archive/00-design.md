@@ -469,11 +469,13 @@ class DimensionDAO:
 
 | action_type | target_type | target_id | summary | metadata |
 |-------------|-------------|-----------|---------|----------|
-| `create` | `dimension_record` | `<dim_record_id>` | 创建维度：{type_name} | `{node_id, type_id, content_size}` |
-| `update` | `dimension_record` | `<dim_record_id>` | 更新维度：{type_name} | `{node_id, type_id, old_version, new_version}` |
-| `delete` | `dimension_record` | `<dim_record_id>` | 删除维度：{type_name} | `{node_id, type_id}` |
+| `dimension_record_created` | `dimension_record` | `<dim_record_id>` | 创建维度：{type_name} | `{node_id, type_id, content_size}` |
+| `dimension_record_updated` | `dimension_record` | `<dim_record_id>` | 更新维度：{type_name} | `{node_id, type_id, old_version, new_version}` |
+| `dimension_record_deleted` | `dimension_record` | `<dim_record_id>` | 删除维度：{type_name} | `{node_id, type_id}` |
 
-**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条新建的 dimension_record 写独立 `create` 事件（target_id = dim_record_id）；`delete_by_node_id` 调用时每条被删的 dimension_record 写独立 `delete` 事件。批量刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性。
+**命名约定（dogfooding cluster-3 sync）**：与 frontmatter `produces_action_types` + 实装一致采用 `{target_type}_{past_tense}` 复合命名（M14/M15/M16 等模块同范式 / R14 命名规约）。
+
+**R10-1 批量操作补充（batch3 基线补丁）**：`batch_create_in_transaction` 调用时每条新建的 dimension_record 写独立 `dimension_record_created` 事件（target_id = dim_record_id）；`delete_by_node_id` 调用时每条被删的 dimension_record 写独立 `dimension_record_deleted` 事件。批量刷屏问题由 M15 UI 折叠分组解决，不牺牲可追溯性。
 
 ### 实现位置
 

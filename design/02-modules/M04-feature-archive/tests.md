@@ -18,10 +18,10 @@ module_id: M04
 
 | ID | 场景 | 步骤 | 期望 |
 |----|------|------|------|
-| G1 | 创建首条维度 | 编辑者 → POST `/dimensions` 含 type_id=1, content={...} | 201 + version=1 + activity_log 一条 `create` |
+| G1 | 创建首条维度 | 编辑者 → POST `/dimensions` 含 type_id=1, content={...} | 201 + version=1 + activity_log 一条 `dimension_record_created` |
 | G2 | 读取节点所有维度 | 编辑者 → GET `/dimensions` | 200 + items 含已填 + enabled_dimension_types 含未填 |
-| G3 | 更新维度（乐观锁正常） | 拉取 → 改 content → PUT 带 expected_version=1 | 200 + version=2 + activity_log 一条 `update` 含 old/new version |
-| G4 | 删除维度 | DELETE `/dimensions/{type_id}` | 204 + activity_log 一条 `delete` |
+| G3 | 更新维度（乐观锁正常） | 拉取 → 改 content → PUT 带 expected_version=1 | 200 + version=2 + activity_log 一条 `dimension_record_updated` 含 old/new version |
+| G4 | 删除维度 | DELETE `/dimensions/{type_id}` | 204 + activity_log 一条 `dimension_record_deleted` |
 | G5 | 完善度计算 | GET `/completion` | enabled_count=N, filled_count=K, completion_rate=K/N |
 
 ---

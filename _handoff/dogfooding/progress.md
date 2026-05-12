@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-13 (P3 executor 全量 505 tests 真跑 / 488 PASS 96.6% / 17 FAIL / 2 新 bug 入队)
-phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 ✅ DONE / P4 4/N FIX_DONE / P5 待启
-sub_task: P3 全 22 spec / 505 tests / 6 batch 全跑完 / 488 PASS / 17 FAIL（6 known OPEN verified + 8 pre-existing + 3 新）/ 05-regression-results.md 产出
-cost_cumulative: P1 ~$21 + P1→P2 audit $3 + P2 spike $1.5 + P4 fix1+2 $2.8 + P4 fix3 $2 + batch 2-5 ~$15 + close $0.5 + P2-close fixture $1-2 + P3 ~$2 = **~$49-53**
-status: NORMAL / P3 全量回归完成 / init pass rate 96.6% / 03-bug-queue OPEN 池 +2 新条 = 29 OPEN 总 / 待启 P4 收口 / P5 最终回归
+last_session: 2026-05-13 (P4 cluster-3 M04 cross-node + action_type sync + M07 details / 3 OPEN → FIX_DONE / A 路径全 / 主 agent 自做)
+phase: P1 ✅ / P2 ✅ DONE / P2-close ✅ fixture opt-in 落地 / P3 ✅ DONE / P4 cluster-1+2+3 完 / cluster-4/5/6 + P5 待启
+sub_task: cluster-3 M04+M07 fix / dimension_router 3 read endpoints 加 _check_node_belongs_to_project + design §10 prose sync 复合命名 + issue_service kwargs current/target / pytest 146 PASS / playwright local FAIL 因 dev server 未 reload（CI fresh 验证）
+cost_cumulative: P1 ~$21 + audit/spike $4 + P4 cluster-1+2 ~$5 + batch 2-5 ~$15 + close + P2-close ~$2 + P3 $2 + cluster-3 主 agent 自做 ~$3 = **~$52-56**
+status: NORMAL / cluster-3 A 路径完成 / OPEN 池 -3 = 24 OPEN 总 / 下一步 cluster-4（cc-A+cc-B+B-P3-M13+B-P3-M17 / 混 A+B / cap $5）
 ---
 
 # Dogfooding Sprint Progress
@@ -216,7 +216,10 @@ status: NORMAL / P3 全量回归完成 / init pass rate 96.6% / 03-bug-queue OPE
   - ✅ B-list-projects-search-loader（commit cf25cb9 / Turbopack SWC dead re-export）
   - ✅ B-workspace-no-dims-graceful（commit 57c0116 / OverviewNoDimensionsError 422 fallback + parseError 双读 code/error_code / 含 M14 + M19 + M08 + M03 + M04 同根因）
   - ✅ B-cold-start-validation-deadlock（commit 57c0116 / cold_start_service.py L342+L407 立即 commit 释放行锁）
-  - 🟡 OPEN ~27 bug 待 P4 入：M03 (2) / M04 (2) / M05 (1) / M06 (2) / M07 (1) / M10 (1) / M11 (1) / M12 (1) / M13 (4) / M14 (1) / M15 (3) / M16 (2) / M17 (4) / M18 (2) / M19 (1) / M20 (1) / M08 (2) / cc-A (2) / cc-B (1)
+  - ✅ cluster-1 M06 双 fix（commit 033ea64 / 404 + display_name JOIN）
+  - ✅ cluster-2 M18 422→400 + M03 type-immutable + DELETE-projects（commit 0992dc8 / ⚠️ M03 DELETE HIGH design 冲突待 CY 决）
+  - ✅ cluster-3 M04 cross-node 404 + M04 action_type design sync + M07 transition details current/target（B-P4-cluster-3-M04-M07 / A 路径全 / 7 文件 / pytest 146 PASS）
+  - 🟡 OPEN ~24 bug 待 P4 入：M04 (0) / M05 (1) / M07 (0) / M10 (1) / M11 (1) / M12 (1) / M13 (4) / M14 (1) / M15 (3) / M16 (2) / M17 (4) / M18 (1 design-gap) / M19 (0) / M20 (0) / M08 (2) / cc-A (2) / cc-B (1)
 - **P5 final** ⬜ NOT_STARTED
 
 ---

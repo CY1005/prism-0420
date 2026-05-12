@@ -157,7 +157,11 @@ async def test_transition_open_to_closed_returns_422(auth_client, make_user):
         headers=_bearer(user.id),
     )
     assert r.status_code == 422
-    assert r.json()["code"] == "issue_transition_invalid"
+    body = r.json()
+    assert body["code"] == "issue_transition_invalid"
+    # dogfooding cluster-3 fix: design §13 + tests.md ER2 要求 details.current + details.target
+    assert body["details"]["current"] == "open"
+    assert body["details"]["target"] == "closed"
 
 
 async def test_transition_closed_cannot_reopen_returns_422(auth_client, make_user):

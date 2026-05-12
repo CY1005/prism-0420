@@ -155,6 +155,23 @@ async def test_list_dimensions_returns_items_and_enabled_types(
     assert "lst1" in keys and "lst2" in keys
 
 
+async def test_list_dimensions_cross_node_tenant_returns_404(auth_client, make_user):
+    """dogfooding cluster-3 B-P2-M04-cross-node-tenant-read-gap:
+    GET /dimensions 用 projectA URL + projectB nodeId → 404 NODE_NOT_IN_PROJECT
+    （design §8 R8-1 第三层防御 / router 已加 svc._check_node_belongs_to_project）。
+    """
+    user = await make_user(email="m04-cross-node@example.com")
+    pid_a = await _create_project(auth_client, user.id, name="P_A")
+    pid_b = await _create_project(auth_client, user.id, name="P_B")
+    nid_b = await _create_node(auth_client, user.id, pid_b, name="nB")
+
+    r = await auth_client.get(
+        f"/api/projects/{pid_a}/nodes/{nid_b}/dimensions", headers=_bearer(user.id)
+    )
+    assert r.status_code == 404
+    assert r.json()["code"] == "dimension_not_found"
+
+
 # ─────────────── G3: get_one + 404 ───────────────
 
 
