@@ -271,6 +271,60 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 - 严重度：比关闸盲区 #1（删 export 未扫调用方 / 编译 broken）更高一档——前者 CI 红会暴露，后者编译过 = 永远不会被 audit 自动发现，需要人工 + 真跑才能识别
 - 量化：Phase 2.2 子片关闸模板覆盖率 ≈ 80%（缺数据形态迁移完整性扫这一项），漏检 70+ 错
 
+### #8 本地 dev 跑通 ≠ 远程访问跑通 / dogfooding 远程接入暴露 4 类系统性 bug（2026-05-12 cloudflare tunnel 上线）
+
+**现象**：Phase 2.3 cleanup 完成（tsc 0 / pytest 1643 / next build / CI 全绿）后，准备 dogfooding 通过 cloudflare tunnel 暴露 `https://prism-0420.19911005.xyz` 给 CY Windows 浏览器访问。本地 dev 全跑通的同代码，**远程访问立即撞 4 类系统性 bug**：
+
+#### 1. docker-compose 默认绑 0.0.0.0 公网暴露
+- `prism0420-pg / prism0420-redis` ports `5432:5432` / `6379:6379`
+- 实际公网 `162.43.44.163:5432 / :6379` 直接可达（`nc -zv` 验证 succeeded）
+- ufw 防火墙完全失效（docker iptables 绕过 ufw 是已知现象）
+- **修法**：ports 显式绑 `127.0.0.1:5432:5432` / `127.0.0.1:6379:6379`
+
+#### 2. 浏览器端 fetch BASE_URL "http://localhost:8000" 远程访问撞客户机本地
+- `services/http-client.ts: BASE_URL = NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"`
+- 浏览器执行 JS 时 `fetch("http://localhost:8000/auth/logout")` → localhost = 客户机自己 / 不是服务器
+- 症状：logout 无反应 / 隐身模式直接登录态（refresh failed silent）
+- **修法**：BASE_URL 默认 `""`（同源相对路径）+ Next.js rewrites 转 backend
+- **教训**：server-side fetch 和 client-side fetch 用不同 URL 策略 / 不能共享 BASE_URL 常量
+
+#### 3. cookie `secure=settings.app_env != "local"` 把 CI/test/staging 都当 production
+- `api/routers/auth.py:52` 设 cookie secure flag
+- CI 是 APP_ENV=ci → secure=True / ASGITransport base_url=http://test 非 HTTPS → cookie 不发 → refresh test 401
+- 症状：CI `test_refresh_with_cookie_only_no_body_token` 失败 / 本地 PASS
+- **修法**：`secure=settings.app_env == "production"`（production-only 白名单）
+- **教训**：黑名单 production 排除法（`!= "local"`）会把任何未列举环境当 production / 白名单才安全
+
+#### 4. Next.js 默认无 rewrites / 前端单独跑无法代理 backend
+- prism-0420 默认 `next.config.ts` 空 / 前端 3000 / backend 8000 各自独立
+- 客户端 fetch 必须显式打 backend URL（撞 bug #2）
+- **修法**：`next.config.ts rewrites /auth/* + /api/* → http://localhost:8000`
+- **教训**：前后端分离架构的"前端 dev server 必须能代理 backend API"是基础设施前置 / 不该等远程接入暴露
+
+#### Bonus: SYSTEM_USER 例外漏在 2 处业务逻辑（CI 暴露）
+- migration m16 种 system user (role=platform_admin) / `count_active_admins` + `bootstrap_admin_if_empty` 都没排除 → CI 跑测试时 last-admin 保护逻辑失效 + bootstrap 永不创建首个 admin
+- **修法**：两处 SQL 加 `WHERE id != SYSTEM_USER_UUID`
+- **教训**：migration 种 seed 数据 + 业务断言（"empty"/"last"/"first"）冲突 / 所有 WHERE 都要显式排除 SYSTEM seed
+
+**根因总结**：这 5 个 bug **共同点**——**本地 dev 同机器 + 同 localhost + APP_ENV=local 永远撞不到**。dogfooding 远程访问是第一个真实环境暴露（CI 已捕获 #3 + bonus，但 #1 #2 #4 必须真有浏览器跨主机才暴露）。
+
+**立规已落**：
+1. memory 候选 `feedback_remote_access_audit.md`：前后端分离项目 phase 关闸前必跑"远程访问 audit checklist"
+   - 浏览器端 fetch BASE_URL 是相对路径还是 absolute localhost
+   - Next.js rewrites 配 /auth/* /api/* 转 backend
+   - docker-compose ports 绑 127.0.0.1 不绑 0.0.0.0
+   - cookie secure 白名单 production / 不黑名单排除 local
+   - migration 种 seed 数据后所有"empty/last/first"业务断言要排除 seed
+2. phase-gate 关闸盲区 #3（候选 / 跟 #2 数据形态迁移半完成同档）—— 关闸 audit 模板必跑"远程访问 happy path"（不只本地 happy path）
+
+**STAR 标签**：
+- 模式归类：契约漂移 28% 模式 / 子类"本地环境假设漂移到远程"
+- 严重度：跟关闸盲区 #2（数据形态迁移半完成 / 编译绿但运行 broken）平行 / 都是"本地 audit 永远撞不到的远程 bug"
+- 量化：dogfooding 第 1 次远程接入 = 4 类 bug + 1 个 bonus / 全部本地 audit 完全无法发现
+- **教训**：dogfooding 不只是"用产品"——是 phase 关闸最后一道远程环境验证 / 提前到 Phase 2.3 集成验证里可以拦下 80% 这些 bug
+
+---
+
 ### #7 决策类推荐跳过 design + 真实代码 fact-finding（2026-05-12 C sprint 推荐翻车 + workspace 估时差 10 倍）
 
 **现象**：Phase 2.3 cleanup 进行中两个决策暴露同根因失败：
