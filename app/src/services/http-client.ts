@@ -8,7 +8,10 @@
 
 import { getAccessToken, setAccessToken, clearAccessToken } from "./auth-token-store";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+// Phase 2.3 cleanup follow-up: 默认空字符串 = 同源相对路径
+// 浏览器端 fetch("/auth/logout") → Next.js rewrites → backend
+// 旧默认 "http://localhost:8000" 在远程访问时 = 客户机自己 localhost / 不通
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 export class ApiError extends Error {
   constructor(
