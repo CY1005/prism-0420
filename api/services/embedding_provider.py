@@ -284,15 +284,21 @@ def get_embedding_provider(
         provider_name: ∈ SUPPORTED_PROVIDERS = {'openai', 'bge', 'mock'}；None / "" → 'mock'
         model_name: 模型名（mock 必须 ``mock-*`` 前缀；openai 'text-embedding-3-small' 等）
         dim: 向量维度，必须 ∈ SUPPORTED_DIMS
-        api_key: OpenAI api_key（R1 fix #13：caller 从 ProjectSettings.embedding_api_key_enc + AES decrypt 传入；
-                 未传时 fallback 到 os.getenv OPENAI_API_KEY + DeprecationWarning）
+        api_key: OpenAI api_key（默认从 env `OPENAI_API_KEY` 读 / 部署期 secrets manager 或 env 注入；
+                 caller 可显式传入 override（用于测试 / 未来多租户演进）；范式差异参 ADR-006 §Consequences）
 
     Raises:
         EmbeddingProviderConfigError: 未知 provider / mock 前缀违反 / dim 档位非法
 
     子片 0 prep（2026-05-09）：实装 ``mock``。
     子片 3（2026-05-09）：OpenAI + bge skeleton（embed_single/batch 暂 NotImplementedError）。
-    子片 4+：pgvector 装后接通 OpenAI + bge 真实现；EmbeddingService._get_provider 接 ProjectSettings 解密后传 api_key。
+    子片 4+：pgvector 装后接通 OpenAI + bge 真实现。
+
+    api_key 范式（F9 决策 2026-05-12 / CY 拍方案 A 接受 env-only）：
+        - M18 (embedding) = 基础设施级 / 全局 OPENAI_API_KEY env / 与 ADR-001 §4 "embedding provider 部署期固定" 自洽
+        - M13 (LLM analysis) = 业务级 / ProjectSettings.ai_api_key_enc + AES decrypt / 每 project 独立 key
+        - 范式差异是显式决策（基础设施 vs 业务功能不同语义），非 drift
+        - 未来若需多租户 SaaS / per-project embedding key → 升级方案 B (ProjectSettings.embedding_api_key_enc + alembic 迁移 + admin UI)
     """
     name = (provider_name or "mock").strip().lower()
 
@@ -309,20 +315,10 @@ def get_embedding_provider(
 
     if name == "openai":
         import os
-        import warnings
 
-        # R1 fix #13：api_key 接受 caller 传入（子片 4+ 从 ProjectSettings.embedding_api_key_enc + AES decrypt 传）
-        # os.getenv fallback 仅在 api_key 未传时用，且加 deprecation warning
-        # TODO 子片 4+：caller EmbeddingService._get_provider 必须从 ProjectSettings.embedding_api_key_enc
-        # + AES decrypt 后传入 api_key，不再走 os.getenv fallback
+        # F9 决策（2026-05-12 / CY 拍方案 A）：M18 = 基础设施级 env-only / 与 ADR-001 §4 自洽
+        # caller 可显式传 api_key override (用于测试 / 多租户演进)，否则 env OPENAI_API_KEY
         resolved_api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        if not api_key:
-            warnings.warn(
-                "get_embedding_provider: api_key 未传入，fallback 到 os.getenv OPENAI_API_KEY。"
-                "子片 4+ 必须从 ProjectSettings.embedding_api_key_enc + AES decrypt 传入 api_key。",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         return OpenAIEmbeddingProvider(
             api_key=resolved_api_key,
             model_name=model_name or "text-embedding-3-small",

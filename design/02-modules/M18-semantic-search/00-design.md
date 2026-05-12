@@ -592,6 +592,7 @@ stateDiagram-v2
 
 | env 变量 | 默认 | 用途 | audit 来源 |
 |---------|------|------|-----------|
+| `OPENAI_API_KEY` | （无 / 启动失败）| OpenAI embedding api_key（**F9 决策 2026-05-12 / CY 拍方案 A 接受 env-only**）。部署期 secrets manager 或 env 注入；与 M13 `ProjectSettings.ai_api_key_enc` AES 范式差异是显式决策（embedding=基础设施级 / LLM analysis=业务级），非 drift；未来多租户 SaaS 升级方案 B 时改加 `ProjectSettings.embedding_api_key_enc` 字段 + alembic 迁移 | **F9 / chunk_6 F-6.14** |
 | `EMBEDDING_PROVIDER` | `openai` | 部署期固定，三选一 `openai` / `bge` / `mock` | C3=C 明文化 |
 | `EMBEDDING_MODEL_NAME` | `text-embedding-3-small` | 当前 provider-level 模型名（搜索 filter 用，写入 embeddings.model_name 字段；fix v4.1 verify R5'：从原 `DEFAULT_EMBEDDING_MODEL` 改名，与 product-level 业务版本号拆分清楚）。**fix v4.2 verify R2=A 约束**：当 `EMBEDDING_PROVIDER=mock` 时，model_name 必须 `mock-*` 前缀（默认建议 `mock-default`）；startup sanity check 强制校验，否则启动失败 ConfigError | Q3=A |
 | `EMBEDDING_MODEL_VERSION` | `v1` | 当前 product-level 业务版本号（同 model 多 v1/v2 调参时用，写入 embeddings.model_version PK 字段；fix v4.1 verify R5'：与 model_name 语义层拆分——schema-level dim / provider-level model_name / product-level version 三层不混） | B4 三段式拆分 |

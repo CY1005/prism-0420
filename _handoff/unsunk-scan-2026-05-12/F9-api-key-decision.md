@@ -1,13 +1,32 @@
 ---
-title: F9 — M18 OpenAI api_key vs M13 ProjectSettings AES 对齐决策建议
-status: proposed
-owner: CY (待拍)
+title: F9 — M18 OpenAI api_key vs M13 ProjectSettings AES 对齐决策
+status: accepted
+decision: 方案 A (env-only)
+decided_at: 2026-05-12
+decided_by: CY (显式拍 / 反向 audit 后明确授权)
 created: 2026-05-12
 related:
-  - F-6.14 cross-sprint punt
-  - ADR-006 §Consequences 横切影响段
+  - F-6.14 cross-sprint punt ✅ DONE
+  - ADR-006 §Consequences 横切影响段（已修订）
+  - M18 design §6 env 配置清单（已加 OPENAI_API_KEY）
+  - api/services/embedding_provider.py:286-322（已删 R1 fix #13 TODO + DeprecationWarning）
   - chunk_6 F-6.5 / F-6.14
 related_modules: [M02, M13, M18]
+---
+
+## 决议（2026-05-12 / CY 显式拍方案 A）
+
+**采纳方案 A (env-only)**。落地变更：
+1. `embedding_provider.py:286-322` 删 R1 fix #13 TODO + 删 DeprecationWarning + 改 docstring "接受 env-only 范式"
+2. `M18 design §6 env 配置清单` 加 `OPENAI_API_KEY` 一行（含范式差异业务理由）
+3. `ADR-006 §Consequences 横切影响段` 改"违反 ADR 隐含范式 punt 处理" → "范式差异是显式决策 / F-6.14 ✅ DONE"
+4. `ADR-006 关联段` F-6.14 标 ✅ DONE
+5. ADR-006 §正面段 typo 修：M13 字段 `embedding_api_key_enc` → `ai_api_key_enc` (M02 真实字段)
+
+**业务理由**：embedding 是基础设施级（搜索 / RAG），与 M13 LLM analysis (业务级) 语义不同；ADR-001 §4 已声明 embedding provider 部署期固定；单租户场景 OpenAI 账号通常公司级一个 key。**可逆性**：未来多租户 SaaS 升级方案 B 无沉没（升级成本 ≈ B 工作量 1.5-2d / 无遗留）。
+
+**预期影响**：spec→impl drift bug 修复（R1 fix #13 注释引用的 `ProjectSettings.embedding_api_key_enc` 字段从未实施，现删 TODO 字面化 env-only 为正式范式）。
+
 ---
 
 # F9 — M18 OpenAI api_key 范式对齐决策建议
