@@ -35,6 +35,10 @@ export class UnauthenticatedError extends ApiError {
 interface FastApiErrorBody {
   detail?: unknown;
   error_code?: string;
+  // B-P2-M14-workspace-dimension-error fix（dogfooding 2026-05-12）：backend
+  // middleware 实际序列化字段名是 `code`（api/errors/middleware.py L18）；
+  // 与 server-http-client.ts 同步增加 fallback 读取 + 保留 error_code 兼容老 mock。
+  code?: string;
   message?: string;
 }
 
@@ -45,7 +49,12 @@ async function parseError(resp: Response): Promise<ApiError> {
   } catch {
     // body 不是 json / 走 statusText
   }
-  const errorCode = typeof body.error_code === "string" ? body.error_code : null;
+  const errorCode =
+    typeof body.error_code === "string"
+      ? body.error_code
+      : typeof body.code === "string"
+        ? body.code
+        : null;
   const message =
     (typeof body.message === "string" && body.message) ||
     (typeof body.detail === "string" && body.detail) ||

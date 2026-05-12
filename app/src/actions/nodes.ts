@@ -7,6 +7,7 @@ import {
   serverApiPost,
   serverApiPut,
   serverApiDelete,
+  ApiError,
   UnauthenticatedError,
 } from "@/lib/server-http-client";
 import { logger } from "@/lib/logger";
@@ -105,12 +106,65 @@ export interface NodeData {
  * 项目节点树 + 完善度（M16 overview）。
  * 走 /api/projects/{pid}/overview 端点（NodeOverview 已含 completion_rate / 后端已计算）。
  * 返回 shape 与拷贝层旧 drizzle 版本兼容（含 completionPercent + children 嵌套）。
+ *
+ * B-P2-M14-workspace-dimension-error fix（dogfooding 2026-05-12 / 关联 B-P2-M19-workspace-no-dims-error
+ * + B-P2-M03/M04/M05/M06 同根因复现）：
+ * - 后端 overview_service.py L62 在 enabled_count==0 时 raise OverviewNoDimensionsError(422)
+ *   （design M10-B3 字面 contract — 不返空 tree 而 422 早返回避免半成品）。
+ * - 前端 workspace.tsx server component（page.tsx L11）调用本函数 / 异常会冒泡到
+ *   Next.js error boundary（projects/error.tsx "出错了" 页面）→ workspace 完全不渲染。
+ * - 修法：catch overview_no_dimensions → 退回 GET /api/projects/{pid}/nodes（NodeTreeResponse），
+ *   保留真实节点树，completionPercent=0（无 dim 配置时计算为 0 是合理回退）。logger.warn
+ *   保留可观测性（非静默吞错 / [[feedback_subagent_sprint]] §2 T1 合规）。
+ * - 其他 ApiError 继续抛 / 不动权限/网络/未知错误的 error boundary 行为。
  */
 export async function getProjectTree(projectId: string): Promise<TreeNode[]> {
   return withAuthRedirect(async () => {
-    const data = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
-    return data.tree.map((n) => overviewToTreeNode(n, projectId));
+    try {
+      const data = await serverApiGet<OverviewResponse>(`/api/projects/${projectId}/overview`);
+      return data.tree.map((n) => overviewToTreeNode(n, projectId));
+    } catch (error) {
+      // B-P2-M14-workspace-dimension-error: project 无 enabled dimensions 时优雅降级
+      // backend 字面 error code（api/errors/codes.py L104 / OVERVIEW_NO_DIMENSIONS）
+      if (error instanceof ApiError && error.errorCode === "overview_no_dimensions") {
+        logger.warn("getProjectTree.no_enabled_dimensions", {
+          projectId,
+          fallback: "raw_nodes_tree",
+          bug: "B-P2-M14-workspace-dimension-error",
+        });
+        // 退回 nodes 端点：保留真实节点树，completionPercent=0（无 dim 配置时合理回退）
+        const nodes = await serverApiGet<components["schemas"]["NodeTreeResponse"]>(
+          `/api/projects/${projectId}/nodes`,
+        );
+        return nodes.roots.map((n) => nodeWithChildrenToTreeNode(n, projectId));
+      }
+      throw error;
+    }
   });
+}
+
+/**
+ * B-P2-M14-workspace-dimension-error fix：fallback path 适配 NodeWithChildrenResponse → TreeNode。
+ * 与 overviewToTreeNode 同构 / completionPercent 强制 0（无 dim 配置时计算无意义）。
+ */
+function nodeWithChildrenToTreeNode(node: NodeWithChildren, projectId: string): TreeNode {
+  return {
+    id: node.id,
+    project_id: projectId,
+    parent_id: node.parent_id,
+    name: node.name,
+    description: node.description ?? null,
+    type: node.type,
+    depth: node.depth,
+    sort_order: node.sort_order,
+    path: node.path,
+    created_by: node.created_by ?? null,
+    updated_by: node.updated_by ?? null,
+    created_at: node.created_at,
+    updated_at: node.updated_at,
+    children: (node.children ?? []).map((c) => nodeWithChildrenToTreeNode(c, projectId)),
+    completionPercent: 0,
+  };
 }
 
 function overviewToTreeNode(node: NodeOverview, projectId: string): TreeNode {

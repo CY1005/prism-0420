@@ -18,6 +18,12 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
 interface FastApiErrorBody {
   detail?: unknown;
   error_code?: string;
+  // B-P2-M14-workspace-dimension-error fix（dogfooding 2026-05-12）：backend
+  // api/errors/middleware.py L18 实际序列化字段名是 `code` 而非 `error_code`；
+  // 历史 parser 只看 error_code → ApiError.errorCode 全 null → 业务侧无法按 code 分发
+  // UX（如 OverviewNoDimensionsError 优雅降级为空 tree）。新增 `code` 字段读取，
+  // 保留 `error_code` 兼容老 mock（server-http-client.test.ts L78）+ 未来契约迁移空间。
+  code?: string;
   message?: string;
 }
 
@@ -28,7 +34,12 @@ async function parseError(resp: Response): Promise<ApiError> {
   } catch {
     // 非 json body
   }
-  const errorCode = typeof body.error_code === "string" ? body.error_code : null;
+  const errorCode =
+    typeof body.error_code === "string"
+      ? body.error_code
+      : typeof body.code === "string"
+        ? body.code
+        : null;
   const message =
     (typeof body.message === "string" && body.message) ||
     (typeof body.detail === "string" && body.detail) ||

@@ -339,9 +339,19 @@ class ColdStartOrchestratorService:
         await db.commit()
 
         # ---- validating：解析 + 行校验 ----
+        # B-P2-M11-validation-hang fix（dogfooding 2026-05-12）：
+        # 旧代码 dao.update(VALIDATING) 后不 commit，AsyncSession 自动开启的隐式 txn 持有
+        # cold_start_tasks 行锁；后续行级校验失败走 _mark_failed → compensation_session()
+        # 新 connection UPDATE 同行 → 行锁冲突 deadlock → HTTP 请求挂起（M11 spec
+        # "[P0] 校验失败响应体" timeout 实证）。
+        # 修法：与 L339 任务创建后立即 commit 范式对齐 — VALIDATING/IMPORTING 状态扭转
+        # 各自独立 commit，把行锁立即释放给后续 compensation_session 的独立 connection。
+        # design §5 立修注释字面允许（"service 不主动 begin/commit/rollback" 已被
+        # M17 sprint 子片 0 prep 字面豁免 + 见本文件 docstring L14 "任务创建立即 commit"）。
         await self.dao.update(
             db, task.id, project_id, fields={"status": ColdStartStatus.VALIDATING.value}
         )
+        await db.commit()
         try:
             parsed = parse_csv(content_bytes)
         except (ColdStartCsvInvalidError, ColdStartFileTooLargeError) as e:
@@ -404,6 +414,10 @@ class ColdStartOrchestratorService:
             )
 
         # ---- importing：4 batch_create 共享 savepoint ----
+        # B-P2-M11-validation-hang 同根因同步修：IMPORTING 状态扭转后立即 commit / 释放
+        # 行锁；让随后的 batch_create_in_transaction 任一失败时走 _mark_failed +
+        # compensation_session 不被 task 行锁阻塞（业务 INSERT 在新 txn 内，task 行
+        # 不在其 lock 集合内 / commit 后 comp_db 直接 UPDATE 落盘 FAILED）。
         await self.dao.update(
             db,
             task.id,
@@ -413,6 +427,7 @@ class ColdStartOrchestratorService:
                 "total_rows": parsed.total_rows,
             },
         )
+        await db.commit()
 
         try:
             created_nodes = await self.node_service.batch_create_in_transaction(
