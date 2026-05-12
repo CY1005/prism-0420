@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 evening
+last_session: 2026-05-12 night (batch 1)
 phase: P1 (testpoint generation)
-sub_task: M01 pilot ✅ / 其他 20 模块 + cross-cutting 待并行
-cost_cumulative: $50 (this session) + ~$2 (M01 subagent)
-status: NORMAL / 自然 checkpoint / 切新 session
+sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ / 批 2-5 + cross-cutting 待并行
+cost_cumulative: $52 (M01 pilot) + ~$3.9 (批 1 4 subagent)
+status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 session
 ---
 
 # Dogfooding Sprint Progress
@@ -21,10 +21,24 @@ status: NORMAL / 自然 checkpoint / 切新 session
   - ✅ 3 核心 prompt 落地（phase1-testpoint / phase4-fix / phase4-audit）
   - ✅ CY review 00-plan + 3 prompt → 拍 A 路径接受现状全跑
 
-- **P1 testpoint** 🟡 IN_PROGRESS（1/21 完成）
+- **P1 testpoint** 🟡 IN_PROGRESS（5/21 完成 / 批 1 done）
   - ✅ M01 user-account / 127 testpoint（P0=45 / P1=69 / P2=13）/ 14 视角 / cost ~$2
     - 文件：`01-testpoints/M01-user-account.md`
     - 质量验证：每条引 design §N + tests.md GN / 单行 / 无 forbidden / 全 self-check 通过
+  - ✅ M11 cold-start / 91 testpoint（P0=30 / P1=52 / P2=8 / 实 grep 90）/ 14 视角 / cost ~$1.5
+    - 文件：`01-testpoints/M11-cold-start.md`（152 行）
+    - 风险点：R-X1 orchestrator 首例 / 共享 db.begin() 跨 service 回滚 / G2/G6 无 idempotency / completed/failed 终态 409 / 10MB+1000 行同步阈值
+    - PRD F11 章节未显式存在 → 改引 US-A1.5 + PRD Q3.1（frontmatter 已注）
+  - ✅ M14 industry-news / 89 testpoint（P0=27 / P1=46 / P2=16）/ 14 视角 / cost ~$0.6
+    - 文件：`01-testpoints/M14-industry-news.md`（151 行）
+    - 风险点：首个全局豁免业务模块（GLOBAL DATA NO TENANT FILTER）/ link/unlink 权限裁决 / source_type='manual' 双重防护 / IntegrityError 区分约束名 / 过去式 action_type / activity_log 非事务
+  - ✅ M19 import-export / 86 testpoint（P0=25 / P1=46 / P2=15）/ 14 视角 / cost ~$0.6
+    - 文件：`01-testpoints/M19-import-export.md`（148 行）
+    - 风险点：action_type "exported" 4 处同步漂移 / Content-Disposition filename sanitize 输出端首发 / 跨 project node 走 422 而非 404 / viewer 写 activity_log / EXPORT_EMPTY_CONTENT 422 优先空报告
+  - ✅ M20 team / 128 testpoint（P0=61 / P1=62 / P2=5）/ 12 视角 / cost ~$1.2 / **escalation surface ≥100 → 已按 P0/P1/P2 拆好**
+    - 文件：`01-testpoints/M20-team.md`（186 行）
+    - 风险点：R-X3 跨事务签名首发 / L3 SQL 注入横切 M03-M19 / correlation_id F2.9 + R10-1 批量独立 N+1 / 嵌套 max(team_role, project_role) 10 组合 / archived × team 双路径互锁 F2.3
+    - 复杂度最高单 sprint（design §14.5 R-X5 实证）/ P0 占比 47.7% 偏高合理
   - ⬜ M02 project
   - ⬜ M03 module-tree
   - ⬜ M04 feature-archive
@@ -33,17 +47,23 @@ status: NORMAL / 自然 checkpoint / 切新 session
   - ⬜ M07 issue
   - ⬜ M08 module-relation
   - ⬜ M10 overview
-  - ⬜ M11 cold-start
   - ⬜ M12 comparison
   - ⬜ M13 requirement-analysis
-  - ⬜ M14 industry-news
   - ⬜ M15 activity-stream
   - ⬜ M16 ai-snapshot
   - ⬜ M17 ai-import
   - ⬜ M18 semantic-search
-  - ⬜ M19 import-export
-  - ⬜ M20 team
   - ⬜ _cross-cutting（auth / cookie / 网络 / 跨 tab / mobile / 性能）
+
+  ### 批 1 汇总（M11/M14/M19/M20 / 4 模块）
+  - **testpoint 总数**：394（P0=143 / P1=206 / P2=44 = M01 不计 / 批 1 累计）
+  - **cost**：~$3.9（远低于估 $4 / 4 subagent 4 并发）
+  - **跨模块元发现**（design 推导的 surface 候选）：
+    - R-X1 orchestrator 首例（M11）+ R-X3 跨事务签名首发（M20）→ design 中 R-X 系列横切纪律集中爆发 / 建议 cross-cutting 视角单立测试集
+    - 全局豁免业务模块（M14 首发）+ 跨 project 只读消费（M19）→ tenant 隔离边界 2 类例外，需要 cross-cutting 集中规约
+    - activity_log 失败传播 4 模块全覆盖（M16 范式 / M11/M14/M19/M20 复用）→ 已成横切纪律
+    - action_type 同步漂移 M14（5 个过去式）+ M19（4 处同步）→ CI 守护 / 设计漂移防御视角必须有专项
+    - filename sanitize 输出端首发（M19）→ 后续 M17/M18 导出场景复用范式
 
 - **P2 case** ⬜ NOT_STARTED
 - **P3 executor** ⬜ NOT_STARTED
@@ -65,19 +85,27 @@ status: NORMAL / 自然 checkpoint / 切新 session
 1. `cat _handoff/dogfooding/progress.md`（本文件 / 起点）
 2. `cat _handoff/dogfooding/00-plan.md`（§2 8 类 agent + §5 验收 / 拿总 plan）
 3. `cat _handoff/dogfooding/prompts/phase1-testpoint.md`（P1 提示词 / 跟 M01 pilot 用同一份）
-4. `cat _handoff/dogfooding/01-testpoints/M01-user-account.md` 抽样看格式（参考 pilot 输出 / 14 视角 H2 + 单行 testpoint + 引 design §N）
+4. `cat _handoff/dogfooding/prompts/phase1-testpoint-invocation-template.md`（含 4 并发 invoke 示例 / 6 变量替换清单）
+5. `cat _handoff/dogfooding/01-testpoints/M11-cold-start.md` 抽样看批 1 实战输出（128 testpoint 上限 / 14 视角 / 单行 / 引 design §N）
 
-## 下一 session 任务（启 P1 剩余 20 模块）
+## 下一 session 任务（启 P1 剩余 14 模块 / 批 2-5）
 
 **策略**：并行启动（按 [[feedback_usage_budget]] 信号 A 节流 / 最多 4 并发 Opus subagent）
 
+**批 1 实战观察**（影响后续批次决策）：
+- 4 个"边缘模块"实际 testpoint 数 86-128（远超估 30-50）/ 不阻塞但 cost 比估高 / 批 2-4 估算应 +50%
+- M20 触发 ≥100 escalation surface 但不阻塞 / 按 P0/P1/P2 已拆好 / 后续大业务模块应预期同等触发
+- 4 并发 Opus 单批次实际 cost ~$3.9（接近 $4 估）/ 单 session $10 软上限可装 2 批
+- 风格红线全过（0 forbidden 真违反 / 1 false positive 词频）/ prompt 模板鲁棒
+- 元发现：R-X 横切纪律 / tenant 豁免 2 类 / activity_log 失败传播 / action_type 同步漂移 / filename sanitize → cross-cutting 视角需专项
+
 **推荐分批顺序**（按模块复杂度从低到高 / 先简单的验证 prompt 鲁棒性）：
 
-### 批 1（边缘模块 / 30-50 testpoint each / 4 并发）
-- M11 cold-start
-- M14 industry-news
-- M19 import-export
-- M20 team
+### 批 1（边缘模块 / 30-50 testpoint each / 4 并发）✅ DONE 2026-05-12
+- M11 cold-start ✅ 91
+- M14 industry-news ✅ 89
+- M19 import-export ✅ 86
+- M20 team ✅ 128 (escalation surface)
 
 ### 批 2（主流业务 / 50-80 testpoint each / 4 并发）
 - M02 project
@@ -146,8 +174,9 @@ P1 全完成（21 个 testpoints 文件齐全）后：
 |---------|-----|-----|------|------|
 | 2026-05-12 init | — | — | 00-plan + progress init | $0 |
 | 2026-05-12 evening | $50（前置 sprint）| ~$52 | P0 prompts + M01 pilot | $52 |
+| 2026-05-12 night | $0（新 session）| ~$3.9 | P1 批 1 (M11/M14/M19/M20) 4 并发 / 394 testpoint | $3.9 dogfooding 累计 ~$5.9 |
 
-**预算**：sprint 总 $130-240 / 当前已用 $2（dogfooding 自身）/ 剩 $128-238 / 充足。
+**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$5.9 / 剩 $124-234 / 充足。
 
 ---
 
