@@ -323,6 +323,13 @@ stateDiagram-v2
 - ❌ Router 直查 DB
 - ❌ DAO 做业务校验（行格式检查放 Service）
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）**：
+- design §6 列 `web/src/app/projects/[pid]/cold-start/page.tsx`（M11 专用 CSV 向导）在 frontend 未实装
+- 真实冷启动入口为 workspace.tsx 空状态卡片 → `/projects/{id}/import`（M17 zip/AI 向导）
+- M11 backend `/cold-start/upload` 端点已实装并通过 P3 executor 验证（CSV 上传 happy path + 422 边界用例）
+- punt at Phase 2.x M11-frontend 实装 sprint（补 dedicated cold-start CSV 向导页 + import-csv-modal 仅是节点操作 modal 非首次冷启动空状态引导）
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 7. API 契约（Pydantic + OpenAPI 路径表）

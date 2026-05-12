@@ -164,6 +164,12 @@ test.describe("M04 功能项档案页 dogfooding", () => {
     // 下面断言 error boundary 文本（workspace.tsx error-boundary 类组件）
     // 注：不用 getByRole("alert")（坑 2：Next.js __next-route-announcer__ 冲突）
     // 验 error boundary 触发（"出错了" 或 "Error" 类文案）OR 正常渲染（若 bug 已修）
+    //
+    // dogfooding cluster-6 spec-design-fix（2026-05-13）：
+    // B-P2-M14 fix 后 workspace 不再 crash —— seed 项目无 enabled dimensions 时 workspace 正常渲染但 dim cards 段不渲染（0 个 dim card）
+    // → "点击添加，或上传文档自动分析" 文本不在 DOM（dim card 完全无渲染）
+    // 修：把"正常渲染"判断改成"workspace 主结构渲染" —— 进度条 "0/0 维度已填写" 或 "添加关联" 按钮存在
+    // 三态：（A）error boundary "出错了" / （B）维度卡片 hint 文本可见 / （C）workspace 主结构渲染但 dim cards 段空（seed 无 enabled dimensions）
     const isError = await Promise.race([
       page
         .getByText("出错了")
@@ -175,15 +181,23 @@ test.describe("M04 功能项档案页 dogfooding", () => {
         .catch(() => false),
     ]);
 
-    const isNormal = await page
-      .getByText("点击添加，或上传文档自动分析")
-      .isVisible({ timeout: 3_000 })
+    // C 态：workspace 主结构渲染（"添加关联"按钮存在表明 workspace.tsx file 视图分支已渲染）
+    const workspaceRendered = await page
+      .getByRole("button", { name: /添加关联/ })
+      .isVisible({ timeout: 5_000 })
       .catch(() => false);
 
-    // 必须满足其一（bug 存在 = error boundary / bug 已修 = 正常维度卡片）
+    // B 态：维度卡片 hint 文本（B-P2-M14 已修 + 有 enabled dimensions 时的展开态）
+    const dimCardHintCount = await page
+      .getByText("点击添加，或上传文档自动分析")
+      .count()
+      .catch(() => 0);
+    const isNormal = dimCardHintCount > 0 || workspaceRendered;
+
+    // 必须满足其一（A=bug 未修 / B+C=bug 已修 / 不同 dim config 状态）
     expect(
       isError || isNormal,
-      "workspace 应渲染 error boundary（B-P2-M14 bug 未修）或正常维度卡片（bug 已修）",
+      "workspace 应渲染 error boundary（B-P2-M14 未修 = A）或 workspace 正常渲染（B-P2-M14 已修 / 含 file 视图按钮或维度卡片 hint = B/C）",
     ).toBe(true);
 
     if (isError) {

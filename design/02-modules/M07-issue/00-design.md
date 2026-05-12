@@ -89,6 +89,18 @@ references:
 - **node_id 可为 NULL**：支持游离问题（node_id 为 null，只挂在 project）——沿用 Prism 验证过的灵活设计，游离问题在项目层面是合法业务场景（CY 2026-04-21 ack）。
 - **category 与维度的映射**：PRD 说 bug→测试分析维度，但 M07 本身不写维度记录——该映射是语义标注，供 M13 消费，不是 M07 的写操作。
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）— §8 UI 6 处缺失**：
+- design §8 UI testpoint 声称的 6 处 UI 均未在 frontend 实装：
+  1. issue 列表 status badge（design §8 状态图标 + 文案）→ DOM 缺
+  2. status / category filter 控件 → DOM 缺
+  3. issue 转换按钮（4 状态机 transition action）→ DOM 缺
+  4. issue 详情页（`/projects/{pid}/issues/{iid}` route）→ page 不存在
+  5. node-scoped issue 列表（节点档案页右侧"相关问题"区块）→ DOM 缺
+  6. 档案页"问题"区块（dim card 类比）→ DOM 缺
+- backend issue_router CRUD + transition + filter endpoints 均已实装并通过 P3 executor 验证（见 tests.md API 用例）
+- punt at Phase 2.x M07-frontend 实装 sprint（同时补 issue domain 全量 UI）
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 2. 依赖模块图

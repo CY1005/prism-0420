@@ -548,6 +548,15 @@ M15 无自有实体表，无状态字段，无状态机。
 - ❌ M15 Service 调其他模块 Service（应通过 DAO 直读横切表）
 - ❌ Router 直 `db.query(ActivityLog)` 跳过 Service
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）— 3 处 UI 缺失**：
+- overview/page.tsx 活动日志面板存在但 design §6 声称的 3 个 UI 组件均未实装：
+  1. `activity-filter-bar.tsx`（user / action_type / target_type / 时间范围 4 维过滤）→ DOM 缺
+  2. 按日期分组的时间流渲染（§1 In scope 明确）→ 实装为线性 map 渲染无分组
+  3. metadata 折叠展开 UI（§7 D-3 前端渲染契约的 fallback UI）→ DOM 缺
+- backend activity_stream_router GET endpoint 已实装并通过 P3 executor 验证（含分页 + 过滤参数）
+- punt at Phase 2.x M15-frontend 实装 sprint（补 activity-filter-bar.tsx 组件 + date-grouping 渲染逻辑 + metadata 折叠组件）
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 7. API 契约（Pydantic + OpenAPI 路径表）

@@ -92,6 +92,12 @@ references:
 - **snapshot_data 存储**：M05 负责存，M16 负责读并生成自然语言描述。M05 本身不做 AI 解析。
 - **"切换当前版本"**：决策：仅改标记（`is_current` 布尔），不自动写回维度内容——版本回滚属于 M04 职责（CY 2026-04-21 ack）。
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）**：
+- workspace.tsx 仅暴露 createVersion 操作（对应 POST /versions）；In scope 声称的版本更新（PUT /versions/{vid}）/ 删除（DELETE /versions/{vid}）/ 标记当前版本（POST /versions/{vid}/set-current）在前端无 UI 入口
+- 5 个 backend endpoints 已实装并通过 P3 executor 单测/旁路验证（见 tests.md 旁路用例）
+- punt at Phase 2.x M05-frontend 实装 sprint（补 set-current 按钮 + version edit/delete UI）
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 2. 依赖模块图

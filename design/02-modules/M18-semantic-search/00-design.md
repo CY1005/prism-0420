@@ -606,6 +606,13 @@ stateDiagram-v2
 | `BACKFILL_BATCH_TIMEOUT_S` | `900` | batch backfill 整批超时（对齐 ADR-001 §4.2 ai_embedding=15min） | §12D ⑤ |
 | `SEARCH_EVAL_SAMPLE_RATE` | `0.01` | search 路由 1% 采样写 search_evaluation_log（M13 离线评估） | **M13 新增** |
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）**：
+- design §6 声称 M02 ProjectSettings 加 `rrf_k` + `similarity_threshold` 字段，frontend settings/page.tsx 应有 admin 可编辑输入框；实测 grep `app/src/` 无 `rrf_k` 命中 / settings/page.tsx 无对应输入框
+- backend SearchService 按 project 级参数取值，但缺前端配置入口（仅能通过 env / 代码常量调整）
+- M02 ProjectSettings schema 也缺 `rrf_k` / `similarity_threshold` 字段（PUT /api/projects/{pid}/settings 不支持），需 baseline-patch 补 schema 后再补 UI
+- punt at Phase 2.x M02-ProjectSettings schema + M18 settings UI sprint
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 7. API 契约（Pydantic + OpenAPI 路径表）

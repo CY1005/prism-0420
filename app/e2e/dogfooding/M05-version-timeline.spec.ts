@@ -86,8 +86,12 @@ test.describe("M05 版本演进时间线 dogfooding — DOM smoke", () => {
     // 根因已知：workspace.tsx 调 completion rate → seed 无 dimensions → error boundary 崩溃
     // 本 test 目的：验证 workspace 进入行为并记录 DOM 状态
     // 关联 bug：B-P2-M14-workspace-dimension-error
-
-    const seeded = await seedFullProject(request);
+    //
+    // dogfooding cluster-6 spec-design-fix（2026-05-13）：
+    // version-timeline 区域仅在 selectedType === "file" 渲染（workspace.tsx L1208 VersionTimeline）
+    // 默认 seed root=folder → 不渲染时间线 → 此 test 走 error boundary 兜底分支即可
+    // 修：withFileNode: true → 默认 select file → "版本演进" 区域可渲染
+    const seeded = await seedFullProject(request, { withFileNode: true });
     await page.goto(`/projects/${seeded.project.id}`);
 
     // AuthProvider mount → /auth/refresh（坑 4：timeout ≥ 8000ms）

@@ -459,6 +459,13 @@ stateDiagram-v2
 | Schema | `api/schemas/teams.py` | Pydantic 强类型（R7-1 + R7-2） |
 | Model | `api/models/teams.py` | SQLAlchemy class（R3-1 + R3-2 三重防护） |
 
+**dogfooding sprint 2026-05-13 实证（design vs UI 漂移）— member list UI 注解**：
+- M20 frontend 02-frontend-design.md 已显式标"等 backend endpoint"——design 一致，无新增漂移
+- member list 加载/编辑/移除等 UI 在 frontend 待 backend M20 endpoints（POST/PUT/DELETE /teams/{tid}/members）完整接入后实装
+- backend M20 router + service + dao 已实装并通过 P3 executor 单测；frontend page 已存在但仅 placeholder
+- punt at Phase 2.x M20-frontend 实装 sprint（已在 design 02-frontend-design.md 内注解 / 本次仅在 00-design.md §6 加索引指针）
+- 详 `_handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md`
+
 ---
 
 ## 7. API 契约
