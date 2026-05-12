@@ -79,6 +79,7 @@ class CompetitorRefResponse(BaseModel):
     node_id: UUID
     competitor_id: UUID
     project_id: UUID
+    display_name: str  # design §7 JOIN 自 competitors.display_name（前端 ref 列表展示用）
     competitor_version: str | None
     feature_coverage: str | None
     tech_approach: str | None

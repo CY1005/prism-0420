@@ -14,8 +14,13 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.models.competitor import Competitor, CompetitorRef
+
+# design §7 CompetitorRefResponse 含 display_name JOIN 自 competitors.display_name；
+# 所有 ref 读路径强制 eager-load competitor 关系，杜绝 async lazy-load 失败。
+_REF_JOINS = (selectinload(CompetitorRef.competitor),)
 
 
 class CompetitorDAO:
@@ -39,6 +44,18 @@ class CompetitorDAO:
                 Competitor.project_id == project_id,
             )
         )
+        return result.scalar_one_or_none()
+
+    async def get_competitor_global(
+        self, db: AsyncSession, competitor_id: UUID
+    ) -> Competitor | None:
+        """无 tenant 过滤的 id 全局查；仅供 service 层用来区分
+        "竞品不存在 (404)" vs "竞品存在但跨项目 (422)"。
+
+        DAO 通用查询仍强制 tenant 过滤（design §9）；本方法是 service 层
+        防御性错误码区分的窄入口，不暴露给 router。
+        """
+        result = await db.execute(select(Competitor).where(Competitor.id == competitor_id))
         return result.scalar_one_or_none()
 
     async def create_competitor(self, db: AsyncSession, record: Competitor) -> Competitor:
@@ -95,9 +112,14 @@ class CompetitorDAO:
     async def list_refs_by_node(
         self, db: AsyncSession, node_id: UUID, project_id: UUID
     ) -> Sequence[CompetitorRef]:
-        """节点下所有对标记录（按 created_at ASC 旧→新 / id tie-break）。"""
+        """节点下所有对标记录（按 created_at ASC 旧→新 / id tie-break）。
+
+        design §7 CompetitorRefResponse 含 display_name JOIN：强制 selectinload(competitor)
+        让 router `_ref_response` 可读 `ref.competitor.display_name` 而不触发 async lazy-load。
+        """
         result = await db.execute(
             select(CompetitorRef)
+            .options(*_REF_JOINS)
             .where(
                 CompetitorRef.node_id == node_id,
                 CompetitorRef.project_id == project_id,
@@ -122,8 +144,11 @@ class CompetitorDAO:
     async def get_ref_by_id(
         self, db: AsyncSession, ref_id: UUID, project_id: UUID
     ) -> CompetitorRef | None:
+        """单条对标读取（与 list_refs_by_node 同范式：eager-load competitor）。"""
         result = await db.execute(
-            select(CompetitorRef).where(
+            select(CompetitorRef)
+            .options(*_REF_JOINS)
+            .where(
                 CompetitorRef.id == ref_id,
                 CompetitorRef.project_id == project_id,
             )

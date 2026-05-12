@@ -1854,6 +1854,8 @@ export interface components {
              * Format: uuid
              */
             project_id: string;
+            /** Display Name */
+            display_name: string;
             /** Competitor Version */
             competitor_version: string | null;
             /** Feature Coverage */

@@ -257,9 +257,15 @@ class CompetitorService:
     ) -> CompetitorRef:
         await self._check_node_belongs_to_project(db, node_id, project_id)
 
-        # cross-project 校验：competitor 必须属于本 project
+        # design §13 错误码区分（B-P2-M06-competitor-not-found-returns-422 fix）：
+        #   1) competitor 全局不存在 → 404 COMPETITOR_NOT_FOUND
+        #   2) competitor 存在但跨项目 → 422 COMPETITOR_CROSS_PROJECT
+        # 旧实装仅做 tenant 过滤查询 → 不存在的 UUID 也走 422，与 design + tests.md 不符。
         c = await self.dao.get_competitor_by_id(db, competitor_id, project_id)
         if c is None:
+            global_c = await self.dao.get_competitor_global(db, competitor_id)
+            if global_c is None:
+                raise CompetitorNotFoundError(competitor_id=str(competitor_id))
             raise CompetitorCrossProjectError(
                 competitor_id=str(competitor_id), project_id=str(project_id)
             )
@@ -293,7 +299,9 @@ class CompetitorService:
                 reason="competitor_concurrently_modified",
             ) from e
 
-        await db.refresh(ref, attribute_names=["created_at", "updated_at"])
+        # design §7 display_name JOIN：router `_ref_response` 读 ref.competitor.display_name；
+        # 新建路径 ref 是内存对象 / relationship 未 load → 显式 refresh 触发 eager load。
+        await db.refresh(ref, attribute_names=["created_at", "updated_at", "competitor"])
         await write_event(
             db=db,
             actor_user_id=actor_user_id,

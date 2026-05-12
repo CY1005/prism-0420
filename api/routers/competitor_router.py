@@ -45,7 +45,22 @@ def _competitor_response(c: Competitor) -> CompetitorResponse:
 
 
 def _ref_response(ref: CompetitorRef) -> CompetitorRefResponse:
-    return CompetitorRefResponse.model_validate(ref, from_attributes=True)
+    # design §7 display_name JOIN 自 competitors.display_name；DAO 已强制
+    # selectinload(competitor)（B-P2-M06-competitor-ref-response-no-display-name fix）。
+    return CompetitorRefResponse(
+        id=ref.id,
+        node_id=ref.node_id,
+        competitor_id=ref.competitor_id,
+        project_id=ref.project_id,
+        display_name=ref.competitor.display_name,
+        competitor_version=ref.competitor_version,
+        feature_coverage=ref.feature_coverage,
+        tech_approach=ref.tech_approach,
+        pros_and_cons=ref.pros_and_cons,
+        created_by=ref.created_by,
+        created_at=ref.created_at,
+        updated_at=ref.updated_at,
+    )
 
 
 @competitor_router.get("", response_model=CompetitorListResponse)

@@ -1,0 +1,152 @@
+diff --git a/api/dao/competitor_dao.py b/api/dao/competitor_dao.py
+index 186d758..4d2139f 100644
+--- a/api/dao/competitor_dao.py
++++ b/api/dao/competitor_dao.py
+@@ -14,9 +14,14 @@ from uuid import UUID
+ 
+ from sqlalchemy import delete, func, select, update
+ from sqlalchemy.ext.asyncio import AsyncSession
++from sqlalchemy.orm import selectinload
+ 
+ from api.models.competitor import Competitor, CompetitorRef
+ 
++# design §7 CompetitorRefResponse 含 display_name JOIN 自 competitors.display_name；
++# 所有 ref 读路径强制 eager-load competitor 关系，杜绝 async lazy-load 失败。
++_REF_JOINS = (selectinload(CompetitorRef.competitor),)
++
+ 
+ class CompetitorDAO:
+     # ─────────── Competitor 全局实体 ───────────
+@@ -41,6 +46,18 @@ class CompetitorDAO:
+         )
+         return result.scalar_one_or_none()
+ 
++    async def get_competitor_global(
++        self, db: AsyncSession, competitor_id: UUID
++    ) -> Competitor | None:
++        """无 tenant 过滤的 id 全局查；仅供 service 层用来区分
++        "竞品不存在 (404)" vs "竞品存在但跨项目 (422)"。
++
++        DAO 通用查询仍强制 tenant 过滤（design §9）；本方法是 service 层
++        防御性错误码区分的窄入口，不暴露给 router。
++        """
++        result = await db.execute(select(Competitor).where(Competitor.id == competitor_id))
++        return result.scalar_one_or_none()
++
+     async def create_competitor(self, db: AsyncSession, record: Competitor) -> Competitor:
+         db.add(record)
+         await db.flush()
+@@ -95,9 +112,14 @@ class CompetitorDAO:
+     async def list_refs_by_node(
+         self, db: AsyncSession, node_id: UUID, project_id: UUID
+     ) -> Sequence[CompetitorRef]:
+-        """节点下所有对标记录（按 created_at ASC 旧→新 / id tie-break）。"""
++        """节点下所有对标记录（按 created_at ASC 旧→新 / id tie-break）。
++
++        design §7 CompetitorRefResponse 含 display_name JOIN：强制 selectinload(competitor)
++        让 router `_ref_response` 可读 `ref.competitor.display_name` 而不触发 async lazy-load。
++        """
+         result = await db.execute(
+             select(CompetitorRef)
++            .options(*_REF_JOINS)
+             .where(
+                 CompetitorRef.node_id == node_id,
+                 CompetitorRef.project_id == project_id,
+@@ -122,8 +144,11 @@ class CompetitorDAO:
+     async def get_ref_by_id(
+         self, db: AsyncSession, ref_id: UUID, project_id: UUID
+     ) -> CompetitorRef | None:
++        """单条对标读取（与 list_refs_by_node 同范式：eager-load competitor）。"""
+         result = await db.execute(
+-            select(CompetitorRef).where(
++            select(CompetitorRef)
++            .options(*_REF_JOINS)
++            .where(
+                 CompetitorRef.id == ref_id,
+                 CompetitorRef.project_id == project_id,
+             )
+diff --git a/api/routers/competitor_router.py b/api/routers/competitor_router.py
+index cc0e521..a02d9eb 100644
+--- a/api/routers/competitor_router.py
++++ b/api/routers/competitor_router.py
+@@ -45,7 +45,22 @@ def _competitor_response(c: Competitor) -> CompetitorResponse:
+ 
+ 
+ def _ref_response(ref: CompetitorRef) -> CompetitorRefResponse:
+-    return CompetitorRefResponse.model_validate(ref, from_attributes=True)
++    # design §7 display_name JOIN 自 competitors.display_name；DAO 已强制
++    # selectinload(competitor)（B-P2-M06-competitor-ref-response-no-display-name fix）。
++    return CompetitorRefResponse(
++        id=ref.id,
++        node_id=ref.node_id,
++        competitor_id=ref.competitor_id,
++        project_id=ref.project_id,
++        display_name=ref.competitor.display_name,
++        competitor_version=ref.competitor_version,
++        feature_coverage=ref.feature_coverage,
++        tech_approach=ref.tech_approach,
++        pros_and_cons=ref.pros_and_cons,
++        created_by=ref.created_by,
++        created_at=ref.created_at,
++        updated_at=ref.updated_at,
++    )
+ 
+ 
+ @competitor_router.get("", response_model=CompetitorListResponse)
+diff --git a/api/schemas/competitor_schema.py b/api/schemas/competitor_schema.py
+index b7d028f..71e89e6 100644
+--- a/api/schemas/competitor_schema.py
++++ b/api/schemas/competitor_schema.py
+@@ -79,6 +79,7 @@ class CompetitorRefResponse(BaseModel):
+     node_id: UUID
+     competitor_id: UUID
+     project_id: UUID
++    display_name: str  # design §7 JOIN 自 competitors.display_name（前端 ref 列表展示用）
+     competitor_version: str | None
+     feature_coverage: str | None
+     tech_approach: str | None
+diff --git a/api/services/competitor_service.py b/api/services/competitor_service.py
+index 32d2d13..6dc4743 100644
+--- a/api/services/competitor_service.py
++++ b/api/services/competitor_service.py
+@@ -257,9 +257,15 @@ class CompetitorService:
+     ) -> CompetitorRef:
+         await self._check_node_belongs_to_project(db, node_id, project_id)
+ 
+-        # cross-project 校验：competitor 必须属于本 project
++        # design §13 错误码区分（B-P2-M06-competitor-not-found-returns-422 fix）：
++        #   1) competitor 全局不存在 → 404 COMPETITOR_NOT_FOUND
++        #   2) competitor 存在但跨项目 → 422 COMPETITOR_CROSS_PROJECT
++        # 旧实装仅做 tenant 过滤查询 → 不存在的 UUID 也走 422，与 design + tests.md 不符。
+         c = await self.dao.get_competitor_by_id(db, competitor_id, project_id)
+         if c is None:
++            global_c = await self.dao.get_competitor_global(db, competitor_id)
++            if global_c is None:
++                raise CompetitorNotFoundError(competitor_id=str(competitor_id))
+             raise CompetitorCrossProjectError(
+                 competitor_id=str(competitor_id), project_id=str(project_id)
+             )
+@@ -293,7 +299,9 @@ class CompetitorService:
+                 reason="competitor_concurrently_modified",
+             ) from e
+ 
+-        await db.refresh(ref, attribute_names=["created_at", "updated_at"])
++        # design §7 display_name JOIN：router `_ref_response` 读 ref.competitor.display_name；
++        # 新建路径 ref 是内存对象 / relationship 未 load → 显式 refresh 触发 eager load。
++        await db.refresh(ref, attribute_names=["created_at", "updated_at", "competitor"])
+         await write_event(
+             db=db,
+             actor_user_id=actor_user_id,
+diff --git a/app/src/types/api.ts b/app/src/types/api.ts
+index 54f084d..91da4a6 100644
+--- a/app/src/types/api.ts
++++ b/app/src/types/api.ts
+@@ -1854,6 +1854,8 @@ export interface components {
+              * Format: uuid
+              */
+             project_id: string;
++            /** Display Name */
++            display_name: string;
+             /** Competitor Version */
+             competitor_version: string | null;
+             /** Feature Coverage */
