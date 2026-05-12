@@ -37,9 +37,14 @@ from api.services.auth_service import AuthService, get_auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Phase 2.2 子片 2 — refresh cookie 名 / path（spec 06 §2）
-# Path=/auth 与 router prefix 对齐，refresh+logout endpoint 都能携带
+# Path=/ 全局：dogfooding sprint trigger_bug 修复（2026-05-12）
+# 原 Path=/auth 与 router prefix 对齐，但导致 Next.js Server Action 端点（/projects/new 等
+# 应用路径）请求时浏览器不携带 refresh cookie → server-auth.ts `cookies().get(refresh_token)`
+# 返 undefined → server action 全部 401 redirect /login。
+# 修为 Path=/ 让所有同源请求带 refresh cookie / 安全护栏仍是 HttpOnly + Secure(prod) + SameSite=strict。
+# 详见 _handoff/dogfooding/04-bug-fixes/B-trigger-bug-server-action-cookie/rca.md
 REFRESH_COOKIE_NAME = "refresh_token"
-REFRESH_COOKIE_PATH = "/auth"
+REFRESH_COOKIE_PATH = "/"
 
 
 def _set_refresh_cookie(response: Response, raw_refresh: str) -> None:

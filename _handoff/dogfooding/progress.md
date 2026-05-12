@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 night (batch 5 / P1 全完)
-phase: P1 (testpoint generation) ✅ DONE
-sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ + 批 2 (M02/M03/M04/M05) ✅ + 批 3 (M06/M07/M08/M10/M12) ✅ + 批 4 (M13/M15/M16/M17/M18) ✅ + 批 5 _cross-cutting ✅ / **21/21 = 100%**
-cost_cumulative: $52 (M01 pilot 含前置) + ~$3.9 (批 1) + ~$3.4 (批 2) + ~$5.7 (批 3) + ~$6.2 (批 4) + ~$1.8 (批 5) = ~$21.0 dogfooding 自身累计（含 M01 pilot $2）
-status: NORMAL / P1 全完闸门到 / 2327 testpoint / 21 文件 / 待 CY review 抽样 3-4 模块 → 进 P2 case
+last_session: 2026-05-12 (P2 spike + trigger_bug 抓到 / fix in progress)
+phase: P1 ✅ DONE / P2 🟡 SPIKE DONE / 待 trigger_bug fix 后启 batch
+sub_task: P1 21/21 ✅ / P2 spike Opus（M01+M02 pilot / 7 PASS + 3 真 FAIL）✅ / P4-prelim trigger_bug fix Opus 跑中
+cost_cumulative: P1 ~$21.0 + P1→P2 audit $3 + P2 spike $1.5 + P4-prelim fix (in-progress) = ~$25.5 + 待算
+status: NORMAL / P2 spike verdict=B-范式可行 / trigger_bug 真复现入 03-bug-queue.md / 等 fix subagent 完成后改 phase2-case.md 已就绪 → 启 batch 2-5
 ---
 
 # Dogfooding Sprint Progress
@@ -161,9 +161,17 @@ status: NORMAL / P1 全完闸门到 / 2327 testpoint / 21 文件 / 待 CY review
   - **cost 累计**：~$15.0 + ~$6.2 = **~$21.2 dogfooding 自身**（含 M01 pilot $2）
   - **本 session**：批 4 全 5 模块单 session 完成 / cost ~$6.2 自身（含主 agent ~$0.5）/ **未触 $10 单 session 硬上限**（5 subagent ≤4 并发 / context 不堆叠 / 节流策略起作用）
 
-- **P2 case** ⬜ NOT_STARTED
+- **P2 case** 🟡 SPIKE 完 / 待 trigger_bug fix 后启 batch
+  - 2026-05-12 P1→P2 闸门 audit：`audit/p1-p2-gate-finding.md` / verdict=PASS_WITH_FIX / testpoint 文件 A- 质量不改 / P0 finding=范式错位（API contract 视角 vs 全 DOM 端到端）→ CY 拍两轨范式 B
+  - 2026-05-12 P2 spike Opus subagent：`audit/p2-spike-report.md` / verdict=B-范式可行 / 写 M01+M02 pilot spec / cost ~$1.5 / 25 min
+    - M01-user-account.spec.ts 146 行 / 5 tests / **5/5 PASS** ✅
+    - M02-project.spec.ts 209 行 / 5 tests / 2 PASS + **3 真 FAIL 抓 trigger_bug**
+    - **trigger_bug 真复现** → 入 `03-bug-queue.md` B-trigger-bug-server-action-cookie / 同根因 list projects 0 卡片渲染（B-pre-2）
+    - Next.js 自定义版 4 坑（server action cookie 透传 / `__next-route-announcer__` 冲突 / server action 303 redirect / AuthProvider mount timeout ≥8s）→ 沉淀进 `prompts/phase2-case.md` Forbidden 范式红线
+    - phase2-case.md 8 条改完（两轨范式 / 分类决策树 / 三标签 punt / Self-check +1 真跑 / Forbidden +3 Next.js 坑 / Escalation 真 bug vs spec 错区分 / 启动 prompt 模板）
+  - 🟡 阻塞批量：P4-prelim trigger_bug fix Opus subagent 跑中 / B 路径 + audit / fix 完后启 batch 2-5
 - **P3 executor** ⬜ NOT_STARTED
-- **P4 闭环** ⬜ NOT_STARTED
+- **P4 闭环** 🟡 P4-prelim 进行中（trigger_bug fix）/ 其余待 P3 后
 - **P5 final** ⬜ NOT_STARTED
 
 ---
@@ -172,7 +180,8 @@ status: NORMAL / P1 全完闸门到 / 2327 testpoint / 21 文件 / 待 CY review
 
 | ID | 现象 | 来源 | status |
 |----|------|------|--------|
-| B-pre-1 | 创建项目后跳 login（应进项目详情）| CY dogfooding 2026-05-12 | OPEN / 待 P4 入 |
+| B-pre-1 | 创建项目后跳 login（应进项目详情）| CY dogfooding 2026-05-12 / P2 spike 真复现 | **OPEN / P4 修中（B-trigger-bug-server-action-cookie）** / 根因=Next.js 自定义版 server action cookie 透传断裂 |
+| B-pre-2 | /projects 列表 0 卡片渲染（getProjects server action 失败）| P2 spike 2026-05-12 顺带抓 | OPEN / 同根因 / fix B-pre-1 自然覆盖 |
 
 ---
 

@@ -5,7 +5,7 @@ owner: CY
 created: 2026-05-12
 last_updated: 2026-05-12
 scope: M01-M20 全功能 + 跨模块用户旅程
-trigger_bug: 创建项目后跳 login（dogfooding 触发）
+trigger_bug: 创建项目后跳 login（dogfooding 触发 / 2026-05-12 P2 spike 真复现 / 根因 = Next.js 自定义版 server action cookie 透传断裂 / fix in progress: 04-bug-fixes/B-trigger-bug-server-action-cookie/）
 methodology: Approach 3 阶段化 + checkpoint（5 phase × subagent 并行）
 references:
   - skill: requirements-to-testpoints（Phase 1 风格）

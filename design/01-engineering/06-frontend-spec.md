@@ -93,7 +93,7 @@ sanction_path: AI 自决（feedback_decision_layering 5 步流程跑后判定为
 ### 实施备注（2026-05-09 / Phase 2.3 子 sprint A 顺修 punt #3+#5）
 
 - **路径前缀**：本 spec 字面写 `/api/auth/*`；当前实装 router prefix=`/auth`（即 `/auth/login` / `/auth/refresh` / `/auth/logout`）。Next.js 前端通过 `NEXT_PUBLIC_API_URL` 拼接 → 实际请求 URL 仍是 `<api-host>/auth/*`。前缀差异不破 spec 语义。
-- **REFRESH_COOKIE_PATH**：实装 `Path=/auth`（与 router prefix 对齐 / 见 `api/routers/auth.py:42`），refresh 与 logout endpoint 都能携带 cookie。
+- **REFRESH_COOKIE_PATH**：实装 `Path=/` 全局（2026-05-09 初版 `Path=/auth` 已废）。**dogfooding sprint trigger_bug 修复 2026-05-12**：原 `Path=/auth` 与 §3 SSR α-P1 通道冲突——Next.js Server Action 端点（如 `/projects/new`）请求时浏览器不携带 refresh cookie → `server-auth.ts cookies().get(refresh_token)` 返 undefined → server action 全部 401 → `withAuthRedirect` 跳 `/login`。修为 `Path=/` 让所有同源请求带 refresh cookie。**安全护栏不变**：HttpOnly + Secure(prod) + SameSite=Strict 仍是核心防御 / Path 限制唯一真作用是同 server 多 app namespace 隔离 / prism-0420 单 app 无此场景 / Next.js 官方推荐 `path: '/'`。详见 `_handoff/dogfooding/04-bug-fixes/B-trigger-bug-server-action-cookie/rca.md`。
 - **logout body**：当前实装 204 + 清 cookie 即可；refresh_token 不需要 body 携带（cookie 已带）。前端调用形式：`fetch('/auth/logout', { method: 'POST', credentials: 'include' })`，body 不必填。
 
 ---

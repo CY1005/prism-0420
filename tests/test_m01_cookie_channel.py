@@ -16,7 +16,9 @@ async def test_login_sets_refresh_cookie(auth_client, make_user):
     cookie_header = r.headers.get("set-cookie", "")
     assert "refresh_token=" in cookie_header
     assert "HttpOnly" in cookie_header
-    assert "Path=/auth" in cookie_header
+    # Path=/ 全局：dogfooding sprint trigger_bug 修复（api/routers/auth.py L42 注释）
+    # Server Action 端点（/projects/new 等）需要 cookie 才能 SSR auth
+    assert "Path=/" in cookie_header and "Path=/auth" not in cookie_header
     assert "SameSite=strict" in cookie_header.lower() or "samesite=strict" in cookie_header.lower()
 
 
