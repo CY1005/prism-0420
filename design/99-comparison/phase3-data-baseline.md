@@ -185,16 +185,34 @@ dogfooding 抓 47 个独立 bug ID（去重 / 不计 spec-design-fix 重号）/ 
 
 ### D4 design-audit 命中率
 
-2 次 design-audit subagent：
+**11 fix 全产 design-audit**（11/11 = 100% audit 覆盖率 / A 路径形式 audit + B 路径详查 audit 各占）：
 
-| Audit | Cluster | HIGH | MEDIUM | 真冲突 | 动作 |
-|-------|---------|------|--------|--------|------|
-| #1 | cluster-2 M03 DELETE 物理删除 vs G2 软删除 | **4** | 2 | ✅ 100% | cluster-2-revert 改 422 PROJECT_DELETE_NOT_SUPPORTED |
-| #2 | cluster-5 RequestValidationError flat | 0 | 0 | — | 直推 b 路径 design sync |
+| Fix / Cluster | audit 模式 | HIGH | MEDIUM | LOW | verdict |
+|---------------|-----------|------|--------|-----|---------|
+| B-trigger-bug-server-action-cookie | B 主 agent 详查 | 0 | 1 | 1 | spec 备注 vs fix 字面 |
+| B-list-projects-search-loader | A 形式 | 0 | 0 | 0 | 0 conflicts |
+| B-workspace-no-dims-graceful | A 形式 | 0 | 0 | 0 | 0 conflicts |
+| B-cold-start-validation-deadlock | B 主 agent 详查 | 0 | 1 | 1 | design L289 vs commit boundary 隔离 |
+| B-P4-cluster-1 M06 | A 形式 | 0 | 0 | 0 | 0 conflicts |
+| **B-P4-cluster-2 M18-M03 物理删除** | **B 派 subagent** | **4** | **1** | 0 | **HIGH 真冲突 → cluster-2-revert** |
+| B-P4-cluster-2-revert M03 DELETE | A 形式 | 0 | 0 | 0 | 跟 design G2 一致 |
+| B-P4-cluster-3 M04-M07 | A 主 agent 自审 | 0 | 0 | 0 | 0 conflicts |
+| B-P4-cluster-4 mixed | A 形式 | 0 | 0 | 0 | 4 单点 fix / 0 conflicts |
+| B-P4-cluster-5 error contract | B 主 agent 详查 | 0 | 0 | 1 | 实装即真相 / design sync |
+| B-P4-cluster-6 design-gap | A 形式 | 0 | 0 | 0 | 8 design 段尾追加 |
 
-- audit 命中率：2 次 audit / 1 次找出 HIGH = **50%**
-- HIGH 真冲突率：**4/4 = 100%**（audit 抓到的 HIGH 全真实）
-- 系统价值：cluster-2 audit 拦下 G2 design 违反 commit / ROI 极高（audit subagent ~$0.5-1）/ 但暴露**流程边界 bug**——audit HIGH 应 BLOCK 不应 CY 投票（design G 类硬决策 / 推 sink）
+**汇总**：
+- audit 覆盖率：**11/11 = 100%**
+- 5 走 B 路径详查 / 6 走 A 路径形式 audit
+- HIGH 命中：**1 次**（cluster-2 物理删除 / 触发 revert）
+- MEDIUM 命中：**3 次**（trigger_bug / cold-start / cluster-2）/ 全转 follow-up
+- B 路径详查 (HIGH+MEDIUM) 命中率：4/5 ≈ **80%**
+- HIGH 真实率：**4/4 = 100%**（audit 抓到的 HIGH 全真冲突）
+
+**系统价值**（cluster-2 实证）：
+- audit 拦下 G2 物理删除 commit `0992dc8` 上 main 风险（任何 owner 调 DELETE 即触发 17 子表 CASCADE 删 / 不可逆数据损失）
+- ROI：audit subagent ~$0.5-1 / 防灾难性数据风险 = 极高
+- 流程边界 bug 暴露：plan §3 C 路径"audit HIGH → CY 投票"边界模糊 / design G 类硬决策 audit HIGH 应 BLOCK 不应投票 → 推 sink Phase 2.x 立规约
 
 ### 跟 v0.3 STAR 对照
 

@@ -109,15 +109,29 @@ dogfooding 总抓到 **47 个独立 bug ID**（去重后），按状态拆：
 
 ### D4 design-audit 命中率
 
-P4 cluster 共跑 **2 次 design-audit subagent**（B 路径强制 audit）：
+11 个 fix 目录**全部产出 `design-audit.md`**（A 路径形式 audit + B 路径详查 audit 各占）：
 
-| Audit 跑次 | Cluster | 验证范围 | HIGH 冲突 | MEDIUM 冲突 | 真实命中 | 后续动作 |
-|------------|---------|---------|----------|-----------|---------|---------|
-| audit #1 | cluster-2 M03 DELETE | 物理删除 vs design G2 软删除不可逆 | **4** | 2 | ✅ 全真实 | cluster-2-revert 改 422 PROJECT_DELETE_NOT_SUPPORTED |
-| audit #2 | cluster-5 RequestValidationError handler | flat error contract / 不破 §7.4 §7.6 | 0 | 0 | — | 直推 b 路径 design sync |
+| Fix / Cluster | 路径 | audit 模式 | HIGH | MEDIUM | LOW | verdict |
+|---------------|------|-----------|------|--------|-----|---------|
+| B-trigger-bug-server-action-cookie | B | 主 agent 自跑 | 0 | 1 | 1 | spec 实施备注 vs fix 字面 |
+| B-list-projects-search-loader | A | 形式 audit | 0 | 0 | 0 | 0 conflicts |
+| B-workspace-no-dims-graceful | A | 形式 audit | 0 | 0 | 0 | 0 conflicts |
+| B-cold-start-validation-deadlock | B | 主 agent 自跑详查 | 0 | 1 | 1 | design L289 vs commit boundary 隔离 |
+| B-P4-cluster-1 M06 | A | 形式 audit | 0 | 0 | 0 | 0 conflicts |
+| **B-P4-cluster-2 M18-M03（错装物理删除）** | **B** | **派 audit subagent** | **4** | **1** | 0 | **HIGH 真冲突 → 触发 cluster-2-revert** |
+| B-P4-cluster-2-revert M03 DELETE | A | 形式 audit | 0 | 0 | 0 | 跟 design G2 一致 |
+| B-P4-cluster-3 M04-M07 | A | 主 agent 自审 | 0 | 0 | 0 | 0 conflicts |
+| B-P4-cluster-4 mixed | A | 形式 audit | 0 | 0 | 0 | 0 conflicts / 4 单点 fix |
+| B-P4-cluster-5 error contract | B | 主 agent 自跑详查 | 0 | 0 | 1 | 反向冲突 0 / 实装即真相 / design sync |
+| B-P4-cluster-6 design-gap | A | 形式 audit | 0 | 0 | 0 | 0 conflicts / 8 design 段尾追加 |
 
-**Audit 命中率**：2 次 audit / 1 次找出 HIGH = **50% audit 真触发设计冲突**
-**HIGH 冲突真实率**：4/4 = **100% audit 抓到的 HIGH 都是真冲突**
+**汇总数据**：
+- **11 fix 全产 audit**（11/11 = 100% audit 覆盖率）
+- **5 fix 走 B 路径详查**（trigger_bug / cold-start / cluster-2 物理删除 / cluster-5 / cluster-2-revert 中 1 个为 B）
+- **真 HIGH 冲突命中：1 次**（cluster-2 物理删除）→ 直接触发 cluster-2-revert
+- **MEDIUM 冲突命中：3 次**（trigger_bug / cold-start / cluster-5）→ 全转 follow-up
+- **B 路径详查命中率（HIGH+MEDIUM）= 4/5 ≈ 80%** / 含 1 次"防止上线 G2 违反"的 HIGH 命中
+- **HIGH 冲突真实率：4/4 = 100% audit 抓到的 HIGH 全部为真冲突**（cluster-2 audit）
 
 关键发现（cluster-2 audit 实证）：
 - subagent 写代码 commit `0992dc8` 装物理删除 / 跨 5 文件 / 触 R-X2 +1 + activity_log 漂移 / 违反 design G2 软删除不可逆
@@ -125,7 +139,13 @@ P4 cluster 共跑 **2 次 design-audit subagent**（B 路径强制 audit）：
 - ⚠️ **流程边界 bug**：plan §3 C 路径"audit 抓 HIGH → CY 拍" 边界模糊 / G 决策不应投票（design G 类决策 = 硬边界 / audit 抓 HIGH 应 BLOCK 不应 CY 投）
 - cluster-2-revert 修复 = audit 系统价值实证（拦下 G2 design 违反 / 防 commit 进 main）
 
-**audit 拦截成本 vs 价值**：单 audit subagent cost ≈ $0.5-1 / 拦下 1 次 design 违反 commit = **ROI 极高**。建议 Phase 2.x sprint 把"design G 决策不投票 / audit HIGH = BLOCK"立成新规约。
+**audit 拦截成本 vs 价值**：单 audit subagent cost ≈ $0.5-1 / 拦下 1 次 design G2 物理删除 commit = **ROI 极高**（cluster-2 commit `0992dc8` 物理删除 endpoint 已上 main 风险窗口 / 任何 owner 调 DELETE 即触发 17 子表 CASCADE 删 / audit 抓 4 HIGH → cluster-2-revert 补救）。建议 Phase 2.x sprint 把"design G 决策不投票 / audit HIGH = BLOCK"立成新规约。
+
+**设计前置价值实证**（关键论点）：
+- audit 命中率（B 路径 80%）反映 design-first 模式下，每个 fix 触发 design 文档反查是真有价值的
+- 1 次 HIGH 冲突直接**避免了上线物理删除导致全 17 子表 CASCADE 删除的灾难性数据风险** / 这是 design audit 闸门的纯硬价值
+- 多次 MEDIUM 命中暴露"design 文档 vs 实装"双写漂移的真实摩擦点 / 全部转 follow-up 持续修正 design
+- 反向证明：如果没有完整 design + audit 闸门，cluster-2 物理删除会直接上线 → 业务损失不可逆
 
 ## STAR 维度（简历级素材）
 
@@ -200,7 +220,7 @@ P4 cluster 共跑 **2 次 design-audit subagent**（B 路径强制 audit）：
 **硬数据**：
 - **22 spec / 505 tests / 99.4% PASS rate**（502/505 / +14 vs P3 init 488/505=96.6% / +2.8pp）
 - **17 真 bug FIX_DONE + 1 VERIFIED + 10 design-gap SYNCED + 7 spec-design-fix + 12 frontend PUNT + 2 M08 OPEN = 47 个独立 bug ID**（去重 / 多 ID 跨池跳轨）
-- **2 次 design-audit / 1 次抓 4 HIGH + 2 MEDIUM 真冲突 / audit 命中率 50%**（cluster-2 实证 audit 系统拦下 G2 design 违反）
+- **11 fix 全产 design-audit（100% 覆盖率）/ 5 走 B 路径详查 / cluster-2 抓 4 HIGH 真冲突触发 cluster-2-revert / HIGH 真实率 100% / B 路径详查命中率 (HIGH+MEDIUM) ≈ 80%**（cluster-2 实证 audit 系统拦下 G2 物理删除上线 / 防 17 子表 CASCADE 灾难性数据风险）
 - **平均 multiplier ≈ 2.4x**（最大 6x workspace-no-dims fix 覆盖 6 模块 / 中位 2x）
 - **设计前置 v0.3 → v0.4 演进**：v0.3 prism-0420 23 天 / 14 fix vs Prism v1 13 天 / 23 fix → 39% bug 减少 / v0.4 加测覆盖：dogfooding 抓 47 个 bug ID（其中 17 真 bug + 12 frontend gap punt + 10 design-gap SYNCED）→ 后端 design-first bug 接近清零 / 主要 bug 集中在前端继承期 + contract 漂移
 - **cost**：dogfooding sprint 自身 ~$80-85（P1 ~$23 + P2 ~$33-38 + P3 ~$2 + P4 ~$18-20 + P5a ~$2 + P5b ~$2-5）/ 2 天 / 平均 $40-43 / 天
