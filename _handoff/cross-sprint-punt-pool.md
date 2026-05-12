@@ -398,6 +398,28 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 
 ---
 
+### #10 auto-gen marker 字面自指 bug — 文档内 hint 嵌入 marker 字符串导致 non-greedy 正则误匹配（2026-05-12 Phase 3 v0.3→narrative 落地揭露）
+
+**触发**：`phase3_data_collector.py` 重跑 7 次，`phase3-data-baseline.md` 累积 7 段重复（1 BEGIN + 7 END + 7 段 ## 维度 1）。表面看像"append 而非 replace bug"。
+
+**真 root cause**（非表面）：脚本 line 333 hint 文本 `f"> 手工 narrative 段写在 {END_MARK} 之后，不会被脚本覆盖。"` 把 `END_MARK` 字面值嵌入了 BEGIN block 内部。每个 auto_block 因此含 **2 个 END_MARK 字符串**——一个在 hint 行（行中），一个在结尾（行起手）。Line 342 正则 `BEGIN.*?END` non-greedy 匹配 BEGIN→第一个 END_MARK（hint 行那个），真数据 + 真 END 被孤立保留。每次重跑残留一次 → N 次跑 = N 段重复。
+
+**修复**（方案 1+2 一起）：
+1. hint 文本不嵌入字面 marker 字符串（改成"自动生成区块之后"）
+2. 正则加 `\n` anchor `BEGIN.*?\nEND` 强制 marker 行起手
+
+**教训**：
+- **marker 字符串必须唯一且只出现在结构位置**——不允许出现在 hint / 注释 / 文档说明里
+- non-greedy 正则在文档替换场景**不能裸用**，必须配 anchor（`\n` 或 line-start）
+- 发现 N 段重复时不要假设"append bug"——可能是 marker 匹配错位
+- 跟元发现 #7 同源：决策跳 fact-finding。本次幸亏 systematic-debugging Phase 1 没跳"读真实代码 + 数 marker 数量"两步，否则会照着"append bug"方向乱改
+
+**联动**：
+- 与 #7（决策跳 fact-finding）：本元发现也是 phase 1 强制读源代码 + 数 marker 才避开了假修复
+- 与 #4（被默默吸收）：7 段重复其实污染了 5/12 内 6 次脚本重跑后的 baseline.md，但没人 grep 看 marker 数量 → 默默累积
+
+---
+
 ## 完整 punt 池（按原 sprint 分组）
 
 > 详细 grep 证据已在 subagent 审计跑出。本表只列简要状态；要看具体 grep 命令请回查

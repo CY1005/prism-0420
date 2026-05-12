@@ -330,7 +330,7 @@ def write_output(table_md: str) -> None:
     auto_block = (
         f"{BEGIN_MARK}\n"
         f"\n> 自动生成于 {timestamp}（脚本: `scripts/phase3_data_collector.py`）。\n"
-        f"> 手工 narrative 段写在 {END_MARK} 之后，不会被脚本覆盖。\n\n"
+        f"> 手工 narrative 段写在自动生成区块之后，不会被脚本覆盖。\n\n"
         f"{table_md}\n"
         f"{END_MARK}\n"
     )
@@ -339,7 +339,7 @@ def write_output(table_md: str) -> None:
         old = OUTPUT.read_text(encoding="utf-8")
         if BEGIN_MARK in old and END_MARK in old:
             new = re.sub(
-                rf"{re.escape(BEGIN_MARK)}.*?{re.escape(END_MARK)}\n?",
+                rf"{re.escape(BEGIN_MARK)}.*?\n{re.escape(END_MARK)}\n?",
                 auto_block,
                 old,
                 count=1,
