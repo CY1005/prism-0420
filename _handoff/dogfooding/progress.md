@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 (P2 spike + trigger_bug 抓到 / fix in progress)
-phase: P1 ✅ DONE / P2 🟡 SPIKE DONE / 待 trigger_bug fix 后启 batch
-sub_task: P1 21/21 ✅ / P2 spike Opus（M01+M02 pilot / 7 PASS + 3 真 FAIL）✅ / P4-prelim trigger_bug fix Opus 跑中
-cost_cumulative: P1 ~$21.0 + P1→P2 audit $3 + P2 spike $1.5 + P4-prelim fix (in-progress) = ~$25.5 + 待算
-status: NORMAL / P2 spike verdict=B-范式可行 / trigger_bug 真复现入 03-bug-queue.md / 等 fix subagent 完成后改 phase2-case.md 已就绪 → 启 batch 2-5
+last_session: 2026-05-12 night (P2 11 模块 spec 跑过 / 15 bug 入 OPEN + 5 FIX_DONE + 待 CY review P1 闸门)
+phase: P1 ✅ DONE / P2 🟡 HYBRID（11/21 模块 spec 已跑 + 抓 15 OPEN bug）/ P4 🟡 5 FIX_DONE / 待 CY review P1 闸门
+sub_task: P1 21/21 ✅ / P2 spec 已跑 M01/M02/M03/M04/M05/M06/M07/M10/M11/M12/M14/M15/M19（11 模块 / 剩 M08/M13/M16/M17/M18/M20 + cross-cutting）/ P4 fix 5/20 闭环（B-trigger-bug / B-list-projects-search-loader / B-workspace-no-dims-graceful / B-cold-start-validation-deadlock / 5th 在 5 FIX_DONE 内）/ 15 OPEN bug 待 P4
+cost_cumulative: P1 ~$21.0 + P1→P2 audit $3 + P2 spike $1.5 + P2 batch-1（多模块 spec hybrid 跑）+ P4 5 fix（含 audit + RCA）= ~$30-40（精确数待 cost 跟踪段补）
+status: NORMAL / **plan §5 P1 闸门未过**（待 CY review 抽样）/ 当前 W21 优先动作：(1) CY review P1 抽样 3-4 模块 → (2) P4 收口剩 15 OPEN bug → (3) 启 P2 batch 剩 8 模块（M08/M13/M16/M17/M18/M20 + cross-cutting）
 ---
 
 # Dogfooding Sprint Progress
@@ -161,39 +161,66 @@ status: NORMAL / P2 spike verdict=B-范式可行 / trigger_bug 真复现入 03-b
   - **cost 累计**：~$15.0 + ~$6.2 = **~$21.2 dogfooding 自身**（含 M01 pilot $2）
   - **本 session**：批 4 全 5 模块单 session 完成 / cost ~$6.2 自身（含主 agent ~$0.5）/ **未触 $10 单 session 硬上限**（5 subagent ≤4 并发 / context 不堆叠 / 节流策略起作用）
 
-- **P2 case** 🟡 SPIKE 完 / 待 trigger_bug fix 后启 batch
+- **P2 case** 🟡 HYBRID（11/21 模块 spec 已跑 / 抓 18 真 bug / plan §1 串行红线已破）
   - 2026-05-12 P1→P2 闸门 audit：`audit/p1-p2-gate-finding.md` / verdict=PASS_WITH_FIX / testpoint 文件 A- 质量不改 / P0 finding=范式错位（API contract 视角 vs 全 DOM 端到端）→ CY 拍两轨范式 B
   - 2026-05-12 P2 spike Opus subagent：`audit/p2-spike-report.md` / verdict=B-范式可行 / 写 M01+M02 pilot spec / cost ~$1.5 / 25 min
     - M01-user-account.spec.ts 146 行 / 5 tests / **5/5 PASS** ✅
     - M02-project.spec.ts 209 行 / 5 tests / 2 PASS + **3 真 FAIL 抓 trigger_bug**
-    - **trigger_bug 真复现** → 入 `03-bug-queue.md` B-trigger-bug-server-action-cookie / 同根因 list projects 0 卡片渲染（B-pre-2）
-    - Next.js 自定义版 4 坑（server action cookie 透传 / `__next-route-announcer__` 冲突 / server action 303 redirect / AuthProvider mount timeout ≥8s）→ 沉淀进 `prompts/phase2-case.md` Forbidden 范式红线
+    - **trigger_bug 真复现** → 入 `03-bug-queue.md` / Next.js 自定义版 4 坑沉淀进 `prompts/phase2-case.md` Forbidden 范式红线
     - phase2-case.md 8 条改完（两轨范式 / 分类决策树 / 三标签 punt / Self-check +1 真跑 / Forbidden +3 Next.js 坑 / Escalation 真 bug vs spec 错区分 / 启动 prompt 模板）
-  - 🟡 阻塞批量：P4-prelim trigger_bug fix Opus subagent 跑中 / B 路径 + audit / fix 完后启 batch 2-5
-- **P3 executor** ⬜ NOT_STARTED
-- **P4 闭环** 🟡 P4-prelim 进行中（trigger_bug fix）/ 其余待 P3 后
+  - 2026-05-12 P2 hybrid 跑（11 模块 spec / 边写边跑抓 bug）：
+    - 已 cover：M03 / M04 / M05 / M06 / M07 / M10 / M11 / M12 / M14 / M15 / M19（+ spike M01/M02）
+    - 未 cover（8）：M08 / M13 / M16 / M17 / M18 / M20 + cross-cutting
+    - 抓出 18 真 bug 入 `03-bug-queue.md`：15 OPEN + 3 FIX_DONE（P2-prefix）
+- **P3 executor** ⬜ NOT_STARTED（实际 P2 边写边跑 = 隐式 P3 / plan 红线已破 / W21 守 plan 时需补正式 P3 全跑）
+- **P4 闭环** 🟡 5/20 FIX_DONE（spike 期前置 bug 2 + P2-prefix bug 3）/ 剩 15 OPEN 待 P4
+  - ✅ B-trigger-bug-server-action-cookie（commit cf25cb9 / CI 6/6 GREEN / Next.js refresh_token cookie Path=/auth → /）
+  - ✅ B-list-projects-search-loader（commit cf25cb9 / Turbopack SWC dead re-export）
+  - ✅ B-workspace-no-dims-graceful（commit 57c0116 / M10 OverviewNoDimensionsError 422 fallback + parseError 双读 code/error_code / 含 M14 + M19 同根因）
+  - ✅ B-cold-start-validation-deadlock（commit 57c0116 / cold_start_service.py L342+L407 立即 commit 释放行锁）
+  - ✅ B-P2-M14-workspace-dimension-error（同 workspace-no-dims-graceful 一并）
+  - 🟡 OPEN 15 bug 待 P4 入：M03 (2) / M04 (2) / M05 (1) / M06 (2) / M07 (1) / M10 (1) / M11 (1) / M12 (1) / M14 (1) / M15 (3)
 - **P5 final** ⬜ NOT_STARTED
 
 ---
 
-## 已发现 bug 池（前置 / dogfooding 触发）
+## 🔴 W21 守 plan 推进路径（CY 2026-05-12 拍）
 
-| ID | 现象 | 来源 | status |
-|----|------|------|--------|
-| B-pre-1 | 创建项目后跳 login（应进项目详情）| CY dogfooding 2026-05-12 / P2 spike 真复现 | **OPEN / P4 修中（B-trigger-bug-server-action-cookie）** / 根因=Next.js 自定义版 server action cookie 透传断裂 |
-| B-pre-2 | /projects 列表 0 卡片渲染（getProjects server action 失败）| P2 spike 2026-05-12 顺带抓 | OPEN / 同根因 / fix B-pre-1 自然覆盖 |
+按选项 A 守 plan：
+1. **CY review P1 抽样**（plan §5 P1 checkpoint / 闸门未过）
+   - 建议抽 4 模块：M02 (130 主流标杆) + M11 (91 边缘) + M18 (143 复杂 AI) + _cross-cutting (238 横切)
+   - 也可压到 2：M02 + _cross-cutting
+2. **P4 收口剩 15 OPEN bug**（plan §3 A/B/C 三路径决策 / 含 audit + RCA）
+   - 注：大部分 OPEN 是 design-gap（前端 UI 未实现 / 后端契约偏移 design 文档）→ 多数走 B 路径含 audit
+3. **启 P2 batch 剩 8 模块**（M08/M13/M16/M17/M18/M20 + cross-cutting / Sonnet × 8 / 拆 2-3 session）
 
 ---
 
-## 下一 session cold-start 顺序
+## 已发现 bug 池总览（详见 `03-bug-queue.md`）
 
-1. `cat _handoff/dogfooding/progress.md`（本文件 / 起点）
-2. `cat _handoff/dogfooding/00-plan.md`（§2 8 类 agent + §5 验收 / 拿总 plan）
-3. `cat _handoff/dogfooding/prompts/phase1-testpoint.md`（P1 提示词 / 跟 M01 pilot 用同一份）
-4. `cat _handoff/dogfooding/prompts/phase1-testpoint-invocation-template.md`（含 4 并发 invoke 示例 / 6 变量替换清单）
-5. `cat _handoff/dogfooding/01-testpoints/M11-cold-start.md` 抽样看批 1 实战输出（128 testpoint 上限 / 14 视角 / 单行 / 引 design §N）
+**累计 20 bug**：5 FIX_DONE + 15 OPEN
 
-## 下一 session 任务（启 P1 剩余 14 模块 / 批 2-5）
+- **FIX_DONE 5**（commit cf25cb9 + 57c0116）：B-trigger-bug-server-action-cookie / B-list-projects-search-loader / B-workspace-no-dims-graceful（含 M14+M19 同根因）/ B-cold-start-validation-deadlock / B-P2-M14-workspace-dimension-error
+- **OPEN 15**（按模块）：M03 (2 — node-type-immutable / project-delete-missing) / M04 (2 — cross-node-tenant-read / activity-log-naming) / M05 (1 — version-ops-ui) / M06 (2 — not-found-422 / ref-no-display-name) / M07 (1 — error-details-field) / M10 (1 — error-response-format) / M11 (1 — cold-start-page) / M12 (1 — comparison-page) / M14 (1 — news-ui) / M15 (3 — filter-bar / date-grouping / metadata-collapse)
+
+**类别分布速看**（W21 P4 收口前供 CY 判断改动量）：
+- design-gap（前端 UI 未实现 / 多数走 B 路径 audit）：M05 / M11 / M12 / M14 / M15 (3) = 7 bug
+- 后端契约偏 design（API 错误码/字段名/格式 / 多数小改）：M03 (2) / M04 (2) / M06 (2) / M07 / M10 = 8 bug
+
+---
+
+## 下一 session cold-start 顺序（W21 守 plan）
+
+1. `cat _handoff/dogfooding/progress.md`（本文件 / 起点 / 看 §"W21 守 plan 推进路径"）
+2. `cat _handoff/dogfooding/00-plan.md`（§2 8 类 agent + §3 三路径决策 + §5 验收）
+3. **W21 入口分支**：
+   - 如果 CY P1 review 还没过 → 等 CY review 完，不主动启 P4 / P2 batch
+   - 如果 review 过 → `cat _handoff/dogfooding/03-bug-queue.md` 拿 OPEN 15 bug → 启 P4 fix subagent（plan §3）
+   - 如果 P4 收口完 → `cat _handoff/dogfooding/prompts/phase2-case.md` 拿 P2 prompt → 启剩 8 模块 batch
+4. `cat _handoff/dogfooding/prompts/phase4-fix.md` + `phase4-audit.md`（P4 收口用）
+5. `cat _handoff/dogfooding/prompts/phase2-case.md`（P2 batch 用 / 含 Next.js 4 坑 + 两轨范式 B）
+
+## 历史任务（P1 21 模块完结清单 / 保留供后续审计）
 
 **策略**：并行启动（按 [[feedback_usage_budget]] 信号 A 节流 / 最多 4 并发 Opus subagent）
 
@@ -282,13 +309,15 @@ status: NORMAL / P2 spike verdict=B-范式可行 / trigger_bug 真复现入 03-b
 
 ## 新 session 启动提示词（CY 直接复制 / 跨批次复用）
 
+> ⚠️ **本段是 P1 历史模板**（P1 已完结 21/21）。W21 启 P4 / P2 batch 时另起 prompt（参考本文件 §"下一 session cold-start 顺序"）。
+
 **通用模板**（替换 N 即可）：
 
 ```
 cold-start dogfooding P1 批 N
 ```
 
-**具体批次**：
+**具体批次**（P1 历史 / 已全完）：
 
 - 批 3：`cold-start dogfooding P1 批 3`（M06/M07/M08/M10/M12 / 5 模块 / 拆 4+1）
 - 批 4：`cold-start dogfooding P1 批 4`（M13/M15/M16/M17/M18 / AI+复杂业务 / 4+1）
@@ -341,10 +370,10 @@ P1 全完成（21 个 testpoints 文件齐全）后：
 | 2026-05-12 night | $0（新 session）| ~$5.7 | P1 批 3 (M06/M07/M08/M10 4 并发 + M12 单派) / 466 testpoint / 含冷启动绕路探索 ~$0.5 | $5.7 dogfooding 累计 ~$15.0 |
 | 2026-05-12 night | $0（新 session）| ~$6.2 | P1 批 4 (M13/M15/M16/M17 4 并发 + M18 单派) / 671 testpoint / 5/5 escalation surface ≥100 | $6.2 dogfooding 累计 ~$21.2 |
 | 2026-05-12 night | $0（新 session）| ~$1.8 | P1 批 5 _cross-cutting 单 subagent / 238 testpoint / 18 视角 / 22 元发现全转化 | $1.8 dogfooding 累计 ~$23.0 |
+| 2026-05-12 night | ~$23.0 | ~?$33-38 | P2 spike + hybrid 11 模块 spec + P4 5 fix (含 audit + RCA) / 待补精确数 | 待补 |
 
-**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$23.0 / 剩 $107-217 / 充足。
-**本 session 节流**：批 5 单 subagent / cost ~$1.8 / **远低于 $8 单 session 软上限** / context 不堆叠 / 节流红线全过。
-**P1 闸门到**：21 个 testpoint 文件齐 / 2327 testpoint 总 / 风格红线全过 / 元发现 22 项全转化 / 待 CY review 抽样 3-4 模块 → 进 P2 case。
+**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$33-38（估）/ 剩 $90-200 / 充足。
+**当前关闸状态**：**plan §5 P1 闸门未过**（待 CY review 抽样）/ P2 hybrid 已破 plan §1 串行红线（11 模块 spec + 抓 20 bug + 5 已 fix）/ W21 守 plan 路径：CY review → P4 收口 15 OPEN → P2 batch 剩 8 模块。
 
 **冷启动 dogfooding 观察点（批 3 实证）**：
 - ❌ 主 agent 起手把 "P1 批 3" 误解为 MEMORY.md P1 分组而非 Phase 1 批次 → 走 KB 专题 + memory 索引绕路 ~5 工具调用浪费 / 后被 CY 显式纠正"上 session 给你的提示词说 我给你发这个 你就会做"
