@@ -24,7 +24,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   }
 
   const defaultNodeId = findFirstLeaf(tree);
-  const nodeData = defaultNodeId ? await getNodeWithDimensions(defaultNodeId) : null;
+  const nodeData = defaultNodeId ? await getNodeWithDimensions(defaultNodeId, projectId) : null;
 
   return (
     <ProjectWorkspace

@@ -16,7 +16,7 @@ export default async function FeatureDetailPage({
   const tree = (await getProjectTree(projectId)) as TreeNode[];
   const dimensions = await getProjectDimensions(projectId);
 
-  const nodeData = await getNodeWithDimensions(featureId);
+  const nodeData = await getNodeWithDimensions(featureId, projectId);
   if (!nodeData) notFound();
 
   return (

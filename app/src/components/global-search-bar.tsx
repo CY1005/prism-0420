@@ -1,27 +1,26 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { globalSearch } from "@/actions/search";
-import { type SearchResultItem } from "@/services/search";
+import type { components } from "@/types/api";
 import { cn } from "@/lib/utils";
 
-const projectColorMap: Record<string, string> = {
-  AI云平台: "border-blue-200 text-blue-700 bg-blue-50",
-  AI云平台竞品分析: "border-blue-200 text-blue-700 bg-blue-50",
-  OpenClaw: "border-green-200 text-green-700 bg-green-50",
-  MappingStudio: "border-purple-200 text-purple-700 bg-purple-50",
-  Prism: "border-orange-200 text-orange-700 bg-orange-50",
-};
+// Phase 2.3 cleanup C: 直接用 M18 codegen SearchResultItem（snake_case，含 target_type/
+// target_id/snippet/matched_by/breadcrumb/score/title）。component 在 projectId 上下文内
+// 才渲染（非项目页 useParams 返 undefined → 不渲染）。
+type SearchResultItem = components["schemas"]["SearchResultItem"];
 
-function getProjectBadgeClass(name: string | null): string {
-  if (!name) return "";
-  return projectColorMap[name] || "border-gray-200 text-gray-700 bg-gray-50";
-}
+const targetTypeLabel: Record<string, string> = {
+  node: "功能项",
+  dimension_record: "维度记录",
+  issue: "问题",
+  competitor: "竞品",
+};
 
 function highlightKeyword(text: string, keyword: string): React.ReactNode {
   if (!keyword.trim()) return text;
@@ -44,6 +43,9 @@ function highlightKeyword(text: string, keyword: string): React.ReactNode {
 
 export function GlobalSearchBar() {
   const router = useRouter();
+  const params = useParams();
+  const projectId = typeof params?.projectId === "string" ? params.projectId : undefined;
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -51,23 +53,26 @@ export function GlobalSearchBar() {
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      setOpen(false);
-      return;
-    }
-    setLoading(true);
-    const result = await globalSearch(q.trim(), { limit: 5 });
-    setLoading(false);
-    if (result.success) {
-      setResults(result.data.results);
-      setOpen(result.data.results.length > 0);
-    } else {
-      setResults([]);
-      setOpen(false);
-    }
-  }, []);
+  const doSearch = useCallback(
+    async (q: string) => {
+      if (!q.trim() || !projectId) {
+        setResults([]);
+        setOpen(false);
+        return;
+      }
+      setLoading(true);
+      const result = await globalSearch(q.trim(), { projectId, limit: 5 });
+      setLoading(false);
+      if (result.success) {
+        setResults(result.data.results);
+        setOpen(result.data.results.length > 0);
+      } else {
+        setResults([]);
+        setOpen(false);
+      }
+    },
+    [projectId],
+  );
 
   const handleChange = (value: string) => {
     setQuery(value);
@@ -76,16 +81,15 @@ export function GlobalSearchBar() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && query.trim()) {
+    if (e.key === "Enter" && query.trim() && projectId) {
       setOpen(false);
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+      router.push(`/projects/${projectId}/search?q=${encodeURIComponent(query.trim())}`);
     }
     if (e.key === "Escape") {
       setOpen(false);
     }
   };
 
-  // Close on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -96,7 +100,6 @@ export function GlobalSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Cleanup timer
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -104,20 +107,30 @@ export function GlobalSearchBar() {
   }, []);
 
   const handleResultClick = (item: SearchResultItem) => {
+    if (!projectId) return;
     setOpen(false);
-    if (item.project_id && item.node_id) {
-      router.push(`/projects/${item.project_id}/features/${item.node_id}`);
-    } else if (item.project_id) {
-      router.push(`/projects/${item.project_id}`);
+    // M18 target_type 4 态分流跳转
+    if (item.target_type === "node") {
+      router.push(`/projects/${projectId}/features/${item.target_id}`);
+    } else if (item.target_type === "issue") {
+      router.push(`/projects/${projectId}/issues`);
+    } else {
+      // dimension_record / competitor 没单独详情页，跳项目首页
+      router.push(`/projects/${projectId}`);
     }
   };
+
+  // 非项目上下文（/projects 列表 / /admin / /login 等）不渲染——M18 是 project-scoped
+  if (!projectId) {
+    return null;
+  }
 
   return (
     <div ref={containerRef} className="relative w-80">
       <Search className="text-muted-foreground absolute top-1/2 left-3 z-10 h-4 w-4 -translate-y-1/2" />
       <Input
         className="pl-9"
-        placeholder="搜索功能、模块、问题..."
+        placeholder="搜索功能、维度、问题、竞品..."
         value={query}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -134,19 +147,14 @@ export function GlobalSearchBar() {
             ) : (
               results.map((item) => (
                 <button
-                  key={item.id}
+                  key={item.target_id}
                   className="hover:bg-accent border-border/40 w-full border-b px-4 py-3 text-left transition-colors last:border-b-0"
                   onClick={() => handleResultClick(item)}
                 >
                   <div className="mb-0.5 flex items-center gap-2">
-                    {item.project_name && (
-                      <Badge
-                        variant="outline"
-                        className={cn("shrink-0 text-xs", getProjectBadgeClass(item.project_name))}
-                      >
-                        {item.project_name}
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className={cn("shrink-0 text-xs")}>
+                      {targetTypeLabel[item.target_type] ?? item.target_type}
+                    </Badge>
                     <span className="text-primary truncate text-sm font-medium">
                       {highlightKeyword(item.title, query)}
                     </span>
@@ -156,9 +164,9 @@ export function GlobalSearchBar() {
                       {item.breadcrumb.join(" → ")}
                     </p>
                   )}
-                  {item.content_snippet && (
+                  {item.snippet && (
                     <p className="text-foreground/70 mt-1 line-clamp-1 text-xs">
-                      {highlightKeyword(item.content_snippet, query)}
+                      {highlightKeyword(item.snippet, query)}
                     </p>
                   )}
                 </button>
@@ -169,7 +177,7 @@ export function GlobalSearchBar() {
             className="text-primary hover:bg-accent border-border w-full border-t px-4 py-2.5 text-center text-sm font-medium transition-colors"
             onClick={() => {
               setOpen(false);
-              router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+              router.push(`/projects/${projectId}/search?q=${encodeURIComponent(query.trim())}`);
             }}
           >
             查看全部结果
