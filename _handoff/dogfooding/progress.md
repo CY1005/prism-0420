@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 night (batch 1)
+last_session: 2026-05-12 night (batch 1+2)
 phase: P1 (testpoint generation)
-sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ / 批 2-5 + cross-cutting 待并行
-cost_cumulative: $52 (M01 pilot) + ~$3.9 (批 1 4 subagent)
-status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 session
+sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ + 批 2 (M02/M03/M04/M05) ✅ / 批 3-5 + cross-cutting 待并行
+cost_cumulative: $52 (M01 pilot) + ~$3.9 (批 1) + ~$3.4 (批 2) = ~$7.3 dogfooding 累计
+status: NORMAL / 自然 checkpoint / 批 2 完成 / 接近 $10 软上限 / 推荐新 session 跑批 3
 ---
 
 # Dogfooding Sprint Progress
@@ -21,7 +21,7 @@ status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 ses
   - ✅ 3 核心 prompt 落地（phase1-testpoint / phase4-fix / phase4-audit）
   - ✅ CY review 00-plan + 3 prompt → 拍 A 路径接受现状全跑
 
-- **P1 testpoint** 🟡 IN_PROGRESS（5/21 完成 / 批 1 done）
+- **P1 testpoint** 🟡 IN_PROGRESS（9/21 完成 / 批 1+2 done）
   - ✅ M01 user-account / 127 testpoint（P0=45 / P1=69 / P2=13）/ 14 视角 / cost ~$2
     - 文件：`01-testpoints/M01-user-account.md`
     - 质量验证：每条引 design §N + tests.md GN / 单行 / 无 forbidden / 全 self-check 通过
@@ -39,10 +39,18 @@ status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 ses
     - 文件：`01-testpoints/M20-team.md`（186 行）
     - 风险点：R-X3 跨事务签名首发 / L3 SQL 注入横切 M03-M19 / correlation_id F2.9 + R10-1 批量独立 N+1 / 嵌套 max(team_role, project_role) 10 组合 / archived × team 双路径互锁 F2.3
     - 复杂度最高单 sprint（design §14.5 R-X5 实证）/ P0 占比 47.7% 偏高合理
-  - ⬜ M02 project
-  - ⬜ M03 module-tree
-  - ⬜ M04 feature-archive
-  - ⬜ M05 version-timeline
+  - ✅ M02 project / 130 testpoint（P0=52 / P1=66 / P2=12）/ 15 视角全用 / cost ~$0.7
+    - 文件：`01-testpoints/M02-project.md`（196 行）
+    - 风险点：AES 加密路径横切归属 / 多表事务回滚（4 步：projects + members + dimension_configs + activity_log）/ PG 部分唯一索引归档语义边界 / archive 不级联（design §4 P5 audit F-2）/ baseline-patch 时序契约（M20/M18 反向引用）/ last-write-wins（AI Key + project name 无乐观锁）/ 三层权限矩阵
+  - ✅ M03 module-tree / 84 testpoint（P0=32 / P1=43 / P2=9）/ 11 视角 / cost ~$0.6
+    - 文件：`01-testpoints/M03-module-tree.md`（137 行）
+    - 风险点：R-X2 R10-1 删除调下游 + 子树 N 条 activity_log（CASCADE 不触发下游）/ path 物化路径 move_subtree 循环引用防御 / last-write-wins 不加锁（与 M01/M02 对照）/ type 不可变三重防护 / M18 baseline-patch get_for_embedding 推迟 / 拓扑排序责任 punt（A5 caller-must）
+  - ✅ M04 feature-archive / 106 testpoint（P0=39 / P1=58 / P2=9）/ 15 视角全用 / cost ~$1.1 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M04-feature-archive.md`（173 行）
+    - 风险点：乐观锁 + DB UNIQUE 双防御（dimension_records）/ R-X3 对外契约 5 方法（M03/M11/M12/M13/M17/M18 调用入口 / 事务边界 caller 控制）/ project_id 冗余 tenant 字段（CHECK + generated column 兜底 + DAO 双过滤）/ content JSONB 运行期 jsonschema 校验（依赖 M02 dimension_types）/ M18 baseline-patch B 路径 enqueue 推迟
+  - ✅ M05 version-timeline / 111 testpoint（P0=42 / P1=57 / P2=12）/ 13 视角 / cost ~$1.0 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M05-version-timeline.md`（170 行）
+    - 风险点：DB 部分唯一索引 uq_version_node_is_current race（两并发 set-current）/ 冗余 project_id 一致性（service 强制 record.project_id = node.project_id）/ cross-tenant node_id 攻击（service 第三层防御 _check_node_belongs_to_project）/ PUT snapshot_data 拒绝（Pydantic schema 无该字段自动拒）/ L1-α detach 语义（exclude_unset） / IntegrityError catch 横切硬规则
   - ⬜ M06 competitor
   - ⬜ M07 issue
   - ⬜ M08 module-relation
@@ -56,14 +64,36 @@ status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 ses
   - ⬜ _cross-cutting（auth / cookie / 网络 / 跨 tab / mobile / 性能）
 
   ### 批 1 汇总（M11/M14/M19/M20 / 4 模块）
-  - **testpoint 总数**：394（P0=143 / P1=206 / P2=44 = M01 不计 / 批 1 累计）
-  - **cost**：~$3.9（远低于估 $4 / 4 subagent 4 并发）
+  - **testpoint 总数**：394（P0=143 / P1=206 / P2=44）
+  - **cost**：~$3.9（4 subagent 4 并发）
   - **跨模块元发现**（design 推导的 surface 候选）：
     - R-X1 orchestrator 首例（M11）+ R-X3 跨事务签名首发（M20）→ design 中 R-X 系列横切纪律集中爆发 / 建议 cross-cutting 视角单立测试集
     - 全局豁免业务模块（M14 首发）+ 跨 project 只读消费（M19）→ tenant 隔离边界 2 类例外，需要 cross-cutting 集中规约
     - activity_log 失败传播 4 模块全覆盖（M16 范式 / M11/M14/M19/M20 复用）→ 已成横切纪律
     - action_type 同步漂移 M14（5 个过去式）+ M19（4 处同步）→ CI 守护 / 设计漂移防御视角必须有专项
     - filename sanitize 输出端首发（M19）→ 后续 M17/M18 导出场景复用范式
+
+  ### 批 2 汇总（M02/M03/M04/M05 / 4 主流业务模块）
+  - **testpoint 总数**：431（P0=165 / P1=224 / P2=42）
+  - **cost**：~$3.4（4 subagent 4 并发 / 略低于批 1）
+  - **escalation surface ≥100**：M02 130 / M04 106 / M05 111（3/4 命中 / 主流业务模块全 escalation 是常态）
+  - **新增跨模块元发现**：
+    - R-X3 对外契约范式（M04 5 方法集中 / M05 跨模块契约 / 与 M11 R-X1 + M20 R-X3 跨事务呼应）→ R-X 系列横切纪律已成 design 主轴 / 必有 cross-cutting 集中测试集
+    - last-write-wins 不加锁（M02 AI Key / M03 reorder/move 子树）vs 乐观锁（M01 + M04 dimension_records version）→ 并发策略 design 内部已分化 / cross-cutting 必专项
+    - DB 部分唯一索引 race 跨模块（M02 uq_project_owner_name_active 归档释放 / M05 uq_version_node_is_current set-current race / M03 也有 path UNIQUE）→ "部分唯一索引 race" 成横切模式
+    - 多表事务回滚（M02 4 步 / M11 共享 db.begin() / M20 R-X3 跨事务）→ 事务边界 design 主纪律 / cross-cutting 必专项
+    - baseline-patch 时序契约（M02 反向引用 M20/M18 / M03 enqueue B 推迟 / M04 enqueue B 推迟）→ M18 sprint 期回写责任已堆积 3 处 / 需 punt pool 追踪
+    - cross-tenant 攻击防御（M05 service 第三层 _check_node_belongs_to_project / R1-C P1-02 立修）→ 三层防御红线
+    - 实战观察：4 个"主流业务"模块的 testpoint 数 84-130，比估 50-80 偏高（M03 84 是唯一例外，原因是 path 物化路径压缩了视角数）
+
+  ### 批 1+2 累计（M01 + 批 1 + 批 2 / 9 模块 / 21 模块进度 43%）
+  - **testpoint 累计**：127 (M01) + 394 (批 1) + 431 (批 2) = **952 testpoint**
+  - **cost 累计**：~$2 (M01) + ~$3.9 (批 1) + ~$3.4 (批 2) = **~$9.3 dogfooding 自身**
+  - **批次实战修正后估算**（剩 12 模块）：
+    - 批 3 (M06/M07/M08/M10/M12)：5 模块 × ~$1 = ~$5
+    - 批 4 (M13/M15/M16/M17/M18)：5 模块 × ~$1.5 (复杂业务 + AI 类) = ~$7.5
+    - 批 5 (_cross-cutting)：1 × ~$2 = ~$2
+    - **P1 剩余 ~$14.5 / 跨 3-4 个新 session**
 
 - **P2 case** ⬜ NOT_STARTED
 - **P3 executor** ⬜ NOT_STARTED
@@ -107,11 +137,11 @@ status: NORMAL / 自然 checkpoint / 批 1 完成 / 可继续批 2 或切新 ses
 - M19 import-export ✅ 86
 - M20 team ✅ 128 (escalation surface)
 
-### 批 2（主流业务 / 50-80 testpoint each / 4 并发）
-- M02 project
-- M03 module-tree
-- M04 feature-archive
-- M05 version-timeline
+### 批 2（主流业务 / 50-80 testpoint each → 实测 84-130 / 4 并发）✅ DONE 2026-05-12
+- M02 project ✅ 130 (escalation surface)
+- M03 module-tree ✅ 84
+- M04 feature-archive ✅ 106 (escalation surface)
+- M05 version-timeline ✅ 111 (escalation surface)
 
 ### 批 3（主流业务续 / 4 并发）
 - M06 competitor
@@ -175,8 +205,10 @@ P1 全完成（21 个 testpoints 文件齐全）后：
 | 2026-05-12 init | — | — | 00-plan + progress init | $0 |
 | 2026-05-12 evening | $50（前置 sprint）| ~$52 | P0 prompts + M01 pilot | $52 |
 | 2026-05-12 night | $0（新 session）| ~$3.9 | P1 批 1 (M11/M14/M19/M20) 4 并发 / 394 testpoint | $3.9 dogfooding 累计 ~$5.9 |
+| 2026-05-12 night | ~$3.9 | ~$7.3 | P1 批 2 (M02/M03/M04/M05) 4 并发 / 431 testpoint | $7.3 dogfooding 累计 ~$9.3 |
 
-**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$5.9 / 剩 $124-234 / 充足。
+**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$9.3 / 剩 $120-230 / 充足。
+**本 session 节流**：接近 $10 软上限 / 推荐 commit 后退出 / 批 3 启新 session。
 
 ---
 
