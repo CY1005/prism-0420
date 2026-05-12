@@ -1,9 +1,9 @@
 ---
-last_session: 2026-05-12 night (batch 3)
+last_session: 2026-05-12 night (batch 4)
 phase: P1 (testpoint generation)
-sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ + 批 2 (M02/M03/M04/M05) ✅ + 批 3 (M06/M07/M08/M10/M12) ✅ / 批 4-5 + cross-cutting 待并行
-cost_cumulative: $52 (M01 pilot) + ~$3.9 (批 1) + ~$3.4 (批 2) + ~$5.7 (批 3) = ~$13.0 dogfooding 累计
-status: NORMAL / 自然 checkpoint / 批 3 完成 / 触及 $10 sprint 单 session 硬上限 / 强制关闸 / 新 session 跑批 4
+sub_task: M01 pilot ✅ + 批 1 (M11/M14/M19/M20) ✅ + 批 2 (M02/M03/M04/M05) ✅ + 批 3 (M06/M07/M08/M10/M12) ✅ + 批 4 (M13/M15/M16/M17/M18) ✅ / 批 5 cross-cutting 待
+cost_cumulative: $52 (M01 pilot) + ~$3.9 (批 1) + ~$3.4 (批 2) + ~$5.7 (批 3) + ~$6.2 (批 4) = ~$19.2 dogfooding 累计
+status: NORMAL / 自然 checkpoint / 批 4 完成 / 19/21 模块完 (90%) / 仅剩 cross-cutting / 新 session 跑批 5
 ---
 
 # Dogfooding Sprint Progress
@@ -21,7 +21,7 @@ status: NORMAL / 自然 checkpoint / 批 3 完成 / 触及 $10 sprint 单 sessio
   - ✅ 3 核心 prompt 落地（phase1-testpoint / phase4-fix / phase4-audit）
   - ✅ CY review 00-plan + 3 prompt → 拍 A 路径接受现状全跑
 
-- **P1 testpoint** 🟡 IN_PROGRESS（9/21 完成 / 批 1+2 done）
+- **P1 testpoint** 🟡 IN_PROGRESS（19/21 完成 / 批 1+2+3+4 done / 仅剩 _cross-cutting）
   - ✅ M01 user-account / 127 testpoint（P0=45 / P1=69 / P2=13）/ 14 视角 / cost ~$2
     - 文件：`01-testpoints/M01-user-account.md`
     - 质量验证：每条引 design §N + tests.md GN / 单行 / 无 forbidden / 全 self-check 通过
@@ -66,11 +66,21 @@ status: NORMAL / 自然 checkpoint / 批 3 完成 / 触及 $10 sprint 单 sessio
   - ✅ M12 comparison / 99 testpoint（P0=35 / P1=56 / P2=8）/ 14 视角 / cost ~$1.2
     - 文件：`01-testpoints/M12-comparison.md`（161 行）
     - 风险点：G4=B 值快照不降级（保存后改 M04 dim_record / 删 M03 node 都不影响 snapshot.items.content）/ 多表事务 snapshots+items+activity_log 三表 with db.begin() 全量回滚 / 跨模块只读纪律（comparison_service 调 M04 batch_get_by_nodes 不直查 dimension_records / R-X1 合规）/ 乐观锁 expected_version 不匹配 409 不写 activity_log / nodes_ref JSONB list[str(UUID)] 类型转换边界 / viewer 写 3 端点 403 主动复制 M07/M08 元教训
-  - ⬜ M13 requirement-analysis
-  - ⬜ M15 activity-stream
-  - ⬜ M16 ai-snapshot
-  - ⬜ M17 ai-import
-  - ⬜ M18 semantic-search
+  - ✅ M13 requirement-analysis / 142 testpoint（P0=53 / P1=72 / P2=17）/ 15 视角全用 / cost ~$1.2 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M13-requirement-analysis.md`（211 行）
+    - 风险点：SSE 流式 pilot（5min 长连接打满 PG pool / chunk 顺序 / aclose 协议 / AbortController 真停）/ R-X3 共享 session 第六真注入实证（M04.create_dimension_record 接受外部 db）/ P2 Server Action HMAC 凭据路径（audit B2）/ 上游 Service 签名对不上（audit B1 / M02/M03/M04/M07 baseline-patch 前置）/ JWT 主动作废中途流不中断 ≤5min 暴露窗口 / 重复 save 多条 dimension_record + 前端防抖（audit R2-04）/ LLM 集成首发 MockProvider aclose_called 可断言（design §14.5 LLM 红线）
+  - ✅ M15 activity-stream / 102 testpoint（P0=38 / P1=51 / P2=13）/ 15 视角全用 / cost ~$1.3 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M15-activity-stream.md`（167 行）
+    - 风险点：R10-2 activity_logs 横切表唯一 owner（ActionType+TargetType enum + CheckConstraint + Alembic 4 处同步）/ C-5 权限非默认（viewer 不可读 / 与多数只读模块相反）/ design §3 三处 disambiguation（Mapped[ActionType] vs str+CheckConstraint / event_metadata 重映射 / list_for_team 签名）/ D-2 分页 total 分支（page=1 精确 / page>1 null + has_more）/ M14 baseline-patch project_id NULLABLE（全局事件跨模块 patch 风险）/ 僵尸 target_id 展示（无 FK / summary 字段冻结目标名）/ R14 守护（业务模块写 activity_log 必须用枚举字面 / M16 sprint 实证 31 处机械批量改）
+  - ✅ M16 ai-snapshot / 141 testpoint（P0=59 / P1=68 / P2=14）/ 15 视角全用 + 3 模块专属 / cost ~$1.2 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M16-ai-snapshot.md`（207 行）
+    - 风险点：BackgroundTasks vs zombie cron CAS race（runner 失败分支必须 cas_complete 不直 UPDATE / audit B3）/ advisory_xact_lock 幂等 get-or-create 替代 DB UniqueConstraint（audit B1+M6）/ GET endpoint 双层鉴权 + 错误码打码统一 404（audit B4）/ save path/task 一致性（SnapshotTaskPathMismatchError 422 防跨 node 攻击 / audit M5）/ content dict 形态契约（audit B2 / M04 JSONB 对齐）/ cron 写 activity_log 落 SYSTEM_USER_UUID（ADR-002 §1.1）/ zombie 阈值 11min + pending 兜底 2min / cron 频率 5min ≤ 阈值/2 / dot-notation action_type 待 Alembic 迁移回写 M15
+  - ✅ M17 ai-import / 143 testpoint（P0=62 / P1=66 / P2=15）/ 15 视角全用 + 2 异步专项 / cost ~$1.0-1.5 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M17-ai-import.md`（212 行）
+    - 风险点：idempotency 跨项目污染（audit B1+R2-01 已修复 / 三元组 key + 7 天过期）/ M17 越权直写跨模块表（audit B2 / 改 orchestrator 调 Service / R-X1 第二实例守护）/ 状态机 11 状态 + 5 禁止转换补全（partial_failed → completed / failed → any / awaiting_review → importing / audit B4）/ WebSocket 每命令鉴权（audit B6 / 防同连接 cancel 任意 task）/ R-X1 importing single transaction 取消 ROLLBACK 路径 / AI Provider 配额超限 IMPORT_QUOTA_EXCEEDED / TOAST 超大 JSONB / chunk_id index / 死信通知 email TBD / mypy strict TaskPayload 基类（audit B5）
+  - ✅ M18 semantic-search / 143 testpoint（P0=68 / P1=56 / P2=19）/ 13 视角（国际化 N/A）/ cost ~$1.5 / **escalation surface ≥100**
+    - 文件：`01-testpoints/M18-semantic-search.md`（208 行）
+    - 风险点：embeddings 表 7 字段 PK + 异维列拆分（embedding_512/1536/3072 + dim 路由 / audit B4 schema 性死债务）/ 删除一致性（audit B1+C2 / except SilentFailure 不能 except Exception 否则崩溃 / orphan cleanup cron 兜底）/ 三段式回填语义（PROVIDER+MODEL_NAME+MODEL_VERSION 三 env 全改 / 漏一个 fallback 全表 / fix v4.1 R5'=B）/ 失败容忍 vs §12C 反向（embedding 失败不通知用户 / 三维 monitor 阈值告警 CY）/ 跨模读双路豁免（ADR-003 规则 4 / 增量 R-X3 调上游 / backfill 只读 import + LEFT JOIN / DAO 必须分文件）/ Race 与幂等三层（Redis SET 60s debounce + pg_advisory_xact_lock 双 namespace 防 hashtext 32-bit 跨 project 鸽笼碰撞 + content_hash 7 字段 PK）/ pgvector 降级 SEARCH_MODE kill switch（audit B5 / env 一键切 hybrid/keyword_only/semantic_only）/ backfill 中断恢复（fix v3 决策 2=A / async def + arq_pool 形参 + _job_id 1h 幂等去重）
   - ⬜ _cross-cutting（auth / cookie / 网络 / 跨 tab / mobile / 性能）
 
   ### 批 1 汇总（M11/M14/M19/M20 / 4 模块）
@@ -124,6 +134,28 @@ status: NORMAL / 自然 checkpoint / 批 3 完成 / 触及 $10 sprint 单 sessio
   - **testpoint 累计**：127 + 394 + 431 + 466 = **1418 testpoint**
   - **cost 累计**：~$9.3 + ~$5.7 = **~$15.0 dogfooding 自身**（含 M01 pilot $2）
   - **触及 $10 sprint 单 session 硬上限**：本 session 强制关闸 + 新 session 跑批 4
+
+  ### 批 4 汇总（M13/M15/M16/M17/M18 / 5 模块 AI+复杂业务 / 拆 4+1 并发）
+  - **testpoint 总数**：671（P0=280 / P1=313 / P2=78）
+  - **cost**：~$6.2（4 并发 ~$4.7 + M18 单派 ~$1.5 / 接近批 4 估 $7.5 / 略低于估）
+  - **escalation surface ≥100**：M13 142 / M15 102 / M16 141 / M17 143 / M18 143（**5/5 命中 / AI+复杂业务模块全 escalation 是常态**）
+  - **新增跨模块元发现**：
+    - **R-X 横切纪律继续爆发**：M13 R-X3 共享 session 第六真注入（写 M04 dimension_record）/ M16 cron 写多模块 / M17 越权直写需 audit / M18 增量走 R-X3 + backfill 走 ADR-003 规则 4 双路豁免 → **R-X 系列已 8 模块连续命中 / cross-cutting 必有 R-X 专项 + DAO 必须分文件子项**
+    - **AI 异步路径 4 范式集中爆发**：M13 SSE 流式 + M16 BackgroundTasks/cron 双路 + M17 Queue + WebSocket + M18 enqueue_delete + Redis debounce + advisory_xact_lock → 异步纪律 cross-cutting 必须单独立"异步路径范式"专项
+    - **幂等三层堆积**：M16 advisory_xact_lock 替代 UniqueConstraint / M17 idempotency key 三元组 + 7 天过期 / M18 Redis SET 60s + pg_advisory_xact_lock 双 namespace + content_hash 7 字段 PK → 幂等设计已成 design 主纪律 / cross-cutting "幂等模式对照表"专项
+    - **状态机复杂度天花板**：M17 11 状态 + 5 禁止转换（与 M07 4 态 + 5 禁转范式呼应）/ M16 zombie cron CAS race 状态机 / M18 5 cron + 3 层幂等 → 状态机非法转换 cross-cutting 已 3 模块命中
+    - **AI Provider 集成首发**（M13 LLM red line / M17 多 provider + 配额 / M18 PROVIDER+MODEL_NAME+MODEL_VERSION 三 env 同步）→ AI 边界 cross-cutting 专项
+    - **WebSocket 协议视角首发**（M17）→ 新视角加入 cross-cutting 测试集（握手 / 每命令鉴权 / ping-pong）
+    - **JWT 主动作废中途流不中断 ≤5min 暴露窗口**（M13）→ auth 时间窗 cross-cutting 待覆盖
+    - **新增 disambiguation 模式**（M15 design §3 三处）→ Pydantic schema vs SQLAlchemy 模型字段映射 cross-cutting 专项
+    - **baseline-patch 时序契约堆积 +2**：M13 audit B1（M02/M03/M04/M07 baseline-patch 前置）+ M15 baseline-patch project_id NULLABLE → punt pool 累计 6 处（M02 + M03 + M04 + M07 + M13 + M15）
+    - **schema 性死债务首发**（M18 audit B4 / embeddings 表 7 字段 PK + 异维列拆分）→ "schema 一次错全表回填"专项 / 跟 M04 乐观锁 + DB UNIQUE 双防御对照 / 设计前置价值实证点
+    - 实战观察：批 4 单批 testpoint 数 102-143 / 5/5 全 ≥100 / 与 批 1-3 主流业务 79-130 对比 / **AI+复杂业务模块密度显著高（design 业务面宽 + 异步 + 幂等 + 状态机 + provider + 跨模读豁免叠加）**
+
+  ### 批 1+2+3+4 累计（M01 + 批 1 + 批 2 + 批 3 + 批 4 / 19 模块 / 21 模块进度 90%）
+  - **testpoint 累计**：127 + 394 + 431 + 466 + 671 = **2089 testpoint**
+  - **cost 累计**：~$15.0 + ~$6.2 = **~$21.2 dogfooding 自身**（含 M01 pilot $2）
+  - **本 session**：批 4 全 5 模块单 session 完成 / cost ~$6.2 自身（含主 agent ~$0.5）/ **未触 $10 单 session 硬上限**（5 subagent ≤4 并发 / context 不堆叠 / 节流策略起作用）
 
 - **P2 case** ⬜ NOT_STARTED
 - **P3 executor** ⬜ NOT_STARTED
@@ -180,12 +212,12 @@ status: NORMAL / 自然 checkpoint / 批 3 完成 / 触及 $10 sprint 单 sessio
 - M10 overview ✅ 79
 - M12 comparison ✅ 99（单派 / 信号 A ≤4 并发硬约束）
 
-### 批 4（AI / 复杂业务 / 80-120 testpoint each / 4 并发）
-- M13 requirement-analysis
-- M15 activity-stream
-- M16 ai-snapshot
-- M17 ai-import
-- M18 semantic-search
+### 批 4（AI / 复杂业务 / 5 模块 / 拆 4+1 并发）✅ DONE 2026-05-12
+- M13 requirement-analysis ✅ 142 (escalation surface)
+- M15 activity-stream ✅ 102 (escalation surface)
+- M16 ai-snapshot ✅ 141 (escalation surface)
+- M17 ai-import ✅ 143 (escalation surface)
+- M18 semantic-search ✅ 143（单派 / 信号 A ≤4 并发硬约束）(escalation surface)
 
 ### 批 5（跨模块视角）
 - _cross-cutting（单独 subagent / 按视角而非模块）
@@ -269,9 +301,10 @@ P1 全完成（21 个 testpoints 文件齐全）后：
 | 2026-05-12 night | $0（新 session）| ~$3.9 | P1 批 1 (M11/M14/M19/M20) 4 并发 / 394 testpoint | $3.9 dogfooding 累计 ~$5.9 |
 | 2026-05-12 night | ~$3.9 | ~$7.3 | P1 批 2 (M02/M03/M04/M05) 4 并发 / 431 testpoint | $7.3 dogfooding 累计 ~$9.3 |
 | 2026-05-12 night | $0（新 session）| ~$5.7 | P1 批 3 (M06/M07/M08/M10 4 并发 + M12 单派) / 466 testpoint / 含冷启动绕路探索 ~$0.5 | $5.7 dogfooding 累计 ~$15.0 |
+| 2026-05-12 night | $0（新 session）| ~$6.2 | P1 批 4 (M13/M15/M16/M17 4 并发 + M18 单派) / 671 testpoint / 5/5 escalation surface ≥100 | $6.2 dogfooding 累计 ~$21.2 |
 
-**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$15.0 / 剩 $115-225 / 充足。
-**本 session 节流**：触及 $10 sprint 单 session 硬上限 / **强制关闸退出** / 批 4 启新 session（提示词：`cold-start dogfooding P1 批 4`）。
+**预算**：sprint 总 $130-240 / dogfooding 自身已用 ~$21.2 / 剩 $109-219 / 充足。
+**本 session 节流**：批 4 单 session 完成 / **未触 $10 单 session 硬上限**（≤4 并发 + 不堆 context + 批 3 冷启动绕路教训已修正）/ 仅剩批 5 cross-cutting，可启新 session 跑（提示词：`cold-start dogfooding P1 批 5`）。
 
 **冷启动 dogfooding 观察点（批 3 实证）**：
 - ❌ 主 agent 起手把 "P1 批 3" 误解为 MEMORY.md P1 分组而非 Phase 1 批次 → 走 KB 专题 + memory 索引绕路 ~5 工具调用浪费 / 后被 CY 显式纠正"上 session 给你的提示词说 我给你发这个 你就会做"
