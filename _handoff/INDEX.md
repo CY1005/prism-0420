@@ -52,13 +52,13 @@ purpose: |
 | 文件 / 目录 | 用途 | 状态 |
 |-----------|------|------|
 | **[dogfooding/00-plan.md](dogfooding/00-plan.md)** | 总 sprint plan（同上 §1）| 📁 living |
-| **[dogfooding/progress.md](dogfooding/progress.md)** | single source of truth / 每 session 起点必读 | 📁 living（2026-05-12 evening：P0 ✅ / P1 1/21 进展）|
+| **[dogfooding/progress.md](dogfooding/progress.md)** | single source of truth / 每 session 起点必读 | 📁 living（2026-05-12 night：P0 ✅ / P1 19/21 进展 90% / 批 1+2+3+4 完 / 仅剩 _cross-cutting）|
 
 ### 3.2 dogfooding/prompts/（subagent 提示词）
 
 | 文件 | Phase / Role | 状态 | 备注 |
 |------|------------|------|------|
-| [phase1-testpoint.md](dogfooding/prompts/phase1-testpoint.md) | P1 单模块测试点生成（Opus / $3 cap）| 🟡 PARTIAL | M01 pilot ✅ / 剩 20 模块 + cross-cutting |
+| [phase1-testpoint.md](dogfooding/prompts/phase1-testpoint.md) | P1 单模块测试点生成（Opus / $3 cap）| 🟡 PARTIAL | M01 pilot ✅ + 批 1+2+3+4 完 / 19/21 / 仅剩 _cross-cutting |
 | [phase4-fix.md](dogfooding/prompts/phase4-fix.md) | P4 bug 修复 + 6 项风险自评（Opus / $5）| ⬜ TODO | 待 P3 产出 bug-queue 后启 |
 | [phase4-audit.md](dogfooding/prompts/phase4-audit.md) | P4 design-conflict-audit（Opus / $4）| ⬜ TODO | 同上 |
 | _phase2-case.md_ | P2 testpoint → playwright spec | ⬜ TODO | 待 P1 完后再写 |
@@ -72,7 +72,12 @@ purpose: |
 | 文件 | 模块 | 状态 | testpoint 数 |
 |------|------|------|-------------|
 | [M01-user-account.md](dogfooding/01-testpoints/M01-user-account.md) | M01 auth pilot | ✅ DONE | 127（P0=45 / P1=69 / P2=13）|
-| _M02-M20 + cross-cutting_ | 其他 20 模块 + 跨视角 | ⬜ TODO | 估 ~1500 累计 |
+| 批 1 (M11/M14/M19/M20) | 边缘模块 4 并发 | ✅ DONE | 394（91+89+86+128）|
+| 批 2 (M02/M03/M04/M05) | 主流业务 4 并发 | ✅ DONE | 431（130+84+106+111）|
+| 批 3 (M06/M07/M08/M10/M12) | 主流业务续 4+1 | ✅ DONE | 466（90+110+88+79+99）|
+| 批 4 (M13/M15/M16/M17/M18) | AI+复杂业务 4+1 / 5/5 escalation ≥100 | ✅ DONE | 671（142+102+141+143+143）|
+| _cross-cutting_ | 跨模块视角（单 subagent） | ⬜ TODO | 估 ~100-150 |
+| **累计** | 19/21 模块（90%） | 🟡 | **2089 / 估剩 ~100-150** |
 
 ### 3.4 dogfooding/02-cases/ + 04-bug-fixes/（待跑）
 
