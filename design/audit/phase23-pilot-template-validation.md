@@ -4,7 +4,7 @@ status: partial-complete
 owner: CY
 created: 2026-05-09
 phase: Phase 2.3 子 sprint B
-parent: ../00-roadmap.md §8.1 + ../../_handoff/phase23-prompts.md「子 sprint B」段
+parent: ../00-roadmap.md §8.1 + ../../_handoff/_archive/phase23-prompts.md「子 sprint B」段
 ---
 
 # Phase 2.3 子 sprint B — pilot template validation

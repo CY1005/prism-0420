@@ -9,7 +9,7 @@ purpose: |
   （v0.3+ 维度 + 最终报告 v0.1 草稿）。
 parent:
   - _handoff/cross-sprint-punt-pool.md 真漏 #25 + #26
-  - _handoff/phase23-prompts.md（原 4 子 sprint A/B/C/D 总体 plan / 本文件是其延伸 / 聚焦清债）
+  - _handoff/_archive/phase23-prompts.md（原 4 子 sprint A/B/C/D 总体 plan / 本文件是其延伸 / 聚焦清债）
   - design/99-comparison/phase3-data-baseline.md（v0.2 数据 / 每子片完成后重跑看数据演化）
 related:
   - scripts/phase3_data_collector.py（v0.2 数据采集脚本 / 可重跑）
@@ -430,11 +430,11 @@ related:
 
 冷启动按序读：
 1. _handoff/phase23-integration-cleanup-prompts.md 「子片 S9」段
-2. _handoff/phase23-prompts.md 「子 sprint B」段（原始 e2e 规划）
+2. _handoff/_archive/phase23-prompts.md 「子 sprint B」段（原始 e2e 规划）
 3. design/00-phase-gate.md 闸门 5 §8.1
 4. app/playwright/* 现有 e2e
 
-本次范围（参考 _handoff/phase23-prompts.md 子 sprint B 详细 plan）：
+本次范围（参考 _handoff/_archive/phase23-prompts.md 子 sprint B 详细 plan）：
 - 10 关键路径 e2e 设计：login → 创建项目 → 加成员 → 加节点 → ... → 导出
 - backend docker-compose up + frontend pnpm dev 真接通
 - Playwright config 跨栈

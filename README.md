@@ -173,9 +173,9 @@ prism-0420/
 ├── _handoff/                            # 跨 session 接力（详见 _handoff/INDEX.md）
 │   ├── INDEX.md                         #   全 handoff 文件索引 + 状态枚举
 │   ├── cross-sprint-punt-pool.md        #   跨 sprint Punt 池 + 真漏洞表 + 元发现集
-│   ├── next-session.md                  #   历史交接总表
 │   ├── dogfooding/                      #   ★ 当前活跃 sprint（progress.md + plan + prompts/）
-│   └── *.md                             #   各 sprint 启动 prompts（M05-M20 / p22 / phase23 / cleanup）
+│   ├── phase23-integration-cleanup-prompts.md  # Phase 2.3 cleanup S1-S10 prompts（2026-05-12 跑完）
+│   └── _archive/                        #   📦 已完成 sprint 历史 prompt（详见 _archive/README.md）
 │
 └── design/                              # 所有设计产物
     ├── README.md                        # 设计文档总索引

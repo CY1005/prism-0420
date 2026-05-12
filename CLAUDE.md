@@ -12,23 +12,26 @@ GitHub：https://github.com/CY1005/prism-0420
 
 ## 当前阶段
 
-**Phase 2.2：前端继承 Prism（子片 1+2 已完成，剩 3a-5 子片）**（截至 2026-05-09）
+**Phase 3 数据对照 v0.3 落地 + dogfooding 全功能测试 sprint 进行中**（截至 2026-05-12）
 
-**真实进度**（权威来源 `design/00-roadmap.md`，每次进度变化必须同步更新）：
+**真实进度**（权威来源 `design/00-roadmap.md`，每次进度变化必须同步更新；以下仅快照，不替代 roadmap）：
 - ✅ Phase 0 准备 100%
 - ✅ Phase 1 设计前置 100%（2026-04-26 完成）
   - 档位 A 架构骨架 7 份 / 档位 B 工程规约 5 份 / 档位 C 模块详设 M01–M20 全交付 / 5 个 ADR
-- ✅ Phase 2.0 工程基线 100%（2026-05-05 一日完成 B1-B10 全跑通）
-- ✅ Phase 2.1 业务模块 100%（M01-M08+M10-M20 全交付，5/7-5/9 三天连完 18 sprint，M09 superseded by M18）
-- ⏳ **Phase 2.2 前端继承 进行中** ← 当前位置
-  - 子片 0 prep `aa6dbd0`（拷 Prism web 基底 + shadcn/zod/openapi-typescript + 删 next-auth/drizzle）
-  - 子片 1 `12cc62c`（codegen 接通 + http-client 重写 + Bearer JWT 占位 + 6 unit tests）
-  - 子片 2（本次）— auth flow 改造（access 内存 React context + refresh httpOnly cookie + CORS）+ login/register 页面 + 13 vitest + 4 backend cookie e2e + R1+R2 第 1 数据点
-  - 子片 3a-5 待启动（projects/dimension 5 页 → node/relation-graph 5 页 → 长尾 + admin → M20 团队页新写 → 关闸 audit）
-- ⏳ Phase 2.3 集成验证 0%
-- ⏳ Phase 3 数据对照报告 0%
+- ✅ Phase 2.0 工程基线 100%（2026-05-05）
+- ✅ Phase 2.1 业务模块 100%（M01-M08+M10-M20 全交付 / M09 superseded by M18）
+- ✅ Phase 2.2 前端继承 100%（7/7 子片，2026-05-09 完 / 揭露关闸盲区 #2 已立规）
+- ✅ Phase 2.3 集成验证 100%（2026-05-12 cleanup S1+S3+S4+B+A+C+D 全完 / tsc 88→0 / next build PASS / pytest 1643 PASS / CI 6/6 绿）
+- 🟢 **Phase 3 数据对照 v0.3** ← 当前位置
+  - 同水位 STAR 数据已落地：prism-0420 23 天 / 14 fix vs prism v1 13 天 / 23 fix → 设计前置 + 三 Agent reviewer 减少 39% bug 硬实证；时间代价 1.77x
+  - 下一步：6/8 + 6/15 工作笔记导入 → Phase 3 完整报告 v1
+- 🟡 **dogfooding sprint 并行进行**（2026-05-12 起 / 当前活跃 sprint）
+  - 接力点权威：`_handoff/dogfooding/progress.md`（每 session 起点必读）
+  - 总 plan：`_handoff/dogfooding/00-plan.md`（5-phase / 8 agent / A 路径全跑）
+  - P0 preflight ✅ / P1 testpoint 🟡 进行中（M01 pilot + 批 1+2 完，剩批 3-5 + cross-cutting）
+  - P2-P5 待启（待 P1 完）
 
-**下一件事**：Phase 2.2 子片 3a 启动（projects 列表 + 详情 + dimension 档案 5 页面）。详见 `_handoff/p22-subslice-prompts.md`「子片 3a」段 + `design/00-roadmap.md` §7。
+**下一件事**：见 `_handoff/dogfooding/progress.md` 起手段 + `design/00-roadmap.md` §1 仪表盘。历史 sprint prompt 在 `_handoff/_archive/`（详见 `_handoff/_archive/README.md`）。
 
 ## 协作规则（严格遵守）
 
@@ -120,7 +123,7 @@ GitHub：https://github.com/CY1005/prism-0420
 ## 快速上手（新 session 读这个顺序）
 
 1. 本文件（协作规则）
-2. **`_handoff/next-session.md`**（上一 session 留的"接着做什么 + 怎么做"——含 prompt A/B/C 和状态快照）
+2. **`_handoff/INDEX.md`**（_handoff 全图索引）→ 当前活跃 sprint = dogfooding，接力点 `_handoff/dogfooding/progress.md`（旧 `next-session.md` 已归档到 `_handoff/_archive/`）
 3. **`_handoff/cross-sprint-punt-pool.md`**（🔴 跨 sprint Punt 池总表 / 防"约定 M? sprint 处理但被遗忘"漂移 / 启动 reconcile 必查本 sprint 命中项 + 真漏洞 Top 10 + 高耦合触发点联动）
 4. `design/00-roadmap.md`（**真实进度仪表盘——权威**）
 5. `design/00-phase-gate.md`（下一闸门 checkbox）

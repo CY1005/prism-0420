@@ -182,7 +182,7 @@ filename 不 sanitize → path traversal / CRLF 头注入。
 
 ## sprint 总览数据
 
-- **commits**：8 主提交（commit hash 见 _handoff/next-session.md M11 段）
+- **commits**：8 主提交（commit hash 见 _handoff/_archive/next-session.md M11 段）
   - 8ef59b3 子片 0 prep（§14.5 + 3 跨模块 batch_create 接通）
   - 4ed8dbe 子片 1（model + alembic + 14 model tests）
   - 090621a 子片 2（DAO + 12 unit tests）

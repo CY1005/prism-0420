@@ -3,7 +3,7 @@ title: prism-0420 _handoff 文件索引
 status: living-doc
 owner: CY
 created: 2026-05-12
-last_updated: 2026-05-12
+last_updated: 2026-05-12（归档 7 文件到 _archive/ — sprint-prompts-M05-M20 / m20 / p22 / p22-subslice / phase23-prompts / post-phase23-cleanup-plan / next-session）
 purpose: |
   集中索引 _handoff/ 全部文件，按"做的内容"分类 + 每个加状态。
   新 session cold-start 先看本文件判断从哪入手。
@@ -11,7 +11,7 @@ purpose: |
 
 # _handoff/ 索引
 
-> **状态枚举**：✅ DONE / 🟡 PARTIAL / ⬜ TODO / 📁 living-doc（持续更新 / 不归类完成）/ 📦 归档候选
+> **状态枚举**：✅ DONE / 🟡 PARTIAL / ⬜ TODO / 📁 living-doc（持续更新 / 不归类完成）/ 📦 已归档
 
 ---
 
@@ -21,7 +21,9 @@ purpose: |
 |------|------|------|---------|
 | **[INDEX.md](INDEX.md)** | 本文件 / 全 handoff 索引 | 📁 | 2026-05-12 |
 | **[cross-sprint-punt-pool.md](cross-sprint-punt-pool.md)** | 跨 sprint Punt 池总表 + 真漏洞表 + 8 个元发现 | 📁 | 2026-05-12（元发现 #8 立规）|
-| **[next-session.md](next-session.md)** | 跨 session 交接旧总表（被 progress.md 部分取代）| 📁 已过时 | 2026-05-12（Sprint 3.1+3.2 状态 / 未含 dogfooding sprint）|
+| **[_archive/README.md](_archive/README.md)** | 归档清单（7 个历史 sprint prompt / plan / 旧交接）| 📦 | 2026-05-12 |
+
+> 旧的跨 session 交接 `next-session.md` 已归档到 `_archive/`。当前接力点 = `dogfooding/progress.md`。
 
 ---
 
@@ -30,7 +32,6 @@ purpose: |
 | 文件 | 对应 sprint | 状态 | 备注 |
 |------|------------|------|------|
 | **[dogfooding/00-plan.md](dogfooding/00-plan.md)** | Dogfooding 全功能测试 sprint（5-phase / 8 agent / 3 路径决策）| 📁 living | 2026-05-12 落地 / CY 拍 A 路径全跑 |
-| [post-phase23-cleanup-plan.md](post-phase23-cleanup-plan.md) | Post-Phase-2.3 cleanup 4 sprint plan | 🟡 PARTIAL | Sprint 1+2+3+4 部分跑过；2026-05-10 后续被 phase23-integration-cleanup-prompts.md 取代 / 候选归档 📦 |
 
 ---
 
@@ -38,12 +39,9 @@ purpose: |
 
 | 文件 | 对应 sprint | 状态 | 备注 |
 |------|------------|------|------|
-| [sprint-prompts-M05-M20.md](sprint-prompts-M05-M20.md) | M05-M20 后端 16 模块 sprint 启动 prompt | ✅ DONE | 2026-05-07 落地 / 17 模块全 accepted+implemented（M09 superseded by M18）|
-| [m20-sprint-prompt.md](m20-sprint-prompt.md) | M20 团队模块（最后一个 own 模块）单独 sprint | ✅ DONE | 2026-05-09 落地 / M20 已完成 |
-| [p22-sprint-prompt.md](p22-sprint-prompt.md) | Phase 2.2 前端继承 总 sprint | ✅ DONE | 2026-05-09 落地 / Phase 2.2 100%（但揭露关闸盲区 #2 数据形态迁移半完成）|
-| [p22-subslice-prompts.md](p22-subslice-prompts.md) | Phase 2.2 子片 1-5 冷启动 prompts | ✅ DONE | 2026-05-09 落地 / 7/7 子片完 |
-| [phase23-prompts.md](phase23-prompts.md) | Phase 2.3 集成验证 + 上线准备 4 子 sprint A/B/C/D | ✅ DONE | 2026-05-09 落地 / A/B/C/D 都跑过 / 被 phase23-integration-cleanup-prompts.md 接续 |
 | [phase23-integration-cleanup-prompts.md](phase23-integration-cleanup-prompts.md) | Phase 2.3 cleanup S1-S10 子片 prompts | ✅ DONE | 2026-05-12 跑完（S1+S3+S4+B+A+C+D）/ tsc 88→0 / next build PASS / pytest 1643 PASS / CI 6/6 绿 |
+
+> Phase 2.1 (M05-M20) / Phase 2.2 (P22) / Phase 2.3 A-D 等已完成 sprint 的 prompt 全部归档到 [`_archive/`](_archive/README.md)。
 
 ---
 
@@ -85,27 +83,32 @@ purpose: |
 
 ---
 
-## 4️⃣ 归档候选（📦 / 已被取代或过时）
+## 4️⃣ 已归档（2026-05-12 执行）
 
-| 文件 | 建议 | 理由 |
-|------|------|------|
-| post-phase23-cleanup-plan.md | 📦 移到 _archive/ | 2026-05-10 文档 / 被 phase23-integration-cleanup-prompts.md 5/12 完整 cleanup sprint 取代 |
-| phase23-prompts.md | 📦 移到 _archive/ | 原计划 4 子 sprint A/B/C/D / 被 cleanup-prompts S1-S10 接续 / 历史价值仍在但不再活跃 |
-| m20-sprint-prompt.md / p22-sprint-prompt.md / p22-subslice-prompts.md / sprint-prompts-M05-M20.md | 📦 一组打包归档 | 全 sprint 已完成 / 历史价值仍在 |
-| next-session.md | ⚠️ 严重过时（5/10 状态 / 未含 dogfooding）/ 短期保留 | dogfooding sprint 接力点已迁到 dogfooding/progress.md / 候选废弃或刷新 |
+7 个文件已 mv 至 `_archive/`，详见 [_archive/README.md](_archive/README.md)：
 
-**归档建议**：建 `_handoff/_archive/` 目录 / 把 ✅ DONE 类历史 sprint 文件 mv 进去 / 保留 README 索引。
+| 文件 | 归档理由 |
+|------|---------|
+| sprint-prompts-M05-M20.md | Phase 2.1 全 sprint ✅ |
+| m20-sprint-prompt.md | M20 sprint ✅ |
+| p22-sprint-prompt.md / p22-subslice-prompts.md | Phase 2.2 ✅ 7/7 子片 |
+| phase23-prompts.md | Phase 2.3 A/B/C/D ✅ / 被 cleanup-prompts 接续完成 |
+| post-phase23-cleanup-plan.md | 被 phase23-integration-cleanup-prompts.md (S1-S10) 取代 |
+| next-session.md | 状态停在 Sprint 4C.3 (5/10) / 不含 dogfooding / 已被 dogfooding/progress.md 接力 |
+
+**仍在根目录的活跃文件**：INDEX / cross-sprint-punt-pool / phase23-integration-cleanup-prompts（5/12 刚完 / 历史价值新）/ dogfooding/
 
 ---
 
-## 状态汇总
+## 状态汇总（归档后）
 
-| 状态 | 数 | 占比 |
-|------|-----|------|
-| 📁 living-doc（永久跟踪）| 4 | 19% |
-| ✅ DONE（已运行）| 6 + M01 pilot = 7 | 33% |
-| 🟡 PARTIAL（部分运行）| 3（dogfooding P1 + cleanup-plan + dogfooding-prompt phase1）| 14% |
-| ⬜ TODO（未运行）| 7（dogfooding P2-P5 + M02-M20 testpoints）| 33% |
+| 状态 | 数 |
+|------|-----|
+| 📁 living-doc（根目录 / 永久跟踪）| 3（INDEX / cross-sprint-punt-pool / dogfooding/00-plan + progress）|
+| ✅ DONE（最新完成 / 保留）| 1（phase23-integration-cleanup-prompts）|
+| 🟡 PARTIAL（dogfooding P1 进行中）| 1 |
+| ⬜ TODO（dogfooding P2-P5）| dogfooding/prompts 6 个待启 |
+| 📦 已归档（_archive/）| 7 |
 
 ---
 
@@ -125,7 +128,7 @@ purpose: |
   │
   └── 没在跑活跃 sprint / 想做其他事
         → cat cross-sprint-punt-pool.md 看真漏 + 元发现
-        → cat next-session.md 看历史交接（注意已过时）
+        → 历史 sprint prompt 复用 → cat _archive/README.md 找对应文件
 ```
 
 ---

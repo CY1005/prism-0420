@@ -4,7 +4,7 @@ status: accepted
 owner: CY
 created: 2026-05-09
 phase: Phase 2.3 子 sprint D
-parent: ../00-roadmap.md §8 + ../../_handoff/phase23-prompts.md「子 sprint D」段
+parent: ../00-roadmap.md §8 + ../../_handoff/_archive/phase23-prompts.md「子 sprint D」段
 decision: 选项 C — DEFER_TO_POST_LAUNCH
 ---
 

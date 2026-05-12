@@ -21,7 +21,7 @@ policy:
 # 跨 sprint Punt 池总表
 
 > ⚠️ M15 sprint 收官审计后**首次**建立。基于 design/audit/m05-pilot..m15-pilot.md 9 个
-> 文件 + _handoff/next-session.md M01/M02 后置债 = 共 94 条 punt 全量代码验证。
+> 文件 + _handoff/_archive/next-session.md M01/M02 后置债 = 共 94 条 punt 全量代码验证。
 > Opus subagent 跑完整 grep 验证。
 
 ---

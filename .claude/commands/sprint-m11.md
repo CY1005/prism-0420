@@ -4,7 +4,7 @@ description: 启动 prism-0420 M11 冷启动 sprint 实施
 
 继续 prism-0420 M11 sprint 实施代码（M11 冷启动）。
 
-任务：按 `_handoff/sprint-prompts-M05-M20.md` 中以下两段的完整指令执行：
+任务：按 `_handoff/_archive/sprint-prompts-M05-M20.md` 中以下两段的完整指令执行：
 1. **`## 通用启动序`** 段（12 项冷启动 + 5 步启动顺序 + 红线 + 沉淀清单）
 2. **`## M11 — 冷启动（M11-cold-start）`** 段（模块特定要素 + 特殊触发点 + 模块特定红线 + 起手 prompt）
 

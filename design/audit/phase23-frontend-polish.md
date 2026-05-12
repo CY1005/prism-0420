@@ -4,7 +4,7 @@ status: partial-complete
 owner: CY
 created: 2026-05-09
 phase: Phase 2.3 子 sprint C
-parent: ../00-roadmap.md §8 + ../../_handoff/phase23-prompts.md「子 sprint C」段
+parent: ../00-roadmap.md §8 + ../../_handoff/_archive/phase23-prompts.md「子 sprint C」段
 ---
 
 # Phase 2.3 子 sprint C — frontend-polish 关闸 audit
