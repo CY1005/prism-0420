@@ -35,8 +35,17 @@ class UserDAO:
         return user
 
     async def count_active_admins(self, db: AsyncSession) -> int:
+        # Phase 2.3 cleanup D follow-up: 排除 system user (SYSTEM_USER_UUID)
+        # —— 它的 role=platform_admin 但只用于 cron/Queue activity_log，不应计入
+        # "最后 active admin 保护"逻辑（LastAdminProtectedError 应该针对真实运营 admin）
+        from api.queue.base import SYSTEM_USER_UUID
+
         result = await db.execute(
-            select(User).where(User.role == "platform_admin", User.status == "active")
+            select(User).where(
+                User.role == "platform_admin",
+                User.status == "active",
+                User.id != SYSTEM_USER_UUID,
+            )
         )
         return len(result.scalars().all())
 
