@@ -270,6 +270,44 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 - 严重度：比关闸盲区 #1（删 export 未扫调用方 / 编译 broken）更高一档——前者 CI 红会暴露，后者编译过 = 永远不会被 audit 自动发现，需要人工 + 真跑才能识别
 - 量化：Phase 2.2 子片关闸模板覆盖率 ≈ 80%（缺数据形态迁移完整性扫这一项），漏检 70+ 错
 
+### #7 决策类推荐跳过 design + 真实代码 fact-finding（2026-05-12 C sprint 推荐翻车 + workspace 估时差 10 倍）
+
+**现象**：Phase 2.3 cleanup 进行中两个决策暴露同根因失败：
+
+1. **C sprint 推荐 C-1 全删**（CY 一问"看真实代码和设计"暴露 5 处反向证据）：
+   - M18 design §1 明文"搜索框不变 / 升级 F9 / 保留 F9 全部能力" → 跟"删全局搜索"反向
+   - M18 backend 99 行 search_router 真实装含 hybrid + RRF + pgvector 降级 / production-grade
+   - GlobalSearchBar 是 7 页面 header `flex justify-between` 中间填充元素，删后视觉塌陷
+   - SearchResultItem 在 `src/types/api.ts` codegen 是 M18 真类型，不是 dead
+   - GlobalSearchBar hooks 是 production-grade，重做 1-2h 不是 30min
+
+2. **workspace.tsx "1-2 天" 估时**（fact-finding 后实测 1-2h）：
+   - 14 个 TS2554 全是同一种错（`getNodeWithDimensions(id)` 缺 projectId arg）→ 5-10 min find+replace 批量改
+   - 8 个 TS2352 / 11 个 TS2345 总计 60-120 min
+   - 之前 1-2 天估时基于"33 错 / 1549 行 / 大问题"笼统印象，没数具体修复路径
+
+3. **DimensionTypeRef 扩字段 "30 min" 估时**（fact-finding 后 10 min）：
+   - schema 加 2 字段 + router list comprehension 加 2 行 + codegen 自动重生 = 10 min
+   - 而且 fact-finding 顺便揭露**更深业务漏**：dimension_types 表只种 1 行 'default'（migrations/versions/m02_project.py:163），workspace 期望的 8 维度（description/user_scenario/tech_impl/design_decision/engineering_exp/test_analysis/requirement_analysis/competitive_ref）从未真种过
+
+**根因**：决策类推荐时跳过 fact-finding：
+- 跳 design 文档（M18 design §1 业务背景没读，直接套"M18 = project-scoped"一句话归纳）
+- 跳真实代码 grep（GlobalSearchBar 在 header 中的角色没看 / SearchResultItem codegen 类型没查 / TS2554 14 错没数具体修复路径）
+- 用 abstraction + 推理代替 ground truth 验证
+
+**与 #6 区别**：#6 是关闸 audit 模板不完整 / 漏验数据形态；#7 是**决策环节本身就跳过 fact-finding**。两者递进——#6 是机制漏洞，#7 是行为漏洞。讽刺连锁：同日刚立 #6 + 关闸盲区 #2 讲"决策跳 fact-finding"，几小时后 AI 又犯，被 CY 抓现行。
+
+**立规已落**：
+1. memory `feedback_decision_codefirst_validation.md`（2026-05-12 创建）— 决策类推荐前必 fact-finding 3 步：读 design 文档 + grep 真实代码 + hypothesis 反验；不适用于纯机械修复
+2. 触发条件：A 模式选项 / 工作量估计 / "推 X 不推 Y" / sprint 范围划分 — 任一缺 fact-finding → 不许给推荐
+3. 错误快路径识别：从"项目 X = Y"一句话归纳推具体决策 / "似乎应该删干净"心态 / 笼统估时
+
+**STAR 标签**：
+- 元方法论失败模式——AI 给推荐不读 design + 代码 → 决策类输出全不可信
+- 量化：机械修复 fact-finding 程度高 → 9/9 不暴露；产品决策跳 design → 100% 暴露反向证据或工作量偏差 5-10 倍
+- 比 #6 严重一档：#6 是 phase 关闸模板覆盖率不足（机制层），#7 是决策行为本身跳 fact-finding（行为层）；机制可补但行为漏洞需要立"规则 + 触发条件"双层防御
+- **教训**：prism-0420 项目方法论是"设计前置 → AI 实现"。AI 给推荐时绕过 design 文档 = 方法论自我背叛
+
 ---
 
 ## 完整 punt 池（按原 sprint 分组）
