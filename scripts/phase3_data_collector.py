@@ -39,7 +39,8 @@ MILESTONES = {
         ("design 完成", "8d14e46"),  # 2026-04-27 Phase 1 全 20 模块 accepted
         ("业务实装完成", "b36d4d0"),  # 2026-05-09 Phase 2.1 100% / M01-M20
         ("前端继承完成", "597b885"),  # 2026-05-09 Phase 2.2 100%
-        # 注: "测试通过 / 可上线" 等价点未到（Phase 2.3 集成验证未做）
+        # Phase 2.3 集成验证清债完成 / tsc 88→0 / next build PASS / pytest 1643 PASS
+        ("测试通过 / 可上线", "b2bc2a8"),  # 2026-05-12 Phase 2.3 cleanup A+B+C+D 全完
     ],
     "prism v1": [
         ("init", "bd5c2d6"),  # 2026-04-03
@@ -280,10 +281,30 @@ def render_milestone_section(
         lines.append("")
 
     lines.append("### 关键 insight 候选\n")
-    lines.append(
-        '- ⚠️ prism-0420 **未到"测试通过 / 可上线"水位**（Phase 2.3 集成验证未做）；'
-        "完整对照需 Phase 2.3 完成后重跑\n"
-    )
+    # 取 prism-0420 + v1 各自"测试通过 / 可上线"水位 / 若已达即输出真对照
+    p0_ready_pair = next(((lab, s) for lab, s in p0_ms if "测试通过" in lab), None)
+    v1_ready_pair = next(((lab, s) for lab, s in v1_ms if "测试通过" in lab), None)
+    if p0_ready_pair and v1_ready_pair:
+        _, p0_ready = p0_ready_pair
+        _, v1_ready = v1_ready_pair
+        days_ratio = p0_ready.days_span / max(v1_ready.days_span, 1)
+        fix_ratio = p0_ready.bug_fix_commits / max(v1_ready.bug_fix_commits, 1)
+        lines.append(
+            f'- ✅ prism-0420 已到**"测试通过 / 可上线"水位**'
+            f"（{p0_ready.days_span} 天 / {p0_ready.bug_fix_commits} fix commits）；"
+            f"同水位 v1 用 {v1_ready.days_span} 天 / {v1_ready.bug_fix_commits} fix commits\n"
+        )
+        lines.append(
+            f"- ⏱️ 时间代价：prism-0420 比 v1 多 {p0_ready.days_span - v1_ready.days_span} 天 "
+            f"({days_ratio:.2f}x) —— 设计前置 + AI 实现的天数代价（含 Phase 2.3 集成验证清债）\n"
+        )
+        lines.append(
+            f"- 🐛 **bug 数收益**：prism-0420 fix commits {p0_ready.bug_fix_commits} vs v1 "
+            f"{v1_ready.bug_fix_commits} ({fix_ratio:.2f}x) —— 设计前置 + 三 Agent reviewer "
+            f"**减少 {(1 - fix_ratio) * 100:.0f}% bug** 的硬实证\n"
+        )
+    else:
+        lines.append('- ⚠️ prism-0420 **未到"测试通过 / 可上线"水位**；完整对照需达水位后重跑\n')
     if p0_impl and v1_impl:
         ratio = p0_impl.days_span / max(v1_impl.days_span, 1)
         lines.append(

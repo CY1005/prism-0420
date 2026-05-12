@@ -458,8 +458,14 @@ class AuthService:
         from sqlalchemy import select
 
         from api.models.user import User as UserModel
+        from api.queue.base import SYSTEM_USER_UUID
 
-        result = await db.execute(select(UserModel).limit(1))
+        # Phase 2.3 cleanup D follow-up: 排除 system user（migration m16 种入 /
+        # 只用于 cron/Queue activity_log / 不算"真实运营用户"）。否则 CI fresh DB
+        # bootstrap_admin_if_empty 永远看到 system user 在表里 → 返 None 不创建
+        result = await db.execute(
+            select(UserModel).where(UserModel.id != SYSTEM_USER_UUID).limit(1)
+        )
         if result.scalar_one_or_none() is not None:
             return None
         if len(password) < MIN_PASSWORD_LEN:
