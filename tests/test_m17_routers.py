@@ -608,24 +608,27 @@ class TestWebSocketAuth:
             pass
 
     def test_ws_invalid_token_closes_1008(self):
-        """无效 JWT → decode_jwt 抛 → close 1008 policy violation。"""
+        """无效 JWT → decode_jwt 抛 → accept + close 1008 policy violation。
+
+        B-P3-M17 fix：server 现在先 accept 再 close(1008) 让 client 收到 1008 close frame
+        （accept 前 close → Starlette 回 HTTP 403 / client closeCode=-1 不可观测）。
+        TestClient enter `with` 不抛 / receive_*() 时才抛 WebSocketDisconnect(1008)。
+        """
         from fastapi.testclient import TestClient
         from starlette.websockets import WebSocketDisconnect
 
         from api.main import app
 
         client = TestClient(app)
-        with (
-            pytest.raises(WebSocketDisconnect) as exc,
-            client.websocket_connect(
-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token=bogus"
-            ),
-        ):
-            pass
-        assert exc.value.code == 1008, f"expected 1008 policy violation, got {exc.value.code}"
+        with client.websocket_connect(
+            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token=bogus"
+        ) as ws:
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_text()
+            assert exc.value.code == 1008, f"expected 1008 policy violation, got {exc.value.code}"
 
     def test_ws_refresh_token_type_closes_1008(self):
-        """access claim type ≠ "access"（refresh / 其他）→ close 1008（防 refresh token 被误用）。"""
+        """access claim type ≠ "access"（refresh / 其他）→ accept + close 1008（防 refresh token 被误用）。"""
         from fastapi.testclient import TestClient
         from starlette.websockets import WebSocketDisconnect
 
@@ -634,17 +637,15 @@ class TestWebSocketAuth:
         client = TestClient(app)
         # 制造合法但 type='refresh' 的 token
         bad_type_token = encode_jwt(uuid4(), extra_claims={"type": "refresh"})
-        with (
-            pytest.raises(WebSocketDisconnect) as exc,
-            client.websocket_connect(
-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={bad_type_token}"
-            ),
-        ):
-            pass
-        assert exc.value.code == 1008
+        with client.websocket_connect(
+            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={bad_type_token}"
+        ) as ws:
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_text()
+            assert exc.value.code == 1008
 
     def test_ws_task_not_owned_closes_1008(self):
-        """合法 access JWT 但 user 不是 task creator → check_task_access 失败 → 1008。
+        """合法 access JWT 但 user 不是 task creator → check_task_access 失败 → accept + close 1008。
 
         简化路径：用 random task_id（不存在）+ 合法 token → service.check_task_access 抛
         ImportTaskNotFoundError → 1008 close。
@@ -656,14 +657,12 @@ class TestWebSocketAuth:
 
         client = TestClient(app)
         token = encode_jwt(uuid4(), extra_claims={"type": "access"})
-        with (
-            pytest.raises(WebSocketDisconnect) as exc,
-            client.websocket_connect(
-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={token}"
-            ),
-        ):
-            pass
-        assert exc.value.code == 1008
+        with client.websocket_connect(
+            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={token}"
+        ) as ws:
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_text()
+            assert exc.value.code == 1008
 
 
 __all__ = [

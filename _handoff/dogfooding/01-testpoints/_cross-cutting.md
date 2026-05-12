@@ -67,7 +67,7 @@ prism-0420 单租户多用户 SaaS：Tenant 锚点=project_id（M20 团队仅做
 - [P0] M16 BackgroundTasks AI provider 5xx 重试 3 次 status=failed 不 zombie（M16 §6 BackgroundTasks 分支 + 批 4 元发现 BackgroundTasks 范式）
 - [P0] M16 zombie cron CAS race：runner 失败分支必须 cas_complete 不直 UPDATE（M16 audit B3 + 批 4 元发现 cron CAS）
 - [P0] M18 embedding worker AI 调失败 3 次写 embedding_failures + monitor 三维阈值告警 CY 不通知用户（M18 §12D 失败容忍 + audit C2）
-- [P1] M01 /auth/login 网络断连前端 fetch reject 用户重试不锁账号（无 rate limit / M01 §7）
+- [P1] M01 /auth/login 网络断连前端 fetch reject 用户重试 — 后端实装 5-strike lockout 15min（M01 §7 line 98 + api/core/config.py max_failed_logins=5 + account_lock_minutes=15 + auth_service.py L100-106 / app 层 IP rate limit 本期未实装，部署前 Nginx slowapi 兜底 / cc-A spec [P1/§3] 测试覆盖锁定行为）
 - [P1] 业务 GET 端点网络超时前端 retry 友好 不写 activity_log 不污染数据（design §10 R10-3 GET 不写 log 通用）
 - [P1] 业务 POST 端点网络断连前端不确定是否写入 通过 GET 查最新状态 或带 idempotency_key 走幂等（清单 4 敏感操作 + M17 idempotency 范式）
 - [P1] M18 Redis SET 60s debounce 重复 enqueue 同 target 60s 内忽略不重复跑 worker（M18 §12D 字段⑤ + 批 4 元发现 Redis 60s）

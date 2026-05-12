@@ -832,8 +832,10 @@ export default function AnalysisPage() {
             </div>
           </ScrollArea>
 
-          {/* Bottom Action Bar */}
-          {hasResults && allLayersDone && !testPointsResult && (
+          {/* Bottom Action Bar — !error 守护 B-P3-M13-save-btn-shows-on-error fix：
+              error 路径下 layers 仍 isComplete=true（line 346/357 失败回调强制 isComplete），
+              allLayersDone=true 不能作为成功完成的代理；必须显式排除 error state */}
+          {hasResults && allLayersDone && !error && !testPointsResult && (
             <div className="border-border bg-card flex items-center justify-between border-t p-4">
               <Button
                 variant="outline"

@@ -95,8 +95,19 @@ async def stream_requirement_analysis(
     - 取消：Request.is_disconnected() 每 yield 后检查；断开时 break + service finally
       会自动 await stream.aclose() 释放底层流（R1-C P1-01 立修）
     - 异常：在 SSE 流内 yield event:error 给前端；不抛 HTTP 错（流已 200 OK）
+
+    R-X3 防御（B-P2-cc-B-analyze-rx3-cross-tenant-leak fix）：
+      进入 SSE generator **之前**先校验 node 归属 project (NodeDAO.get_by_id 强制 project_id)。
+      不属于则在 HTTP 200 stream 开始前抛 AnalysisNodeNotFoundError → FastAPI 转 404，
+      而非进入 SSE error event（HTTP 200 + 流式错误）混淆 cross-tenant 探测。
+      design §8 R8-1 三层防御第三层 / M04 dimension_router 同范式（service 层早期校验）。
     """
     svc = AnalyzeService()
+
+    # 前置 R-X3 cross-tenant 校验（HTTP 200 + SSE 流前必须早期拒绝）
+    target_node = await svc.nodes.dao.get_by_id(db, node_id, access.project.id)
+    if target_node is None:
+        raise AnalysisNodeNotFoundError(node_id=str(node_id))
 
     async def generator() -> AsyncIterator[bytes]:
         full_chunks: list[str] = []

@@ -1,0 +1,288 @@
+diff --git a/_handoff/dogfooding/01-testpoints/_cross-cutting.md b/_handoff/dogfooding/01-testpoints/_cross-cutting.md
+index 0695726..6497ba3 100644
+--- a/_handoff/dogfooding/01-testpoints/_cross-cutting.md
++++ b/_handoff/dogfooding/01-testpoints/_cross-cutting.md
+@@ -67,7 +67,7 @@ prism-0420 单租户多用户 SaaS：Tenant 锚点=project_id（M20 团队仅做
+ - [P0] M16 BackgroundTasks AI provider 5xx 重试 3 次 status=failed 不 zombie（M16 §6 BackgroundTasks 分支 + 批 4 元发现 BackgroundTasks 范式）
+ - [P0] M16 zombie cron CAS race：runner 失败分支必须 cas_complete 不直 UPDATE（M16 audit B3 + 批 4 元发现 cron CAS）
+ - [P0] M18 embedding worker AI 调失败 3 次写 embedding_failures + monitor 三维阈值告警 CY 不通知用户（M18 §12D 失败容忍 + audit C2）
+-- [P1] M01 /auth/login 网络断连前端 fetch reject 用户重试不锁账号（无 rate limit / M01 §7）
++- [P1] M01 /auth/login 网络断连前端 fetch reject 用户重试 — 后端实装 5-strike lockout 15min（M01 §7 line 98 + api/core/config.py max_failed_logins=5 + account_lock_minutes=15 + auth_service.py L100-106 / app 层 IP rate limit 本期未实装，部署前 Nginx slowapi 兜底 / cc-A spec [P1/§3] 测试覆盖锁定行为）
+ - [P1] 业务 GET 端点网络超时前端 retry 友好 不写 activity_log 不污染数据（design §10 R10-3 GET 不写 log 通用）
+ - [P1] 业务 POST 端点网络断连前端不确定是否写入 通过 GET 查最新状态 或带 idempotency_key 走幂等（清单 4 敏感操作 + M17 idempotency 范式）
+ - [P1] M18 Redis SET 60s debounce 重复 enqueue 同 target 60s 内忽略不重复跑 worker（M18 §12D 字段⑤ + 批 4 元发现 Redis 60s）
+diff --git a/api/routers/analyze_router.py b/api/routers/analyze_router.py
+index d2a0971..b64707e 100644
+--- a/api/routers/analyze_router.py
++++ b/api/routers/analyze_router.py
+@@ -95,9 +95,20 @@ async def stream_requirement_analysis(
+     - 取消：Request.is_disconnected() 每 yield 后检查；断开时 break + service finally
+       会自动 await stream.aclose() 释放底层流（R1-C P1-01 立修）
+     - 异常：在 SSE 流内 yield event:error 给前端；不抛 HTTP 错（流已 200 OK）
++
++    R-X3 防御（B-P2-cc-B-analyze-rx3-cross-tenant-leak fix）：
++      进入 SSE generator **之前**先校验 node 归属 project (NodeDAO.get_by_id 强制 project_id)。
++      不属于则在 HTTP 200 stream 开始前抛 AnalysisNodeNotFoundError → FastAPI 转 404，
++      而非进入 SSE error event（HTTP 200 + 流式错误）混淆 cross-tenant 探测。
++      design §8 R8-1 三层防御第三层 / M04 dimension_router 同范式（service 层早期校验）。
+     """
+     svc = AnalyzeService()
+ 
++    # 前置 R-X3 cross-tenant 校验（HTTP 200 + SSE 流前必须早期拒绝）
++    target_node = await svc.nodes.dao.get_by_id(db, node_id, access.project.id)
++    if target_node is None:
++        raise AnalysisNodeNotFoundError(node_id=str(node_id))
++
+     async def generator() -> AsyncIterator[bytes]:
+         full_chunks: list[str] = []
+         t_start = time.monotonic()
+diff --git a/api/routers/import_router.py b/api/routers/import_router.py
+index 49498e0..818924c 100644
+--- a/api/routers/import_router.py
++++ b/api/routers/import_router.py
+@@ -380,13 +380,25 @@ async def import_progress_ws(
+     握手鉴权（WS 不走 require_user Depends，因为 WS 端不读 Authorization header）：
+     - Query token 必填 → decode_jwt → user_id
+     - Service 层 check_task_access 校验 task 归属（user + project tenant 双层）
+-    - 任一失败 → close(1008) policy violation
++    - 任一失败 → accept() + close(1008) policy violation（必先 accept 才能发 close frame）
+ 
+     accept 后调 handle_import_progress_ws 主循环（broker subscribe + recv/send 双 task）。
++
++    🔴 RFC 6455 + Starlette 范式（B-P3-M17-ws-invalid-jwt-close-code fix）：
++      websocket.close() 在 accept() 之前调用 → Starlette 自动回 HTTP 403（handshake denial），
++      但 RFC 6455 client（浏览器 / playwright WebSocket API）此场景下表现为 connection failed +
++      closeCode=-1 / 1006 abnormal，**收不到 1008 close code**。
++      要让 client 拿到显式 1008 policy violation close frame，必须先 accept() 再 close(1008)。
++      design line 547 字面 "WS 握手 accept() 前 close(1008)" 在 client 侧不可观测，本 fix 改为
++      accept-then-close 以让鉴权失败的 close code 对 client 可见（attacker 多看到一次升级握手
++      不构成实质泄漏，task_id 已在 URL path 暴露）。
+     """
+ 
+     from api.core.db import SessionLocal
+ 
++    # 必须先 accept 才能发送有 close code 的 close frame（RFC 6455 + Starlette）
++    await websocket.accept()
++
+     # 1) JWT 解码
+     try:
+         claims = decode_jwt(token)
+@@ -418,8 +430,7 @@ async def import_progress_ws(
+         await websocket.close(code=ws_status.WS_1011_INTERNAL_ERROR)
+         return
+ 
+-    # 3) accept + 进入主循环
+-    await websocket.accept()
++    # 3) 进入主循环（已 accept）
+     with contextlib.suppress(WebSocketDisconnect):
+         await handle_import_progress_ws(
+             websocket,
+diff --git a/app/e2e/dogfooding/_cross-cutting-A-auth-network.spec.ts b/app/e2e/dogfooding/_cross-cutting-A-auth-network.spec.ts
+index 993afb6..a2233cb 100644
+--- a/app/e2e/dogfooding/_cross-cutting-A-auth-network.spec.ts
++++ b/app/e2e/dogfooding/_cross-cutting-A-auth-network.spec.ts
+@@ -456,10 +456,11 @@ test.describe("_cross-cutting A — Auth flow + 跨 tab cookie sync + 网络断
+   test("[P1/§3] [DOM-reachable] /auth/login 网络断连前端 fetch reject 显示错误（不阻塞重试 + 无静默吞错）", async ({
+     browser,
+   }) => {
+-    // testpoint §3 L72: M01 /auth/login 网络断连前端 fetch reject 用户重试不锁账号（无 rate limit / M01 §7）
+-    // 验证范式：page.context().setOffline(true) → click 登录 → 期望前端 catch network error + 显示"网络错误"
++    // testpoint §3 L72: M01 /auth/login 网络断连前端 fetch reject 用户重试 — 后端 5-strike lockout 15min
++    // 范式：page.context().setOffline(true) → click 登录 → 期望前端 catch network error + 显示"网络错误"
+     // 注：login/page.tsx L43 字面 "网络错误，请检查后端服务" / spike 坑 2 红线 — 用 getByText 不裸 getByRole(alert)
+-    // "重试不锁账号"验证由 [P1/§3] 设计漂移 test 单独覆盖（按 5-strike 真实行为 / 不在此 mix）
++    // 注：M01 §7 已字面写 5-strike lockout / app 层 IP rate limit 部署前 Nginx slowapi 兜底（design line 770/1042）
++    // 真实 lockout 行为由 [P1/§3] 5-strike 锁账号 test 单独覆盖（断网场景不触发 fail-count 不污染计数）
+     const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+     const page = await ctx.newPage();
+     try {
+@@ -666,11 +667,10 @@ test.describe("_cross-cutting A — Auth flow + 跨 tab cookie sync + 网络断
+   });
+ 
+   // 🔴 必须放 describe 最后一条 — 触发 5-strike 账号锁会污染 e2e admin（后续 spec 跑前需 unlock 脚本）
+-  // 设计 vs 实现漂移：testpoint §3 L72 + M01 §7 字面声称"无 rate limit / 不锁账号"，但实现有
+-  // max_failed_logins=5 + account_lock_minutes=15（api/core/config.py L25-26 + auth_service.py L100-106）
+-  // → 真 bug 入 03-bug-queue.md（B-P2-cross-cutting-A-account-lockout-design-drift）
+-  // 测试目的：验证实际锁定行为存在（捕获真 bug 不修 spec / 设计要么改 docs 要么删 lockout 代码）
+-  test("[P1/§3] [API-via-旁路] 🔴 设计漂移：testpoint 声称无 rate limit 但实现 5-strike 锁账号 (15min)", async ({
++  // 设计 ↔ 实现一致性验证：M01 §7 line 98 字面 "连续 5 次失败密码 → 锁 15min" / app 层 IP rate limit 本期未实装，
++  // 部署前 Nginx limit_req 或 slowapi 兜底（M01 design line 770/1042）。本测试验证 5-strike lockout 真实行为存在。
++  // config: api/core/config.py L25-26 max_failed_logins=5 + account_lock_minutes=15 / auth_service.py L100-106 触发
++  test("[P1/§3] [API-via-旁路] M01 §7 设计实证：5-strike 错密码 → 第 6 次锁账号 423 + locked_until 字段", async ({
+     request,
+   }) => {
+     // 1. 5 次错密码（先验前几次返 401）
+@@ -682,15 +682,14 @@ test.describe("_cross-cutting A — Auth flow + 跨 tab cookie sync + 网络断
+       expect([401, 423]).toContain(wrongRes.status());
+     }
+ 
+-    // 2. 第 6 次（正密码）— 设计期望 200，实现会 423（设计漂移真 bug）
++    // 2. 第 6 次（正密码）— design M01 §7 line 98 字面 lockout 范式：5 次失败后即使正密码也 423
+     const rightRes = await request.post(`${API_BASE}/auth/login`, {
+       data: { email: "e2e@example.com", password: "Password123!" },
+     });
+-    // 真 bug 断言：实现返 423 account_locked 而非 design §7 声称的 200
+-    // 如未来 lockout 被去除（design 修代码方向）→ 这条断言反转为 200
++    // design 实证断言：M01 §7 line 98 + auth_service.py L100-106 5-strike → 423 account_locked
+     expect(
+       rightRes.status(),
+-      `设计 vs 实现：testpoint §3 L72/M01 §7 声称无 rate limit 但实现锁账号 / 实际 ${rightRes.status()}`,
++      `M01 §7 设计实证：5-strike 锁定后第 6 次正密码应 423 account_locked / 实际 ${rightRes.status()}`,
+     ).toBe(423);
+     const body = await rightRes.json();
+     expect(body.code).toMatch(/locked/i);
+diff --git a/app/src/app/projects/[projectId]/analysis/page.tsx b/app/src/app/projects/[projectId]/analysis/page.tsx
+index 81790af..4b6c1c6 100755
+--- a/app/src/app/projects/[projectId]/analysis/page.tsx
++++ b/app/src/app/projects/[projectId]/analysis/page.tsx
+@@ -832,8 +832,10 @@ export default function AnalysisPage() {
+             </div>
+           </ScrollArea>
+ 
+-          {/* Bottom Action Bar */}
+-          {hasResults && allLayersDone && !testPointsResult && (
++          {/* Bottom Action Bar — !error 守护 B-P3-M13-save-btn-shows-on-error fix：
++              error 路径下 layers 仍 isComplete=true（line 346/357 失败回调强制 isComplete），
++              allLayersDone=true 不能作为成功完成的代理；必须显式排除 error state */}
++          {hasResults && allLayersDone && !error && !testPointsResult && (
+             <div className="border-border bg-card flex items-center justify-between border-t p-4">
+               <Button
+                 variant="outline"
+diff --git a/design/02-modules/M17-ai-import/00-design.md b/design/02-modules/M17-ai-import/00-design.md
+index 3c9fb15..41d793e 100644
+--- a/design/02-modules/M17-ai-import/00-design.md
++++ b/design/02-modules/M17-ai-import/00-design.md
+@@ -544,7 +544,7 @@ class ClientCommand(BaseModel):
+ | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
+ | **Router** | 用户对 project ≥editor | `Depends(check_project_access(project_id, role="editor"))` |
+ | **Service** | 任务是否真属于该 project + user | `_check_task_belongs_to_user_and_project(task_id, user_id, project_id)` |
+-| **WebSocket connect**（握手）| 同 Router + 校验 URL path 中 task_id 归属 user | WebSocket 握手 `accept()` 前；不通过则 close(1008) |
++| **WebSocket connect**（握手）| 同 Router + 校验 URL path 中 task_id 归属 user | WebSocket 握手 `accept()` 后立即 close(1008)（B-P3-M17 fix：accept 前 close → Starlette 转 HTTP 403 / client closeCode=1006 不可观测；先 accept 后 close 才能让 RFC 6455 close frame 携带 1008 code 对 client 可见；task_id 已在 URL path 暴露，多一次升级握手不构成实质泄漏） |
+ | **WebSocket 每命令入口**（audit B6 修复）| 客户端 `ClientCommand` 中带的 task_id 必须等于握手时的 task_id | 每个 command 处理函数第一行：`assert command.task_id == self.handshake_task_id else close(1008)`——防同连接 cancel 任意 task |
+ | **Queue 消费者**（关键 - 异步路径）| **payload 校验 + Service 层二次 tenant 检查** | `TaskPayload` 基类强制 user_id + project_id；worker 入口校验 + Service 层 `_check_access` |
+ 
+diff --git a/tests/test_m13_routers.py b/tests/test_m13_routers.py
+index 98dc6da..28f6e24 100644
+--- a/tests/test_m13_routers.py
++++ b/tests/test_m13_routers.py
+@@ -514,11 +514,12 @@ async def test_save_pydantic_text_length_bounds(auth_client, make_user, text_len
+ # ─────────────── R2 立修配套测试（2026-05-08）───────────────
+ 
+ 
+-async def test_stream_requirement_cross_project_node_returns_sse_error_event(
++async def test_stream_requirement_cross_project_node_returns_404(
+     auth_client, make_user, db_session, monkeypatch
+ ):
+-    """R2 P1-2 立修：SSE 端点 cross-project node 应映射 analysis_node_not_found
+-    （元教训 4/6：cross-project node 404 / 3 端点全覆盖；与 save + affected-nodes 对齐）。"""
++    """B-P2-cc-B fix（R-X3 cross-tenant leak）：SSE 端点入流前必须前置校验 node 归属，
++    不属于该 project 时返 HTTP 404 + analysis_node_not_found（不进 SSE 200 + event:error，
++    避免 cross-tenant 探测信道）。design §8 R8-1 三层防御第三层 + M04 dimension_router 同范式。"""
+     user = await make_user()
+     pidA = await _create_project(auth_client, user.id, name="A")
+     pidB = await _create_project(auth_client, user.id, name="B")
+@@ -532,12 +533,10 @@ async def test_stream_requirement_cross_project_node_returns_sse_error_event(
+         json={"requirement_text": "x", "analysis_level": "L1"},
+         headers=_bearer(user.id),
+     )
+-    # SSE generator 已 200 OK，错误以 event:error 报
+-    assert r.status_code == 200
+-    events = _parse_sse_lines(r.text)
+-    err_events = [d for e, d in events if e == "error"]
+-    assert len(err_events) == 1
+-    assert err_events[0]["error_code"] == "analysis_node_not_found"
++    # B-P2-cc-B fix：router 前置 _check_node_belongs_to_project → 抛 404，HTTP 200 + SSE 不再触达
++    assert r.status_code == 404
++    body = r.json()
++    assert body["code"] == "analysis_node_not_found"
+ 
+ 
+ async def test_stream_requirement_complete_metadata_includes_analysis_time_ms(
+diff --git a/tests/test_m17_routers.py b/tests/test_m17_routers.py
+index 88b7efb..3ab3bbb 100644
+--- a/tests/test_m17_routers.py
++++ b/tests/test_m17_routers.py
+@@ -608,24 +608,27 @@ class TestWebSocketAuth:
+             pass
+ 
+     def test_ws_invalid_token_closes_1008(self):
+-        """无效 JWT → decode_jwt 抛 → close 1008 policy violation。"""
++        """无效 JWT → decode_jwt 抛 → accept + close 1008 policy violation。
++
++        B-P3-M17 fix：server 现在先 accept 再 close(1008) 让 client 收到 1008 close frame
++        （accept 前 close → Starlette 回 HTTP 403 / client closeCode=-1 不可观测）。
++        TestClient enter `with` 不抛 / receive_*() 时才抛 WebSocketDisconnect(1008)。
++        """
+         from fastapi.testclient import TestClient
+         from starlette.websockets import WebSocketDisconnect
+ 
+         from api.main import app
+ 
+         client = TestClient(app)
+-        with (
+-            pytest.raises(WebSocketDisconnect) as exc,
+-            client.websocket_connect(
+-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token=bogus"
+-            ),
+-        ):
+-            pass
+-        assert exc.value.code == 1008, f"expected 1008 policy violation, got {exc.value.code}"
++        with client.websocket_connect(
++            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token=bogus"
++        ) as ws:
++            with pytest.raises(WebSocketDisconnect) as exc:
++                ws.receive_text()
++            assert exc.value.code == 1008, f"expected 1008 policy violation, got {exc.value.code}"
+ 
+     def test_ws_refresh_token_type_closes_1008(self):
+-        """access claim type ≠ "access"（refresh / 其他）→ close 1008（防 refresh token 被误用）。"""
++        """access claim type ≠ "access"（refresh / 其他）→ accept + close 1008（防 refresh token 被误用）。"""
+         from fastapi.testclient import TestClient
+         from starlette.websockets import WebSocketDisconnect
+ 
+@@ -634,17 +637,15 @@ class TestWebSocketAuth:
+         client = TestClient(app)
+         # 制造合法但 type='refresh' 的 token
+         bad_type_token = encode_jwt(uuid4(), extra_claims={"type": "refresh"})
+-        with (
+-            pytest.raises(WebSocketDisconnect) as exc,
+-            client.websocket_connect(
+-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={bad_type_token}"
+-            ),
+-        ):
+-            pass
+-        assert exc.value.code == 1008
++        with client.websocket_connect(
++            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={bad_type_token}"
++        ) as ws:
++            with pytest.raises(WebSocketDisconnect) as exc:
++                ws.receive_text()
++            assert exc.value.code == 1008
+ 
+     def test_ws_task_not_owned_closes_1008(self):
+-        """合法 access JWT 但 user 不是 task creator → check_task_access 失败 → 1008。
++        """合法 access JWT 但 user 不是 task creator → check_task_access 失败 → accept + close 1008。
+ 
+         简化路径：用 random task_id（不存在）+ 合法 token → service.check_task_access 抛
+         ImportTaskNotFoundError → 1008 close。
+@@ -656,14 +657,12 @@ class TestWebSocketAuth:
+ 
+         client = TestClient(app)
+         token = encode_jwt(uuid4(), extra_claims={"type": "access"})
+-        with (
+-            pytest.raises(WebSocketDisconnect) as exc,
+-            client.websocket_connect(
+-                f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={token}"
+-            ),
+-        ):
+-            pass
+-        assert exc.value.code == 1008
++        with client.websocket_connect(
++            f"/api/projects/{uuid4()}/imports/{uuid4()}/progress?token={token}"
++        ) as ws:
++            with pytest.raises(WebSocketDisconnect) as exc:
++                ws.receive_text()
++            assert exc.value.code == 1008
+ 
+ 
+ __all__ = [

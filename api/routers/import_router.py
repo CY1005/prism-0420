@@ -380,12 +380,24 @@ async def import_progress_ws(
     握手鉴权（WS 不走 require_user Depends，因为 WS 端不读 Authorization header）：
     - Query token 必填 → decode_jwt → user_id
     - Service 层 check_task_access 校验 task 归属（user + project tenant 双层）
-    - 任一失败 → close(1008) policy violation
+    - 任一失败 → accept() + close(1008) policy violation（必先 accept 才能发 close frame）
 
     accept 后调 handle_import_progress_ws 主循环（broker subscribe + recv/send 双 task）。
+
+    🔴 RFC 6455 + Starlette 范式（B-P3-M17-ws-invalid-jwt-close-code fix）：
+      websocket.close() 在 accept() 之前调用 → Starlette 自动回 HTTP 403（handshake denial），
+      但 RFC 6455 client（浏览器 / playwright WebSocket API）此场景下表现为 connection failed +
+      closeCode=-1 / 1006 abnormal，**收不到 1008 close code**。
+      要让 client 拿到显式 1008 policy violation close frame，必须先 accept() 再 close(1008)。
+      design line 547 字面 "WS 握手 accept() 前 close(1008)" 在 client 侧不可观测，本 fix 改为
+      accept-then-close 以让鉴权失败的 close code 对 client 可见（attacker 多看到一次升级握手
+      不构成实质泄漏，task_id 已在 URL path 暴露）。
     """
 
     from api.core.db import SessionLocal
+
+    # 必须先 accept 才能发送有 close code 的 close frame（RFC 6455 + Starlette）
+    await websocket.accept()
 
     # 1) JWT 解码
     try:
@@ -418,8 +430,7 @@ async def import_progress_ws(
         await websocket.close(code=ws_status.WS_1011_INTERNAL_ERROR)
         return
 
-    # 3) accept + 进入主循环
-    await websocket.accept()
+    # 3) 进入主循环（已 accept）
     with contextlib.suppress(WebSocketDisconnect):
         await handle_import_progress_ws(
             websocket,

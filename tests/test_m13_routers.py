@@ -514,11 +514,12 @@ async def test_save_pydantic_text_length_bounds(auth_client, make_user, text_len
 # ─────────────── R2 立修配套测试（2026-05-08）───────────────
 
 
-async def test_stream_requirement_cross_project_node_returns_sse_error_event(
+async def test_stream_requirement_cross_project_node_returns_404(
     auth_client, make_user, db_session, monkeypatch
 ):
-    """R2 P1-2 立修：SSE 端点 cross-project node 应映射 analysis_node_not_found
-    （元教训 4/6：cross-project node 404 / 3 端点全覆盖；与 save + affected-nodes 对齐）。"""
+    """B-P2-cc-B fix（R-X3 cross-tenant leak）：SSE 端点入流前必须前置校验 node 归属，
+    不属于该 project 时返 HTTP 404 + analysis_node_not_found（不进 SSE 200 + event:error，
+    避免 cross-tenant 探测信道）。design §8 R8-1 三层防御第三层 + M04 dimension_router 同范式。"""
     user = await make_user()
     pidA = await _create_project(auth_client, user.id, name="A")
     pidB = await _create_project(auth_client, user.id, name="B")
@@ -532,12 +533,10 @@ async def test_stream_requirement_cross_project_node_returns_sse_error_event(
         json={"requirement_text": "x", "analysis_level": "L1"},
         headers=_bearer(user.id),
     )
-    # SSE generator 已 200 OK，错误以 event:error 报
-    assert r.status_code == 200
-    events = _parse_sse_lines(r.text)
-    err_events = [d for e, d in events if e == "error"]
-    assert len(err_events) == 1
-    assert err_events[0]["error_code"] == "analysis_node_not_found"
+    # B-P2-cc-B fix：router 前置 _check_node_belongs_to_project → 抛 404，HTTP 200 + SSE 不再触达
+    assert r.status_code == 404
+    body = r.json()
+    assert body["code"] == "analysis_node_not_found"
 
 
 async def test_stream_requirement_complete_metadata_includes_analysis_time_ms(

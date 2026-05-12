@@ -544,7 +544,7 @@ class ClientCommand(BaseModel):
 | **Server Action** | session 是否有效 | `getServerSession()`；无则 401 |
 | **Router** | 用户对 project ≥editor | `Depends(check_project_access(project_id, role="editor"))` |
 | **Service** | 任务是否真属于该 project + user | `_check_task_belongs_to_user_and_project(task_id, user_id, project_id)` |
-| **WebSocket connect**（握手）| 同 Router + 校验 URL path 中 task_id 归属 user | WebSocket 握手 `accept()` 前；不通过则 close(1008) |
+| **WebSocket connect**（握手）| 同 Router + 校验 URL path 中 task_id 归属 user | WebSocket 握手 `accept()` 后立即 close(1008)（B-P3-M17 fix：accept 前 close → Starlette 转 HTTP 403 / client closeCode=1006 不可观测；先 accept 后 close 才能让 RFC 6455 close frame 携带 1008 code 对 client 可见；task_id 已在 URL path 暴露，多一次升级握手不构成实质泄漏） |
 | **WebSocket 每命令入口**（audit B6 修复）| 客户端 `ClientCommand` 中带的 task_id 必须等于握手时的 task_id | 每个 command 处理函数第一行：`assert command.task_id == self.handshake_task_id else close(1008)`——防同连接 cancel 任意 task |
 | **Queue 消费者**（关键 - 异步路径）| **payload 校验 + Service 层二次 tenant 检查** | `TaskPayload` 基类强制 user_id + project_id；worker 入口校验 + Service 层 `_check_access` |
 
