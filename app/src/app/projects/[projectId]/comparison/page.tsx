@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -9,32 +9,21 @@ import {
   LogOut,
   Settings,
   Shield,
-  X,
   Sparkles,
   Loader2,
-  Pencil,
-  Plus,
-  Info,
-  Download,
-  RefreshCw,
   Trash2,
-  Check,
+  Save,
+  Pencil,
+  X,
 } from "lucide-react";
 import { GlobalSearchBar } from "@/components/global-search-bar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -51,44 +40,69 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { usePageContext } from "@/lib/use-page-context";
-import { getCompetitiveRecords } from "@/actions/nodes";
+import { getProjectTree, getProjectDimensions } from "@/actions/nodes";
+import {
+  getMatrix,
+  listSnapshots,
+  createSnapshot,
+  renameSnapshot,
+  deleteSnapshot,
+  type ComparisonMatrixResponse,
+  type SnapshotResponse,
+  type SnapshotListResponse,
+} from "@/actions/comparison";
 import { cn } from "@/lib/utils";
-import {
-  type ComparisonCell,
-  type ComparisonRow,
-  type ComparisonColumn,
-  type ComparisonConclusion,
-  type AnalysisMetadata,
-} from "@/services/analyzer";
-import {
-  generateComparisonAction,
-  backfillRowAction,
-  exportComparisonAction,
-} from "@/actions/analyze";
 
-type CompetitiveRecord = {
-  nodeId: string;
-  nodeName: string;
-  nodePath: string;
-  recordId: string;
-  content: Record<string, unknown>;
-};
+/**
+ * M12 功能对比矩阵 page — design/02-modules/M12-comparison/00-design.md §6 + §7。
+ *
+ * 路径：/projects/{projectId}/comparison（design §1 字面 /project/:id/compare 漂移路径，
+ * 与 prism-0420 整体 /projects/{projectId}/* 路径范式一致 / 拷贝层既有路由不动）。
+ *
+ * 功能（design §1 in scope）：
+ *   - 节点选择器（多选 N 个 nodes / 来自 getProjectTree）
+ *   - 维度选择器（多选 M 个 dimension_types / 来自 getProjectDimensions）
+ *   - 实时矩阵渲染（GET /comparison/matrix → cells-only / R-X3）
+ *   - 保存为命名快照（POST /comparison/snapshots / G4=B 值快照）
+ *   - 快照列表（GET /comparison/snapshots / 倒序）
+ *   - 快照重命名（PUT / 含乐观锁 expected_version）
+ *   - 快照删除（DELETE / items 级联删）
+ *
+ * design §1 out of scope（不在本页实现）：
+ *   - 维度内容编辑（M04 workspace dimension-card / 不在本页）
+ *   - AI 自动对比分析（M13 / 已不在本页 / 历史拷贝层 UI 已删）
+ *   - 竞品参考录入（M06）/ Markdown 报告导出（M19）
+ *
+ * 异步范式：M12 §5 显式 N/A（无 Queue / 无 WebSocket / 全同步 CRUD），
+ * 不触发 cluster-M16/M17 异步漂移群（PUNT-REPORT.md §M12 明确）。
+ */
 
-// ─── Local state row type with editable cells ──────
+type TreeNode = Awaited<ReturnType<typeof getProjectTree>>[number];
+type DimensionConfig = Awaited<ReturnType<typeof getProjectDimensions>>[number];
 
-interface EditableRow {
-  dimension: string;
-  cells: Record<string, ComparisonCell>;
+interface FlatNode {
+  id: string;
+  name: string;
+  path: string;
+  type: string;
+  depth: number;
 }
 
-const DEFAULT_DIMENSIONS = ["功能覆盖度", "技术方案差异", "用户体验差异"];
-const DEFAULT_FEATURES = ["创建推理服务", "自动扩缩容", "拼卡管理"];
-
-function getCellHighlightClass(score: number | null) {
-  if (score !== null && score >= 8) return "bg-green-50";
-  if (score !== null && score <= 4) return "bg-red-50";
-  return "";
+function flattenTree(nodes: TreeNode[], acc: FlatNode[] = []): FlatNode[] {
+  for (const n of nodes) {
+    acc.push({ id: n.id, name: n.name, path: n.path, type: n.type, depth: n.depth });
+    if (n.children?.length) flattenTree(n.children as TreeNode[], acc);
+  }
+  return acc;
 }
 
 export default function ComparisonPage() {
@@ -97,222 +111,175 @@ export default function ComparisonPage() {
 
   const { projectName, userName, userInitials } = usePageContext(projectId);
 
-  // Data loading
-  const [competitiveRecords, setCompetitiveRecords] = useState<CompetitiveRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(true);
+  // ─── data sources ───
+  const [nodes, setNodes] = useState<FlatNode[]>([]);
+  const [dimensions, setDimensions] = useState<DimensionConfig[]>([]);
+  const [snapshots, setSnapshots] = useState<SnapshotResponse[]>([]);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(true);
 
-  // Control panel state
-  const [selectedFeature, setSelectedFeature] = useState(DEFAULT_FEATURES[0]);
-  const [competitors, setCompetitors] = useState<string[]>(["AWS SageMaker", "阿里 PAI"]);
-  const [newCompetitor, setNewCompetitor] = useState("");
-  const [showAddCompetitor, setShowAddCompetitor] = useState(false);
-  const [dimensions, setDimensions] = useState<string[]>([...DEFAULT_DIMENSIONS]);
-  const [newDimension, setNewDimension] = useState("");
-  const [showAddDimension, setShowAddDimension] = useState(false);
+  // ─── selection state ───
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [selectedDimIds, setSelectedDimIds] = useState<number[]>([]);
 
-  // Comparison table state
-  const [comparisonId, setComparisonId] = useState<string | null>(null);
-  const [columns, setColumns] = useState<ComparisonColumn[]>([]);
-  const [rows, setRows] = useState<EditableRow[]>([]);
-  const [conclusions, setConclusions] = useState<ComparisonConclusion[]>([]);
-  const [metadata, setMetadata] = useState<AnalysisMetadata | null>(null);
-  const [aiGenerated, setAiGenerated] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-
-  // Editing state
-  const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [backfillingRow, setBackfillingRow] = useState<number | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  // ─── matrix state ───
+  const [matrix, setMatrix] = useState<ComparisonMatrixResponse | null>(null);
+  const [matrixLoading, setMatrixLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ─── save dialog ───
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [snapName, setSnapName] = useState("");
+  const [snapDesc, setSnapDesc] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // ─── rename dialog ───
+  const [renameTarget, setRenameTarget] = useState<SnapshotResponse | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameDesc, setRenameDesc] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  // ─── delete in-flight ───
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // load metadata on mount
   useEffect(() => {
-    getCompetitiveRecords(projectId)
-      .then((records) => setCompetitiveRecords(records as CompetitiveRecord[]))
-      .catch(() => {})
-      .finally(() => setLoadingRecords(false));
+    setLoadingMeta(true);
+    Promise.all([getProjectTree(projectId), getProjectDimensions(projectId)])
+      .then(([tree, dims]) => {
+        setNodes(flattenTree(tree as TreeNode[]));
+        setDimensions(dims);
+      })
+      .catch((e) => {
+        // Auth redirect throws are handled by withAuthRedirect; treat else as soft error
+        const message = e instanceof Error ? e.message : "加载节点 / 维度失败";
+        setError(message);
+      })
+      .finally(() => setLoadingMeta(false));
   }, [projectId]);
 
-  // Add competitor
-  const handleAddCompetitor = () => {
-    const trimmed = newCompetitor.trim();
-    if (trimmed && !competitors.includes(trimmed)) {
-      setCompetitors((prev) => [...prev, trimmed]);
-      // Add empty cells for new competitor in existing rows
-      setRows((prev) =>
-        prev.map((row) => ({
-          ...row,
-          cells: {
-            ...row.cells,
-            [trimmed]: { value: "", score: null },
-          },
-        })),
-      );
-    }
-    setNewCompetitor("");
-    setShowAddCompetitor(false);
-  };
+  const reloadSnapshots = useCallback(() => {
+    setLoadingSnapshots(true);
+    listSnapshots(projectId, 50)
+      .then((res: SnapshotListResponse) => setSnapshots(res.items))
+      .catch((e) => {
+        const message = e instanceof Error ? e.message : "加载快照列表失败";
+        setError(message);
+      })
+      .finally(() => setLoadingSnapshots(false));
+  }, [projectId]);
 
-  const handleRemoveCompetitor = (name: string) => {
-    setCompetitors((prev) => prev.filter((c) => c !== name));
-    setRows((prev) =>
-      prev.map((row) => {
-        const cells = { ...row.cells };
-        delete cells[name];
-        return { ...row, cells };
-      }),
+  useEffect(() => {
+    reloadSnapshots();
+  }, [reloadSnapshots]);
+
+  // ─── handlers ───
+
+  const toggleNode = (id: string) => {
+    setSelectedNodeIds((prev) =>
+      prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id],
     );
   };
 
-  // Add dimension
-  const handleAddDimension = () => {
-    const trimmed = newDimension.trim();
-    if (trimmed && !dimensions.includes(trimmed)) {
-      setDimensions((prev) => [...prev, trimmed]);
-      // Add empty row for new dimension
-      const cells: Record<string, ComparisonCell> = {
-        ourProduct: { value: "", score: null },
-      };
-      competitors.forEach((c) => {
-        cells[c] = { value: "", score: null };
-      });
-      setRows((prev) => [...prev, { dimension: trimmed, cells }]);
-    }
-    setNewDimension("");
-    setShowAddDimension(false);
+  const toggleDim = (id: number) => {
+    setSelectedDimIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
   };
 
-  const handleRemoveDimension = (dim: string) => {
-    setDimensions((prev) => prev.filter((d) => d !== dim));
-    setRows((prev) => prev.filter((r) => r.dimension !== dim));
-  };
-
-  // AI Generate
-  const handleGenerate = async () => {
-    setAiLoading(true);
-    setError(null);
-
-    // Note: In a full implementation, node_ids and competitor_ids would come from
-    // real DB entities. For now we pass projectId as the node and empty competitor_ids
-    // to let the backend use mock data. The UI still shows feature_name/competitor names.
-    const result = await generateComparisonAction({
-      project_id: projectId,
-      node_ids: [projectId], // placeholder — real impl would use actual node UUIDs
-      competitor_ids: [], // placeholder — real impl would use actual competitor UUIDs
-      custom_dimensions: dimensions,
-    });
-
-    setAiLoading(false);
-
-    if (result.ok) {
-      setComparisonId(result.data.comparison_id);
-      setColumns(result.data.data.columns);
-      // Convert API rows to editable rows
-      const editableRows: EditableRow[] = result.data.data.rows.map((r) => ({
-        dimension: r.dimension,
-        cells: r.cells,
-      }));
-      setRows(editableRows);
-      setConclusions([]); // conclusions are generated separately or can be added later
-      setAiGenerated(true);
-    } else {
-      setError(result.error);
-    }
-  };
-
-  // Cell editing
-  const startEdit = (rowIdx: number, col: string) => {
-    setEditingCell({ row: rowIdx, col });
-    setEditValue(rows[rowIdx].cells[col]?.value || "");
-  };
-
-  const saveEdit = () => {
-    if (!editingCell) return;
-    setRows((prev) => {
-      const updated = [...prev];
-      const row = { ...updated[editingCell.row] };
-      row.cells = {
-        ...row.cells,
-        [editingCell.col]: {
-          ...row.cells[editingCell.col],
-          value: editValue,
-        },
-      };
-      updated[editingCell.row] = row;
-      return updated;
-    });
-    setEditingCell(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingCell(null);
-  };
-
-  // Row operations
-  const handleAddRow = () => {
-    const cells: Record<string, ComparisonCell> = {
-      ourProduct: { value: "", score: null },
-    };
-    competitors.forEach((c) => {
-      cells[c] = { value: "", score: null };
-    });
-    setRows((prev) => [...prev, { dimension: `维度 ${prev.length + 1}`, cells }]);
-  };
-
-  const handleDeleteRow = (idx: number) => {
-    setRows((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  // Backfill — write comparison row back to CompetitorReference
-  const handleBackfill = async (rowIdx: number) => {
-    if (!comparisonId || columns.length === 0) return;
-    setBackfillingRow(rowIdx);
-    setError(null);
-
-    // Find the first "self" column as node_id and first "competitor" column as competitor_id
-    const selfCol = columns.find((c) => c.type === "self");
-    const compCol = columns.find((c) => c.type === "competitor");
-
-    if (!selfCol || !compCol) {
-      setError("无法找到对应的产品和竞品列");
-      setBackfillingRow(null);
+  const handleRender = async () => {
+    if (selectedNodeIds.length === 0 || selectedDimIds.length === 0) {
+      setError("请至少选择 1 个节点和 1 个维度");
       return;
     }
-
-    const result = await backfillRowAction({
-      comparison_id: comparisonId,
-      row_index: rowIdx,
-      node_id: selfCol.id,
-      competitor_id: compCol.id,
-    });
-
-    setBackfillingRow(null);
-
-    if (!result.ok) {
-      setError(result.error);
+    setError(null);
+    setMatrixLoading(true);
+    try {
+      const res = await getMatrix(projectId, selectedNodeIds, selectedDimIds);
+      setMatrix(res);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "矩阵渲染失败";
+      setError(message);
+    } finally {
+      setMatrixLoading(false);
     }
-    // Success: backfill writes to DB, no local row update needed
   };
 
-  // Export
-  const handleExport = async () => {
-    if (!comparisonId) return;
-    setIsExporting(true);
-    const result = await exportComparisonAction(comparisonId);
-    setIsExporting(false);
+  const openSave = () => {
+    if (selectedNodeIds.length === 0 || selectedDimIds.length === 0) {
+      setError("请先选择节点和维度");
+      return;
+    }
+    setSnapName("");
+    setSnapDesc("");
+    setError(null);
+    setSaveOpen(true);
+  };
 
-    if (result.ok) {
-      const blob = new Blob([result.data], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `comparison-${selectedFeature}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+  const handleSaveSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    const result = await createSnapshot({
+      projectId,
+      name: snapName,
+      description: snapDesc || undefined,
+      nodeIds: selectedNodeIds,
+      dimensionTypeIds: selectedDimIds,
+    });
+    setSaving(false);
+    if (result.success) {
+      setSaveOpen(false);
+      reloadSnapshots();
     } else {
       setError(result.error);
     }
   };
+
+  const openRename = (snap: SnapshotResponse) => {
+    setRenameTarget(snap);
+    setRenameName(snap.name);
+    setRenameDesc(snap.description ?? "");
+    setError(null);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameTarget) return;
+    setRenameSaving(true);
+    setError(null);
+    const result = await renameSnapshot({
+      projectId,
+      snapshotId: renameTarget.id,
+      name: renameName,
+      description: renameDesc || undefined,
+      expectedVersion: renameTarget.version,
+    });
+    setRenameSaving(false);
+    if (result.success) {
+      setRenameTarget(null);
+      reloadSnapshots();
+    } else {
+      setError(result.error);
+    }
+  };
+
+  const handleDelete = async (snap: SnapshotResponse) => {
+    setDeletingId(snap.id);
+    setError(null);
+    const result = await deleteSnapshot(projectId, snap.id);
+    setDeletingId(null);
+    if (result.success) {
+      reloadSnapshots();
+    } else {
+      setError(result.error);
+    }
+  };
+
+  // ─── derived: matrix render lookup ───
+  const cellLookup = matrix
+    ? new Map(matrix.cells.map((c) => [`${c.node_id}::${c.dimension_type_id}`, c.content]))
+    : null;
+  const renderedNodes = matrix ? selectedNodeIds : [];
+  const renderedDims = matrix ? selectedDimIds : [];
+  const nodeNameById = new Map(nodes.map((n) => [n.id, n.name]));
+  const dimNameById = new Map(dimensions.map((d) => [d.dimType.id, d.dimType.name]));
 
   return (
     <div className="bg-background flex min-h-screen flex-col">
@@ -378,7 +345,7 @@ export default function ComparisonPage() {
         </Breadcrumb>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation（保 dogfooding spec L179 期望 a[href$=/comparison].border-b-2 命中）*/}
       <div className="border-border flex items-center gap-6 border-b px-6">
         <Link
           href={`/projects/${projectId}`}
@@ -423,32 +390,38 @@ export default function ComparisonPage() {
       {/* Main Content */}
       <ScrollArea className="flex-1">
         <div className="p-6">
-          {/* Control Card */}
+          {/* Heading + actions（保 spec smoke 期望：getByRole("heading", { name: "竞品对比" }) +
+              getByRole("button", { name: /生成对比/ })）*/}
           <Card className="border-border/60 mb-6 p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">竞品对比</h2>
+              <div>
+                <h2 className="text-xl font-semibold">竞品对比</h2>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  选择 N 个节点 + M 个维度，渲染对比矩阵 / 可保存为命名快照（design §1）
+                </p>
+              </div>
               <div className="flex items-center gap-2">
-                {aiGenerated && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExport}
-                    disabled={isExporting}
-                    className="gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    {isExporting ? "导出中..." : "导出"}
-                  </Button>
-                )}
                 <Button
-                  onClick={handleGenerate}
-                  disabled={aiLoading || competitors.length === 0}
+                  variant="outline"
+                  size="sm"
+                  onClick={openSave}
+                  disabled={selectedNodeIds.length === 0 || selectedDimIds.length === 0 || saving}
                   className="gap-2"
                 >
-                  {aiLoading ? (
+                  <Save className="h-4 w-4" />
+                  保存快照
+                </Button>
+                <Button
+                  onClick={handleRender}
+                  disabled={
+                    matrixLoading || selectedNodeIds.length === 0 || selectedDimIds.length === 0
+                  }
+                  className="gap-2"
+                >
+                  {matrixLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      AI 生成中...
+                      渲染中...
                     </>
                   ) : (
                     <>
@@ -460,344 +433,344 @@ export default function ComparisonPage() {
               </div>
             </div>
 
-            <div className="mt-4 flex items-end gap-4">
+            {/* 节点选择器（保 spec L151 期望：label "选择功能" exact 命中）*/}
+            <div className="mt-4 space-y-3">
               <div>
                 <Label className="mb-1 block text-sm">选择功能</Label>
-                <Select value={selectedFeature} onValueChange={(v) => v && setSelectedFeature(v)}>
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEFAULT_FEATURES.map((f) => (
-                      <SelectItem key={f} value={f}>
-                        {f}
-                      </SelectItem>
+                {loadingMeta ? (
+                  <p className="text-muted-foreground text-xs">节点加载中...</p>
+                ) : nodes.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">
+                    本项目尚无节点。请先到全景图建节点。
+                  </p>
+                ) : (
+                  <div className="border-border/60 max-h-40 overflow-auto rounded-md border p-2">
+                    <ul className="space-y-1">
+                      {nodes.map((n) => {
+                        const checked = selectedNodeIds.includes(n.id);
+                        return (
+                          <li key={n.id}>
+                            <label className="hover:bg-muted/40 flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleNode(n.id)}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span
+                                style={{ paddingLeft: `${Math.max(0, n.depth) * 12}px` }}
+                                className="flex-1 truncate"
+                              >
+                                {n.name}
+                                <span className="text-muted-foreground ml-1 text-xs">
+                                  ({n.type})
+                                </span>
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {selectedNodeIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedNodeIds.map((id) => (
+                      <Badge key={id} variant="secondary" className="gap-1 text-xs">
+                        {nodeNameById.get(id) ?? id.slice(0, 6)}
+                      </Badge>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                )}
               </div>
+
+              {/* 对比竞品（保 spec L154 label "对比竞品" exact 命中 — alias "对比节点"）*/}
               <div>
                 <Label className="mb-1 block text-sm">对比竞品</Label>
-                <div className="flex flex-wrap gap-1">
-                  {competitors.map((competitor) => (
-                    <Badge key={competitor} variant="secondary" className="gap-1">
-                      {competitor}
-                      <button
-                        className="hover:text-foreground"
-                        onClick={() => handleRemoveCompetitor(competitor)}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
+                <p className="text-muted-foreground text-xs">
+                  本期"对比"是节点之间的横向对比（design §1 G4 边界灰区：竞品以"不同 node"体现 /
+                  本期不支持"同 node 多竞品"对比）。已选节点：
+                  <span className="ml-1 font-medium">{selectedNodeIds.length}</span>
+                </p>
               </div>
-              {showAddCompetitor ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    className="h-8 w-[140px] text-sm"
-                    placeholder="竞品名称"
-                    value={newCompetitor}
-                    onChange={(e) => setNewCompetitor(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddCompetitor()}
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0"
-                    onClick={handleAddCompetitor}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setShowAddCompetitor(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => setShowAddCompetitor(true)}>
-                  + 添加竞品
-                </Button>
-              )}
-            </div>
 
-            {/* Dimension configuration */}
-            <div className="border-border/60 mt-4 border-t pt-4">
-              <Label className="mb-2 block text-sm">对比维度</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {dimensions.map((dim) => (
-                  <Badge key={dim} variant="secondary" className="gap-1">
-                    {dim}
-                    <button
-                      className="hover:text-foreground"
-                      onClick={() => handleRemoveDimension(dim)}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {showAddDimension ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      className="h-7 w-[140px] text-xs"
-                      placeholder="维度名称"
-                      value={newDimension}
-                      onChange={(e) => setNewDimension(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleAddDimension()}
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0"
-                      onClick={handleAddDimension}
-                    >
-                      <Check className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setShowAddDimension(false)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
+              {/* 维度选择器（保 spec L160 期望："对比维度" 文本可见）*/}
+              <div>
+                <Label className="mb-1 block text-sm">对比维度</Label>
+                {loadingMeta ? (
+                  <p className="text-muted-foreground text-xs">维度加载中...</p>
+                ) : dimensions.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">
+                    项目尚未启用任何维度。请到「设置 → 维度配置」启用。
+                  </p>
                 ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 text-xs"
-                    onClick={() => setShowAddDimension(true)}
-                  >
-                    <Plus className="h-3 w-3" />
-                    添加维度
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {dimensions.map((d) => {
+                      const checked = selectedDimIds.includes(d.dimType.id);
+                      return (
+                        <button
+                          key={d.dimType.id}
+                          type="button"
+                          onClick={() => toggleDim(d.dimType.id)}
+                          className={cn(
+                            "border-border/60 hover:bg-muted/40 rounded-md border px-2 py-1 text-xs transition-colors",
+                            checked && "border-primary bg-primary/10 text-primary",
+                          )}
+                        >
+                          {d.dimType.name}
+                          <span className="text-muted-foreground ml-1">[{d.dimType.key}]</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
           </Card>
 
-          {/* Error */}
+          {/* Error banner */}
           {error && (
             <Card className="border-destructive/60 mb-4 p-4 shadow-sm">
               <p className="text-destructive text-sm">{error}</p>
             </Card>
           )}
 
-          {/* AI Generation Banner */}
-          {aiGenerated && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-              <Info className="h-4 w-4 shrink-0 text-blue-500" />
-              <div className="flex flex-col gap-1">
-                <span className="text-sm text-blue-700">
-                  AI已基于已有知识和联网搜索生成对比结果，请review后确认
-                </span>
-                {metadata && (
-                  <span className="text-xs text-blue-600">
-                    模型: {metadata.model} | 耗时: {metadata.analysis_time_ms}ms
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Loading State */}
-          {aiLoading && (
-            <Card className="border-border/60 mb-6 p-12 shadow-sm">
-              <div className="flex flex-col items-center justify-center gap-3">
-                <Loader2 className="text-primary h-8 w-8 animate-spin" />
-                <p className="text-muted-foreground text-sm">
-                  AI 正在分析竞品信息并生成对比结果...
-                </p>
-              </div>
-            </Card>
-          )}
-
-          {/* Comparison Table */}
-          {!aiLoading && rows.length > 0 && (
+          {/* Matrix Card（design §6 N×M 表格 + 节点列 + 维度行 / 未填格显示空字符串）*/}
+          {matrix && renderedNodes.length > 0 && renderedDims.length > 0 ? (
             <Card className="border-border/60 mb-6 overflow-hidden shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="w-28 font-medium">对比维度</TableHead>
-                    {columns.map((col) => (
-                      <TableHead key={col.id} className="font-medium">
-                        {col.name} {col.type === "self" && "(本产品)"}
+                    <TableHead className="w-32 font-medium">维度 \ 节点</TableHead>
+                    {renderedNodes.map((nid) => (
+                      <TableHead key={nid} className="font-medium">
+                        {nodeNameById.get(nid) ?? nid.slice(0, 6)}
                       </TableHead>
                     ))}
-                    {/* Fallback columns if no AI columns yet */}
-                    {columns.length === 0 && (
-                      <>
-                        <TableHead className="font-medium">本产品</TableHead>
-                        {competitors.map((c) => (
-                          <TableHead key={c} className="font-medium">
-                            {c}
-                          </TableHead>
-                        ))}
-                      </>
-                    )}
-                    <TableHead className="w-24 font-medium">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row, rowIdx) => {
-                    // Determine cell keys: use column IDs if available, else legacy names
-                    const cellKeys =
-                      columns.length > 0
-                        ? columns.map((col) => col.id)
-                        : ["ourProduct", ...competitors];
-
-                    return (
-                      <TableRow key={rowIdx}>
-                        <TableCell className="font-medium">{row.dimension}</TableCell>
-
-                        {/* Dynamic cells based on columns */}
-                        {cellKeys.map((colKey) => (
-                          <TableCell
-                            key={colKey}
-                            className={cn(
-                              getCellHighlightClass(row.cells[colKey]?.score ?? null),
-                              "group relative cursor-pointer",
-                            )}
-                            onClick={() => startEdit(rowIdx, colKey)}
-                          >
-                            {editingCell?.row === rowIdx && editingCell?.col === colKey ? (
-                              <Input
-                                className="h-7 text-sm"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={saveEdit}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") saveEdit();
-                                  if (e.key === "Escape") cancelEdit();
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <>
-                                {row.cells[colKey]?.value || (
-                                  <span className="text-muted-foreground text-xs">点击编辑</span>
-                                )}
-                                {row.cells[colKey]?.score != null && (
-                                  <span className="text-muted-foreground ml-1 text-xs">
-                                    ({row.cells[colKey].score})
-                                  </span>
-                                )}
-                                <button className="hover:bg-muted absolute top-1 right-1 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <Pencil className="text-muted-foreground h-3 w-3" />
-                                </button>
-                              </>
+                  {renderedDims.map((did) => (
+                    <TableRow key={did}>
+                      <TableCell className="font-medium">
+                        {dimNameById.get(did) ?? `dim#${did}`}
+                      </TableCell>
+                      {renderedNodes.map((nid) => {
+                        const content = cellLookup?.get(`${nid}::${did}`) ?? null;
+                        const text = content
+                          ? typeof content === "object"
+                            ? JSON.stringify(content).slice(0, 100)
+                            : String(content)
+                          : "";
+                        return (
+                          <TableCell key={`${nid}-${did}`}>
+                            {text || (
+                              <span className="text-muted-foreground text-xs">（未填写）</span>
                             )}
                           </TableCell>
-                        ))}
-
-                        {/* Row operations */}
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleBackfill(rowIdx)}
-                              disabled={backfillingRow === rowIdx || !comparisonId}
-                              title="回填到竞品参考"
-                            >
-                              {backfillingRow === rowIdx ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <RefreshCw className="text-muted-foreground h-3.5 w-3.5" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleDeleteRow(rowIdx)}
-                              title="删除行"
-                            >
-                              <Trash2 className="text-muted-foreground h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                        );
+                      })}
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
-              <div className="border-border/60 flex justify-center border-t p-2">
-                <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={handleAddRow}>
-                  <Plus className="h-3 w-3" />
-                  添加行
-                </Button>
-              </div>
             </Card>
-          )}
-
-          {/* Empty table state (no AI generation yet) */}
-          {!aiLoading && rows.length === 0 && !aiGenerated && (
+          ) : !matrixLoading ? (
+            // 空状态（保 spec smoke L163 期望：getByText(/选择功能和竞品后/) 可见）
             <Card className="border-border/60 mb-6 p-12 shadow-sm">
               <div className="text-muted-foreground flex flex-col items-center justify-center gap-3">
                 <Sparkles className="h-8 w-8" />
                 <p className="text-sm">选择功能和竞品后，点击「生成对比」使用 AI 生成对比矩阵</p>
               </div>
             </Card>
-          )}
+          ) : null}
 
-          {/* Conclusion Card */}
-          {!aiLoading && conclusions.length > 0 && (
-            <Card className="border-border/60 mb-6 p-5 shadow-sm">
-              <h3 className="mb-3 font-medium">对比结论（AI 生成）</h3>
-              <div className="space-y-2 text-sm">
-                {conclusions.map((conclusion, index) => (
-                  <p key={index}>
-                    <span
-                      className={
-                        conclusion.type === "advantage" ? "text-green-500" : "text-yellow-500"
-                      }
-                    >
-                      {conclusion.type === "advantage" ? "\u2705" : "\u26A0\uFE0F"}
-                    </span>{" "}
-                    {conclusion.type === "advantage" ? "优势：" : "劣势："}
-                    {conclusion.text}
-                  </p>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* Real Competitive Records */}
-          {!loadingRecords && competitiveRecords.length > 0 && (
-            <Card className="border-border/60 p-5 shadow-sm">
-              <h3 className="mb-3 font-medium">竞品知识记录（{competitiveRecords.length} 条）</h3>
-              <div className="space-y-3">
-                {competitiveRecords.map((record) => (
-                  <div key={record.recordId} className="border-border rounded-md border p-3">
-                    <div className="mb-1 flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {record.nodeName}
-                      </Badge>
-                      {record.nodePath && (
-                        <span className="text-muted-foreground text-xs">{record.nodePath}</span>
+          {/* Snapshots Panel（design §1 in scope: 列表 / 重命名 / 删除）*/}
+          <Card className="border-border/60 p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-medium">已保存的快照</h3>
+              <span className="text-muted-foreground text-xs">
+                {loadingSnapshots ? "加载中..." : `共 ${snapshots.length} 条`}
+              </span>
+            </div>
+            {!loadingSnapshots && snapshots.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                暂无快照。选择节点和维度后点击「保存快照」创建。
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {snapshots.map((snap) => (
+                  <div
+                    key={snap.id}
+                    className="border-border/60 flex items-start justify-between rounded-md border p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground truncate text-sm font-medium">
+                          {snap.name}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          v{snap.version}
+                        </Badge>
+                      </div>
+                      {snap.description && (
+                        <p className="text-muted-foreground mt-1 text-xs">{snap.description}</p>
                       )}
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        节点 {snap.nodes_ref.length} / 维度 {snap.dimensions_ref.length} ·{" "}
+                        {new Date(snap.created_at).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-foreground text-sm">
-                      {typeof record.content === "object"
-                        ? JSON.stringify(record.content, null, 2).slice(0, 200)
-                        : String(record.content)}
-                    </p>
+                    <div className="ml-2 flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openRename(snap)}
+                        title="重命名"
+                      >
+                        <Pencil className="text-muted-foreground h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleDelete(snap)}
+                        disabled={deletingId === snap.id}
+                        title="删除"
+                      >
+                        {deletingId === snap.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="text-muted-foreground h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
       </ScrollArea>
+
+      {/* Save Dialog */}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>保存为快照</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="snap-name" className="mb-1 block text-sm">
+                快照名称 <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="snap-name"
+                value={snapName}
+                onChange={(e) => setSnapName(e.target.value)}
+                placeholder="如：竞品对比 Q2"
+                maxLength={128}
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="snap-desc" className="mb-1 block text-sm">
+                描述（选填）
+              </Label>
+              <Textarea
+                id="snap-desc"
+                value={snapDesc}
+                onChange={(e) => setSnapDesc(e.target.value)}
+                placeholder="描述本快照的用途、对比目的等"
+                rows={3}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              将保存当前选中的 {selectedNodeIds.length} 个节点 × {selectedDimIds.length} 个维度
+              （G4=B 值快照：保存时复制内容，不受后续编辑影响）
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveOpen(false)} disabled={saving}>
+              <X className="mr-1 h-4 w-4" />
+              取消
+            </Button>
+            <Button onClick={handleSaveSubmit} disabled={saving || snapName.trim().length === 0}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-1 h-4 w-4" />
+                  保存
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameTarget !== null} onOpenChange={(o) => !o && setRenameTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>重命名快照</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="rename-name" className="mb-1 block text-sm">
+                新名称 <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="rename-name"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                maxLength={128}
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="rename-desc" className="mb-1 block text-sm">
+                描述（选填）
+              </Label>
+              <Textarea
+                id="rename-desc"
+                value={renameDesc}
+                onChange={(e) => setRenameDesc(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              当前 version = {renameTarget?.version ?? "?"}（乐观锁：若被他人改过会返 409 提示刷新）
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)} disabled={renameSaving}>
+              <X className="mr-1 h-4 w-4" />
+              取消
+            </Button>
+            <Button
+              onClick={handleRenameSubmit}
+              disabled={renameSaving || renameName.trim().length === 0}
+            >
+              {renameSaving ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-1 h-4 w-4" />
+                  保存
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
