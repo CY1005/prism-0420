@@ -1,9 +1,10 @@
 ---
-last_session: 2026-05-13 (P5b final close / STAR 报告 + Phase 3 v0.4 + bug-queue final close / sprint 全闭环)
-phase: P1 ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE
-sub_task: 全 phase 闭环 / 05-final-report.md 写完 / phase3-data-baseline.md v0.4 段更新 / 03-bug-queue.md final verdict / progress.md final close
-cost_cumulative: P1 ~$21 + audit/spike $4 + P4 cluster-1+2 ~$5 + batch 2-5 ~$15 + close + P2-close ~$2 + P3 $2 + cluster-3 主 agent ~$3 + cluster-4+5+6 ~$8 + P5a ~$2 + P5b ~$3-5 = **~$65-67 (final)**
-status: COMPLETE / dogfooding sprint 全闭环 / Phase 3 v0.4 已落 / Phase 2.x M-frontend 推下 sprint
+last_session: 2026-05-15 (P1 review 闸门 5/15 抽样补齐 / sprint 闭环状态确认)
+last_sprint_close: 2026-05-13 (P5b final close / STAR 报告 + Phase 3 v0.4 + bug-queue final close / sprint 全闭环)
+phase: P1 ✅ + review ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE
+sub_task: 全 phase 闭环 / 05-final-report.md 写完 / phase3-data-baseline.md v0.4 段更新 / 03-bug-queue.md final verdict / progress.md final close + 5/15 P1 review 补齐记录
+cost_cumulative: P1 ~$21 + audit/spike $4 + P4 cluster-1+2 ~$5 + batch 2-5 ~$15 + close + P2-close ~$2 + P3 $2 + cluster-3 主 agent ~$3 + cluster-4+5+6 ~$8 + P5a ~$2 + P5b ~$3-5 + 5/15 review ~$1 = **~$66-68 (final)**
+status: COMPLETE / dogfooding sprint 全闭环 / P1 闸门 review 5/15 PASS 补齐 / Phase 3 v0.4 已落 / Phase 2.x M-frontend 推下 sprint
 ---
 
 # Dogfooding Sprint Progress
@@ -245,6 +246,42 @@ status: COMPLETE / dogfooding sprint 全闭环 / Phase 3 v0.4 已落 / Phase 2.x
 **STAR 报告**：05-final-report.md（简历级素材 / 跳槽 PRISM 代表作 v0.4）
 **总 cost**：~$80-85（2 天 / 5-phase 全跑 / 多 agent 协作）
 **下一 sprint**：Phase 2.x M-frontend 实装（M14/M12/M16/M17/M13 / Opus × 5 / cap $32-48）
+
+---
+
+## P1 review 闸门 5/15 补齐记录
+
+**Why**: plan §5 P1 checkpoint 闸门「CY review 抽样」5/12-5/13 sprint 期被 P2 hybrid 强推跳过；5/15 CY 主动问起 + 选「完整版抽样」补齐闸门，与 5/13 sprint COMPLETE 状态对齐。
+
+**抽样范围**：4 模块 / 602 testpoint / **26% 覆盖率**
+- M02 project (130, A-, 15 视角)
+- M11 cold-start (91, A-, 14 视角 / R-X1 首例)
+- M18 semantic-search (143, A, 13 视角 / 最复杂)
+- _cross-cutting (238, A, 18 视角 / 22 元发现真转化)
+
+**Verdict**: **PASS** — 0 HIGH / 1 MEDIUM / 4 LOW / 20/20 可执行性抽样直接转 spec
+
+**Finding 明细**：
+| 级别 | 文件:行 | 描述 | 处置 |
+|------|---------|------|------|
+| MEDIUM | M18-semantic-search.md:56+127 | ck_embeddings_dim_column_consistency 同 CHECK 两条不同角度，P2 写 spec 时 merge 成 1 个测试避免双跑 | 下 sprint M-frontend 实装期顺手处理 |
+| LOW | M02-project.md:130 | viewer 编辑按钮「置灰 / 隐藏」UI 行为模糊 | P2 写 spec 时选一个 |
+| LOW | M02-project.md:134 | API Key `type=password` 也接受 mask，可补 mask 范式 | 可不补 |
+| LOW | M11-cold-start.md:59 | SQL 注入 P1 只检查「不执行 SQL」，建议加 nodes 表内容验证 | 可补 |
+| LOW | _cross-cutting.md:314 | M03 path 物化路径压缩视角数 — 元观察非 testpoint | 挪到 design audit 备注 |
+
+**声明真实性核对**（progress.md 各项声明 vs 抽样验证）:
+- ✅ 21 testpoint 文件齐全 / 2327 总数符合
+- ✅ 风格红线全过（抽 50+ 条 0 违反）
+- ✅ H3 视角清单达标（边缘 ≥10 / 主流 ≥12 / escalation ≥15）
+- ✅ 22 元发现转化（cc 文件抽 12 项核对全在相应 § 中）
+- ✅ 风险点 Top 5 对照 design 可验证
+
+**Sprint 闭环状态最终对齐**：dogfooding sprint **真闭环**（P3 488/505 → P5a 502/505 → P5b 报告 / Phase 3 v0.4 已落）+ P1 闸门 review 补齐 ✓ → 全部 5 phase 都过 / 0 遗留闸门。
+
+**对 CURRENT.md 影响**：CURRENT v1.4「等 review BLOCKED」是脏数据 → CURRENT v1.5 校准为「P1 review 5/15 补齐 / 下 sprint = M-frontend 实装」。
+
+**cost**：~$1（4 文件直读 + 抽样分析，无 subagent）
 
 ---
 
