@@ -3,7 +3,7 @@ title: prism-0420 跨 sprint Punt 池总表
 status: living-doc
 owner: CY
 created: 2026-05-08（M15 sprint 收官后建立）
-last_updated: 2026-05-12 (**Phase 2.3 cleanup 全完** + **dogfooding P1 testpoint 全闸门** — 元发现 #9 新立：baseline-patch 时序契约累计 6 处升 P1 高耦合触发点)
+last_updated: 2026-05-15 (**Phase 2.x M-frontend cluster-M17 + cluster-M14 闭环** — 元发现 #11 新立：Phase 2.2 拷贝层 vs design §6 范式漂移群 / feed.ts 长期 stub 归宿待决)
 purpose: |
   把分散在 9 个 audit 文件 + handoff 的 punt 项聚合 + 代码验证状态，作为下一 sprint
   cold-start 必读项（防"约定 M? sprint 处理但被遗忘"漂移）。
@@ -417,6 +417,37 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 **联动**：
 - 与 #7（决策跳 fact-finding）：本元发现也是 phase 1 强制读源代码 + 数 marker 才避开了假修复
 - 与 #4（被默默吸收）：7 段重复其实污染了 5/12 内 6 次脚本重跑后的 baseline.md，但没人 grep 看 marker 数量 → 默默累积
+
+---
+
+### #11 Phase 2.2 拷贝层 vs design §6 范式漂移群 — 每 frontend cluster 启动必先 reconcile（2026-05-15 cluster-M17 + cluster-M14 双 RCA 沉淀）
+
+**触发**：Phase 2.x M-frontend follow-up sprint 内 5 个 cluster 共享同根因：
+- **M11**（已闭 / sprint 内）/ **M17**（cluster commit cb27ac8 / RCA §5.2 首推）/ **M14**（cluster commit 79f6204 / RCA §5.3 再推 / 触发立元规则）
+- 待做：**M12** / **M16** / **M13**（PUNT-REPORT.md 清单 / 全同根因群）
+
+**根因模式**（双 cluster 实证 / 不只是单 sprint 巧合）：
+1. **子片 3b 拷贝降级期**：把老 prism 业务 actions 整体 stub 为 `NOT_IMPLEMENTED` / `puntResult` / file header 注释承诺"子片 3c/5 接入"
+2. **子片 3c/5 未执行**：cleanup S1+S3+S4+B+A+C+D 全完 reconcile 时未把 punt 列表完整入 cross-sprint-pool（已立 punt-frontend-gap-phase2x/PUNT-REPORT.md 5/13）
+3. **design §6 字面 vs 实装路径段漂移**（不破契约 / 与 peer 业务组件范式不一致）：
+   - M17 F1（business/ 子目录 vs flat）+ F5（独立组件 vs 合并到 wizard）
+   - M14 F1（business/ 子目录 vs flat）+ F2（`web/` 前缀 vs 项目 app/）
+4. **异步范式漂移**（M13 SSE + M16 轮询 + M17 WebSocket / M14 同步 CRUD 不触发）：老 prism 同步 setTimeout 假进度 / await mapping_rows vs prism-0420 design fire-and-forget + WS/polling
+5. **拷贝层 stub 长期 punt 风险**（M14 实证 §3.3）：`actions/feed.ts` 8 NOT_IMPLEMENTED 签名 + 3 caller（workspace/overview/settings）残留 prism v1 UI / prism-0420 design 无对应概念 / 双域并存到 RSS sprint 或显式删除
+
+**元规则**（cluster 启动前 reconcile checklist）：
+- **A 栏首查**：每 frontend cluster cold-start 必 `cat _handoff/dogfooding/04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md §<当前模块>` + 本元规则
+- **B 栏 design vs 实装 grep**：subagent fact-finding 阶段必 grep design §6 file list vs 实际 `app/src/...` 路径 / 标低风险漂移点（业务组件统一 flat / `web/` 前缀已固化）
+- **C 栏 stub 旁路检查**：必 grep `actions/<related-domain>.ts` `NOT_IMPLEMENTED` / `puntResult` 残留 / 决策 leave/delete/redirect（cluster boundary 守恒优先 / 跨模块影响升 escalation §5）
+- **D 栏 异步范式 audit**：design §6+§7+§12 异步范式 vs 老 prism 同步范式漂移点必单独成 finding（cluster-M17 F3 PARTIAL 范式参考）
+
+**真漏洞触发关联**：
+- 真漏洞表 #28 候选 — **feed 域 stub 长期归宿决策**（M14 RCA §5.1 / A: 删 feed UI 树 + actions/feed.ts / B: feed UI 改 listNewsByNode 适配器 / C: 保留到 RSS sprint）。当前 STILL_PUNT / 待 next cluster (M12) 或独立 cleanup cluster 评估。
+
+**联动**：
+- 与 cluster-M17 RCA §5.2 / cluster-M14 RCA §5.3（直接来源）
+- 与 punt-frontend-gap-phase2x/PUNT-REPORT.md 共同根因段（5 cluster 同根因）
+- 与 #1（高耦合触发点）—— Phase 2.2 子片 3b 是 ≥5 cluster 同根因的高耦合点，本元规则正是 #1 的应用
 
 ---
 

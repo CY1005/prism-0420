@@ -1,10 +1,10 @@
 ---
-last_session: 2026-05-15 (Phase 2.x M-frontend cluster-M17 PASS / 4 bug FIX_DONE + 1 PARTIAL 升独立 cluster)
-last_sprint_close: 2026-05-13 (P5b final close) / 5/15 M17 cluster 单飞
-phase: P1 ✅ + review ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE → Phase 2.x M-frontend cluster-M17 ✅ 5/15
-sub_task: 全 phase 闭环 / 5/15 P1 review 补齐 / 5/15 cluster-M17 4 frontend bug FIX_DONE + design sync
-cost_cumulative: dogfooding ~$66-68 + 5/15 review ~$1 + cluster-M17 ~$4-5 = **~$71-74 (跨 sprint)**
-status: dogfooding COMPLETE / Phase 2.x M-frontend cluster-M17 ✅ / 剩 M14/M12/M16/M13 4 cluster 候选 / cap $32-48 还剩 ~$27-43
+last_session: 2026-05-15 (Phase 2.x M-frontend cluster-M14 PASS / 1 bug FIX_DONE / 全量 UI 实装)
+last_sprint_close: 2026-05-13 (P5b final close) / 5/15 M17 + M14 cluster 接力
+phase: P1 ✅ + review ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE → Phase 2.x M-frontend cluster-M17 ✅ + cluster-M14 ✅ 5/15
+sub_task: 全 phase 闭环 / 5/15 P1 review 补齐 / 5/15 cluster-M17 4 frontend bug FIX_DONE / 5/15 cluster-M14 industry-news 全 UI 实装 FIX_DONE
+cost_cumulative: dogfooding ~$66-68 + 5/15 review ~$1 + cluster-M17 ~$4-5 + cluster-M14 ~$4-5 = **~$75-78 (跨 sprint)**
+status: dogfooding COMPLETE / cluster-M17 ✅ / cluster-M14 ✅ / 剩 M12/M16/M13 3 cluster + uploadZip sub-cluster / cap $32-48 还剩 ~$23-38
 ---
 
 # Dogfooding Sprint Progress
@@ -311,6 +311,37 @@ status: dogfooding COMPLETE / Phase 2.x M-frontend cluster-M17 ✅ / 剩 M14/M12
 **cost**: ~$4-5 / cap $10-12 / 远低于 cap
 
 **剩余 M-frontend cluster**: M14 / M12 / M16 / M13（按 PUNT-REPORT 推荐顺序 cap $5-12 each）
+
+---
+
+## Phase 2.x M-frontend cluster-M14 完成记录 (2026-05-15)
+
+**Why**: M-frontend 5 模块第 2 个 cluster / M14 全量 UI 缺 / 0 拷贝起点 / 最干净起手 / 0 A/B 决策依赖。
+
+**1 bug 处置**（cluster commit 79f6204 + 闭环 commit 待定）:
+
+| Bug ID | 处置 | 改动 |
+|--------|------|------|
+| B-P2-M14-design-gap-news-ui | **FIX_DONE** | `app/src/app/industry-news/page.tsx` + 4 components（news-card / news-form / node-link-picker）+ `actions/industry-news.ts` 接 8 endpoints + `lib/validators/news.ts` zod schema |
+
+**audit verdict**: 0 high + 1 medium DONE + 3 low（2 接受不动 design + 1 spec 断言 PARTIAL）+ 5 PASS（详 `04-bug-fixes/B-P4-cluster-M14/design-audit.md`）
+
+**安全网**: tsc PASS (0 errors) / eslint PASS（6 新文件 0 ignore 依赖）/ playwright --list M14 PASS (27 tests) / pytest M14 PASS (106/106 / 3.60s)
+
+**改动量**: 8 文件 / +1386 / -0（6 新源文件 + 2 B 路径产物 / 0 删除 / feed.ts 不动 / design 文档不动）
+
+**cluster 内自决**:
+- feed.ts LEFT AS-IS（feed 域 ≠ news 域 / 3 caller 页依赖 / 删除超 cluster boundary）→ feed 域 cleanup 推 cross-sprint-punt-pool
+- 组件落 `components/` flat（非 design §6 `business/` 子目录 / 与 peer 业务组件 issue-card/dimension-card/feed-card 范式对齐）
+
+**closeout 闸门处置**:
+- spec L628 P0-DOM-SMOKE 反向断言（`/industry-news` 期望 404 → 实装后 200）→ 本闭环 commit 顺手 flip
+- §5.3 元规则升 cross-sprint-punt-pool（与 cluster-M17 §5.2 合并 / "Phase 2.2 拷贝层 vs design §6 mismatch 范式漂移群"）
+- §5.1 feed 域 stub 长期归宿（A/B/C）→ 跨 cluster 候选 / 沉 cross-sprint pool（不在本 closeout 决）
+
+**cost**: ~$4-5 / cap $6-9 / 与 cluster-M17 同档
+
+**剩余 M-frontend cluster**: M12 / M16 / M13 + uploadZip sub-cluster（M17 escalation）
 
 ---
 

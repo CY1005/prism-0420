@@ -625,23 +625,17 @@ test.describe("M14 行业动态 dogfooding", () => {
 
   // ─── DOM smoke（验 UI 是否存在） ─────────────────────────────────────────
 
-  test("[P0-DOM-SMOKE] design-gap 验：workspace.tsx FeedList 区域渲染空状态（无 news UI）", async ({
-    page,
-    request,
-  }) => {
-    // design §6 声称 news UI 存在但实际未实现。
-    // 这条 DOM test 验证：workspace.tsx 中 FeedList 使用 getFeedItemsByNode()（stub 返 []）
-    // 因此 "暂无动态" 文案可见（feed-card.tsx L193 字面）。
-    // 这是 design-gap 的 DOM 侧证据，不是 M14 功能测试。
+  test("[P0-DOM-SMOKE] /industry-news 页 + workspace 路由烟测", async ({ page, request }) => {
+    // cluster-M14 (commit 79f6204) 实装 /industry-news 全量 UI 后 design §6 与实装对齐。
+    // 本 DOM 烟测验证：① /industry-news 路由 200；② workspace 路由 goto 不抛错。
+    // workspace.tsx 中 FeedList 仍走 getFeedItemsByNode() stub 返 []（feed 域未收敛 / 见 cross-sprint-punt-pool）。
     const seeded = await seedFullProject(request);
 
-    // DOM 路径验证 news 相关 UI 缺失（design-gap 实证）
-    // design §6 声称的 `/industry-news` 路由不存在
+    // /industry-news 路由 200（cluster-M14 实装后）
     const newsPageRes = await request.get(
       `${process.env.E2E_BASE_URL ?? "http://localhost:3000"}/industry-news`,
     );
-    // 期望 404（路由未实现 / design §6 声称的前端页面不存在）
-    expect(newsPageRes.status(), "design §6 声称的 /industry-news 路由应 404（未实现）").toBe(404);
+    expect(newsPageRes.status(), "cluster-M14 后 /industry-news 应 200").toBe(200);
 
     // workspace 页面 goto 验 URL（不检查内容 / 内容可能因 dimension 错误崩溃）
     await page.goto(`/projects/${seeded.project.id}`);
