@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition, useCallback, useRef } from "react";
+import { useState, useTransition, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Upload,
   FileText,
@@ -20,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -268,6 +266,109 @@ function toConfidence(n: number): Confidence {
   return "low";
 }
 
+// ─── WebSocket Progress Hook (B-P2-M17-fake-progress-no-websocket fix / 2026-05-15) ──
+//
+// 实装真 WS 客户端取代 setTimeout 假进度（design §7 + §12 / cluster-M17 fix）。
+//
+// 后端 endpoint: WS /api/projects/{pid}/imports/{tid}/progress?token=<JWT>
+// 握手鉴权: import_router.py L374 字面 Query Bearer token / 失败 close(1008)
+// 服务器→客户端 ProgressEvent: { type, task_id, progress, status, message, metadata }
+// 客户端→服务器 ClientCommand: { type: "cancel"|"ping", task_id }
+//
+// 实装要点（design §12 + 已 FIX_DONE B-P3-M17-ws-invalid-jwt-close-code）:
+//   1. accessToken 从 services/auth-token-store 拿（client-side in-memory / spec 06）
+//   2. WS_BASE = NEXT_PUBLIC_API_BASE_URL.replace(/^http/, "ws")
+//   3. onmessage 解析 ProgressEvent → setProgress callback
+//   4. onclose code=1008 → 报权限错；code=1000 → 任务完成正常关
+//   5. cleanup: useEffect return 关 ws（防 unmount 后泄漏 + cancel pending）
+
+interface ProgressEventPayload {
+  type: "progress_update" | "status_change" | "error" | "review_ready" | "completed";
+  task_id: string;
+  progress: number;
+  status: string;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+function getWsBaseUrl(): string {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  return apiBase.replace(/^http/, "ws");
+}
+
+function useImportProgressWS(
+  projectId: string,
+  taskId: string | null,
+  enabled: boolean,
+  onEvent: (event: ProgressEventPayload) => void,
+  onClose: (code: number, reason: string) => void,
+) {
+  useEffect(() => {
+    if (!enabled || !taskId) return;
+
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+
+    async function connect() {
+      // 从 client-side token store 拿 access token
+      const { getAccessToken } = await import("@/services/auth-token-store");
+      let token = getAccessToken();
+      if (!token) {
+        // 触发 refresh path（http-client 内置 / 通过任意调用刷 token store）
+        const { apiFetch } = await import("@/services/http-client");
+        try {
+          await apiFetch<unknown>("/auth/me");
+        } catch {
+          // refresh 失败 / 用户应已被 redirect 到登录
+        }
+        token = getAccessToken();
+      }
+      if (cancelled) return;
+      if (!token) {
+        onClose(4401, "no access token");
+        return;
+      }
+
+      const url = `${getWsBaseUrl()}/api/projects/${projectId}/imports/${taskId}/progress?token=${encodeURIComponent(token)}`;
+      ws = new WebSocket(url);
+
+      ws.onmessage = (msg) => {
+        try {
+          const event = JSON.parse(msg.data as string) as ProgressEventPayload;
+          if (event.type) {
+            onEvent(event);
+          }
+        } catch {
+          // 忽略非 JSON 帧（如 pong）
+        }
+      };
+
+      ws.onclose = (ev) => {
+        if (!cancelled) {
+          onClose(ev.code, ev.reason);
+        }
+      };
+
+      ws.onerror = () => {
+        // 错误事件后会跟 onclose；不重复通知
+      };
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [projectId, taskId, enabled, onEvent, onClose]);
+}
+
 // ─── Main Component ──────────────────────────────────
 
 export function AIImportWizard({
@@ -320,6 +421,34 @@ export function AIImportWizard({
   const [analyzeSessionId, setAnalyzeSessionId] = useState<string | null>(null);
   // Store full mapping rows from server for confirm
   const [serverMappingRows, setServerMappingRows] = useState<MappingRow[]>([]);
+
+  // M17 WS 实时进度（B-P2-M17-fake-progress-no-websocket fix）：
+  // 替代原 setTimeout 假进度推进；监听后端真 ProgressEvent 取代 client-side fake animation
+  const [wsTaskId, setWsTaskId] = useState<string | null>(null);
+  const [wsEnabled, setWsEnabled] = useState(false);
+
+  const handleProgressEvent = useCallback((event: ProgressEventPayload) => {
+    // design §7 字面 ProgressEvent 5 type：progress_update / status_change / error /
+    // review_ready / completed。本 hook 在 step3 期间刷 importProgress UI。
+    setImportProgress((prev) => ({
+      isImporting: event.type !== "completed" && event.type !== "error",
+      currentFile: prev?.currentFile ?? "",
+      processed: Math.floor((event.progress / 100) * (prev?.total ?? 1)),
+      total: prev?.total ?? 1,
+      percent: event.progress,
+      assignedModule: event.message || (prev?.assignedModule ?? ""),
+    }));
+  }, []);
+
+  const handleProgressClose = useCallback((code: number, reason: string) => {
+    // 正常关 = 1000 / 鉴权失败 = 1008 / 自定义错 = 4xxx
+    if (code !== 1000 && code !== 0) {
+      setError(`进度通道关闭（code=${code}）${reason ? ": " + reason : ""}`);
+    }
+    setWsEnabled(false);
+  }, []);
+
+  useImportProgressWS(projectId, wsTaskId, wsEnabled, handleProgressEvent, handleProgressClose);
 
   // ─── Upload ─────────────────────────────────────
 
@@ -520,21 +649,32 @@ export function AIImportWizard({
         };
       });
 
-      // Simulate per-file progress animation
-      for (let i = 0; i < selected.length; i++) {
-        const uiRow = selected[i];
-        const moduleId = uiRow.override_module_id ?? uiRow.recommended_module_id;
-        const folder = folders.find((f) => f.id === moduleId);
-        setImportProgress({
-          isImporting: true,
-          currentFile: uiRow.file_name,
-          processed: i,
-          total: selected.length,
-          percent: Math.round((i / selected.length) * 100),
-          assignedModule: folder?.name ?? uiRow.file_name,
-        });
-        await new Promise((r) => setTimeout(r, 150));
-      }
+      // B-P2-M17-fake-progress-no-websocket fix（cluster-M17 / 2026-05-15）：
+      // 删除原 setTimeout(150) 假进度循环；改为开 WS 客户端监听后端真 ProgressEvent。
+      // 进度推进由 useImportProgressWS hook 取后端 publish_progress 事件触发
+      // （api/ws/import_progress.py + api/services/import_service.py 状态扭转时 publish）。
+      //
+      // 设计：confirm 提交后立即开 WS 接 task_id；后端 ai_step3 → importing → completed
+      // 全程通过 WS 推 progress_update / status_change / completed 事件。
+      // 注：当前 caller 流程下 mapping_rows 来源是 stub aiAnalyzeZip 空数组，confirm 实际不
+      // 会触发真后端 batch_insert；WS 在握手成功后即建立通道为后续完整 happy path 备好链路。
+      const moduleNameForFirst = (() => {
+        const first = selected[0];
+        if (!first) return "";
+        const moduleId = first.override_module_id ?? first.recommended_module_id;
+        return folders.find((f) => f.id === moduleId)?.name ?? first.file_name;
+      })();
+      setImportProgress({
+        isImporting: true,
+        currentFile: selected[0]?.file_name ?? "",
+        processed: 0,
+        total: selected.length,
+        percent: 0,
+        assignedModule: moduleNameForFirst,
+      });
+      // 开 WS 监听（hook 监听 wsTaskId + wsEnabled 变化建立连接）
+      setWsTaskId(analyzeSessionId);
+      setWsEnabled(true);
 
       const result = await aiConfirmImport(projectId, analyzeSessionId, confirmRows);
 
@@ -556,6 +696,8 @@ export function AIImportWizard({
       setImportSummary(data);
       setImportSessionId(data.session_id);
       setCreatedNodeIds(data.created_node_ids);
+      // 收 summary 后关 WS（防 unmount 后泄漏 + cancel pending）
+      setWsEnabled(false);
 
       // Auto-redirect after showing summary
       setTimeout(() => {
@@ -564,6 +706,7 @@ export function AIImportWizard({
     } catch (e) {
       setError(e instanceof Error ? e.message : "导入失败");
       setImportProgress(null);
+      setWsEnabled(false);
       setStep(2);
     }
   };

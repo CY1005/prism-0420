@@ -435,9 +435,25 @@ async def execute_importing(self, task_id: UUID):
 
 ## 6. 分层职责表
 
+### 6.0 Page 入口范式（dogfooding cluster-M17 / 2026-05-15 sync）
+
+> **🔴 sync 说明**：design 早期草案字面只写「Page = 4 步向导」单一路径。Phase 2.2 前端继承
+> 期实装 `/projects/{pid}/import/page.tsx` 是 **3 tab 切换入口**：
+>
+> 1. **手动映射 tab**（默认）：CSV 多文件批量人工映射 → 走 M11 cold-start 链路（`actions/import.ts confirmImport` / 注：当前 punt 状态，独立 cluster 处理）
+> 2. **AI 智能导入 tab**：本 M17 模块主路径 → 内嵌 `AIImportWizard` 4 步向导（上传 → 预览 → AI 分析 → 确认导入）—— 与本设计 §6 4 步向导字面对齐
+> 3. **Markdown 导入 tab**：单文件 markdown 直接映射 → 走 `actions/import.ts confirmImport`（同手动映射但单文件）
+>
+> **裁决**（B-P2-M17-design-gap-tab-vs-wizard / 主 agent 2026-05-15 拍板）：**sync design 不动 UI** —— 接受 3 tab 入口范式 + AI tab 内 4 步向导。理由：
+> - 3 tab 是真实业务诉求（用户可能不想用 AI / 不想 zip 整包上传 / 有结构化 CSV）
+> - design §1 字面把 CSV 划给 M11、Markdown 划给手动维度编辑 / 单一入口在多 tab 形态下天然分流
+> - 与 cluster-6 cleanup 期 sync 范式一致（cf. B-P2-cc-A-account-lockout-design-drift / B-P2-M10-error-response-format 同 sync 路径）
+>
+> M17 design §6 4 步向导特指 **AI 智能导入 tab 内部流程**，不是 page 顶层唯一形态。
+
 | 层 | M17 涉及文件 | 该层职责 |
 |----|------------|---------|
-| **Page** | `web/src/app/projects/[pid]/import/page.tsx` | 4 步向导 UI（上传 / 预览 / 映射 / 确认） |
+| **Page** | `web/src/app/projects/[pid]/import/page.tsx`<br>`web/src/app/projects/[pid]/import/import-page-client.tsx` | 3 tab 入口（手动映射 / AI 智能导入 / Markdown 导入）+ AI tab 内嵌 `AIImportWizard` 4 步向导 UI |
 | **Component** | `web/src/components/business/import-wizard.tsx`<br>`web/src/components/business/import-progress.tsx`<br>`web/src/components/business/review-mapping.tsx` | 文件上传 / 进度条 / 映射 UI / WebSocket 客户端 |
 | **Server Action** | `web/src/actions/import.ts` | session 校验 / 文件上传到 S3 / 调 FastAPI 提交任务 |
 | **Router** | `api/routers/import_router.py` | REST endpoints + WebSocket endpoint + 权限 |

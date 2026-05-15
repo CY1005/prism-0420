@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Sparkles, List, FileText, Upload } from "lucide-react";
+import { ChevronLeft, Sparkles, List, FileText, Upload, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,12 @@ interface ImportPageClientProps {
   projectName: string;
   folders: { id: string; name: string; path: string; depth: number }[];
   dimensions: { id: number; key: string; name: string }[];
+  /** M02 项目 AI provider 配置（NULL 时 AI 智能导入 tab 阻断 / 引导先去 settings）。
+   *  对应 B-P2-M17-design-gap-fresh-project-blocked: import_router.py L124 字面
+   *  `if not ai_provider: raise ImportInvalidSourceError(reason="ai_provider_unset")`。
+   *  无前置检查 → 用户上传 zip 后才知道踩坑（422 阻断 UX 不友好）。
+   */
+  aiProvider: string | null;
 }
 
 export function ImportPageClient({
@@ -35,6 +41,7 @@ export function ImportPageClient({
   projectName,
   folders,
   dimensions,
+  aiProvider,
 }: ImportPageClientProps) {
   const [mode, setMode] = useState<ImportMode>("manual");
 
@@ -120,16 +127,51 @@ export function ImportPageClient({
             standalone={false}
           />
         ) : mode === "ai" ? (
-          <AIImportWizard
-            projectId={projectId}
-            projectName={projectName}
-            folders={folders}
-            dimensions={dimensions}
-          />
+          aiProvider ? (
+            <AIImportWizard
+              projectId={projectId}
+              projectName={projectName}
+              folders={folders}
+              dimensions={dimensions}
+            />
+          ) : (
+            <AIProviderUnsetGuide projectId={projectId} />
+          )
         ) : (
           <MarkdownImport projectId={projectId} folders={folders} dimensions={dimensions} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── AI Provider Unset Guide ─────────────────────────
+// B-P2-M17-design-gap-fresh-project-blocked: fresh project ai_provider=NULL 时
+// AI 智能导入 tab 必失败（backend 422 IMPORT_INVALID_SOURCE reason=ai_provider_unset）。
+// 进入 tab 前显式引导用户先去 settings 配置 AI provider，避免 422 阻断后才反应过来。
+
+function AIProviderUnsetGuide({ projectId }: { projectId: string }) {
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <Card className="max-w-md p-8 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
+          <AlertTriangle className="h-6 w-6 text-yellow-600" />
+        </div>
+        <h3 className="mb-2 text-lg font-semibold">需要先配置 AI Provider</h3>
+        <p className="text-muted-foreground mb-6 text-sm">
+          AI 智能导入需要项目级 AI Provider 配置（Claude / Codex / Kimi 等）。 请先在项目设置中选择
+          Provider 并填入 API Key，再回到这里上传 zip。
+        </p>
+        <Link href={`/projects/${projectId}/settings`}>
+          <Button className="gap-2">
+            <Sparkles className="h-4 w-4" />
+            去项目设置配置 AI
+          </Button>
+        </Link>
+        <p className="text-muted-foreground mt-4 text-xs">
+          已配置请刷新页面；或先用「手动映射」/「Markdown 导入」tab 入库。
+        </p>
+      </Card>
     </div>
   );
 }

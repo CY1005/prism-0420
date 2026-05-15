@@ -40,6 +40,7 @@ export default async function ImportPage({ params }: { params: Promise<{ project
       projectName={project.name}
       folders={folders}
       dimensions={dimOptions}
+      aiProvider={project.aiProvider}
     />
   );
 }
