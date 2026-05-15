@@ -178,8 +178,8 @@ test.describe("M12 功能对比矩阵 dogfooding", () => {
     // page.tsx L403 Link href=comparison 是激活 tab（border-primary class）
     await expect(page.locator('a[href$="/comparison"].border-b-2')).toBeVisible();
 
-    // page.tsx L523 Button "+ 添加竞品"（初始 showAddCompetitor=false → 显示此按钮）
-    await expect(page.getByRole("button", { name: "+ 添加竞品" })).toBeVisible();
+    // 注：原 L182 "+ 添加竞品" button 断言（拷贝层老 UI / M06 范畴 out of scope M12 §1）已随
+    // cluster-M12 重写删除。详 04-bug-fixes/B-P4-cluster-M12/{design-audit.md F13, rca.md §5.1}
   });
 
   // ─────────────── [API-via-旁路] 全量 backend 验证 ───────────────

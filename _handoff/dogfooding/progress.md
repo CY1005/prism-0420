@@ -1,10 +1,10 @@
 ---
-last_session: 2026-05-15 (Phase 2.x M-frontend cluster-M14 PASS / 1 bug FIX_DONE / 全量 UI 实装)
-last_sprint_close: 2026-05-13 (P5b final close) / 5/15 M17 + M14 cluster 接力
-phase: P1 ✅ + review ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE → Phase 2.x M-frontend cluster-M17 ✅ + cluster-M14 ✅ 5/15
-sub_task: 全 phase 闭环 / 5/15 P1 review 补齐 / 5/15 cluster-M17 4 frontend bug FIX_DONE / 5/15 cluster-M14 industry-news 全 UI 实装 FIX_DONE
-cost_cumulative: dogfooding ~$66-68 + 5/15 review ~$1 + cluster-M17 ~$4-5 + cluster-M14 ~$4-5 = **~$75-78 (跨 sprint)**
-status: dogfooding COMPLETE / cluster-M17 ✅ / cluster-M14 ✅ / 剩 M12/M16/M13 3 cluster + uploadZip sub-cluster / cap $32-48 还剩 ~$23-38
+last_session: 2026-05-15 (Phase 2.x M-frontend cluster-M12 PASS / 1 bug FIX_DONE / comparison page 重写接 6 endpoints)
+last_sprint_close: 2026-05-13 (P5b final close) / 5/15 M17 + M14 + M12 cluster 接力
+phase: P1 ✅ + review ✅ / P2 ✅ / P2-close ✅ / P3 ✅ / P4 cluster-1~6 ✅ / P5a ✅ / **P5b ✅ DONE** / sprint COMPLETE → Phase 2.x M-frontend cluster-M17 ✅ + cluster-M14 ✅ + cluster-M12 ✅ 5/15
+sub_task: 全 phase 闭环 / 5/15 P1 review 补齐 / 5/15 cluster-M17 4 frontend bug FIX_DONE / 5/15 cluster-M14 industry-news 全 UI 实装 FIX_DONE / 5/15 cluster-M12 comparison page 重写 + actions/comparison.ts 新建 FIX_DONE
+cost_cumulative: dogfooding ~$66-68 + 5/15 review ~$1 + cluster-M17 ~$4-5 + cluster-M14 ~$4-5 + cluster-M12 ~$3-4 = **~$78-82 (跨 sprint)**
+status: dogfooding COMPLETE / cluster-M17 ✅ / cluster-M14 ✅ / cluster-M12 ✅ / 剩 M16/M13 2 cluster + uploadZip sub-cluster / cap $32-48 还剩 ~$20-34
 ---
 
 # Dogfooding Sprint Progress
@@ -342,6 +342,43 @@ status: dogfooding COMPLETE / cluster-M17 ✅ / cluster-M14 ✅ / 剩 M12/M16/M1
 **cost**: ~$4-5 / cap $6-9 / 与 cluster-M17 同档
 
 **剩余 M-frontend cluster**: M12 / M16 / M13 + uploadZip sub-cluster（M17 escalation）
+
+---
+
+## Phase 2.x M-frontend cluster-M12 完成记录 (2026-05-15)
+
+**Why**: M-frontend 5 模块第 3 个 cluster / M12 comparison page 重写接 6 endpoints / 0 A/B 决策依赖（按 PUNT-REPORT 推荐顺序第 2 优先）/ 6 endpoints backend 全就绪。
+
+**1 bug 处置**（cluster commit 521182d / CI run 25913478635 全绿 / 闭环 commit 待定）:
+
+| Bug ID | 处置 | 改动 |
+|--------|------|------|
+| B-P2-M12-design-gap-comparison-page | **FIX_DONE** | `app/src/app/projects/[projectId]/comparison/page.tsx` 重写（803→588 / 净 -215 / 节点选择器 + 维度选择器 + 矩阵渲染 + 快照面板 + save/rename dialog）+ `actions/comparison.ts` 新建（162 行 / 6 函数对接 6 endpoints）+ `lib/validators/comparison.ts` 新建（26 行 / zod schema） |
+
+**audit verdict**: 0 high + 0 medium + 5 low（3 接受不动 design + 1 DONE 新建 comparison.ts + 1 spec 反向断言 PARTIAL）+ 8 PASS（详 `04-bug-fixes/B-P4-cluster-M12/design-audit.md`）
+
+**安全网**: tsc PASS (0 errors) / eslint PASS（2 新文件 0 ignore 依赖；page.tsx 仍在 `comparison/**` ignore 范围 / 守 cluster boundary）/ playwright --list M12 PASS (25 tests) / pytest M12 PASS (65/65 / 3.47s) / CI 25913478635 全 6/6 jobs success
+
+**改动量**: 5 文件 / +992 / -543 net +449（其中 page rewrite 净 -215 / 2 新源文件 +188 / 2 B 路径产物 +300）
+
+**cluster 内自决**:
+- 路径段 design `compare` vs 实装 `comparison` → 接受不动 design（项目固化 / 拷贝层 nav + Tab + spec 全用 comparison / 元规则 #11 B 栏）
+- `web/` 前缀 / `business/` 子目录 / 拆 components → 全接受不动（与 cluster-M14 F1+F2 / cluster-M17 F1+F5 同低风险漂移群）
+- `actions/analyze.ts` 中 3 孤儿 stub（generateComparisonAction / backfillRowAction / exportComparisonAction）→ leave-as-is（守 cluster boundary / M13 cluster 单独评估归宿 / 元规则 #11 C 栏）
+- `comparison/**` eslint ignore → 不动（eslint 治理走独立 cleanup cluster / 与 Phase 2.2 子片 1.8 渐进还债延续）
+- 异步范式 → design §5 显式 N/A clean（不触发 cluster-M16 轮询 / cluster-M17 WS / cluster-M13 SSE 漂移群 / 元规则 #11 D 栏 confirmed clean）
+
+**closeout 闸门处置**:
+- spec L181-182 反向断言（"+ 添加竞品" button — 拷贝层老 UI M06 范畴 / cluster 重写后已删按钮 / RCA §5.1 推荐 C）→ 本闭环 commit 顺手删（与 cluster-M14 F9 同范式 / 保 L168-179 heading + tab nav smoke 价值）
+- §5.2 actions/analyze.ts 3 孤儿 stub → leave-as-is（推 M13 cluster 启动时 reconcile）
+- §5.3 comparison eslint ignore → leave-as-is（推 P5b cleanup 池）
+- §5.4 元规则 #11 加 cluster-M12 实证（与 M14 + M17 并列 / 不新立元规则 / 4 栏 reconcile 全 clean）
+
+**cost**: ~$3-4 / cap $5-7 / 远低于 cap（与 cluster-M14/M17 同档 / 元规则 #11 加速 fact-finding）
+
+**audit/RCA discrepancy 主 agent 校验**: subagent RCA §7 字面声明"保留了 + 添加竞品 button 文本"与 audit F13 PARTIAL 矛盾；主 agent grep 实际 page.tsx 0 匹配 → audit F13 正确 / RCA §7 hallucination → 闭环 commit 改 spec L181-182（保 heading + tab nav / 删 button 单行 + 注释）。**元教训**：subagent 综合 fix+audit+rca 范式偶发 verification matrix 自洽性失误 / 主 agent closeout 必须自验关键 finding 而非 trust subagent 总结 / 与 [[feedback_fresh_verification.md]] 一致。
+
+**剩余 M-frontend cluster**: M16 / M13 + uploadZip sub-cluster（M17 escalation）
 
 ---
 

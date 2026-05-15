@@ -32,7 +32,7 @@ sources:
 |----|------|------|--------|--------------|---------|
 | ~~B-P3-M13-save-btn-shows-on-error~~ | analysis/page.tsx SSE 失败后 save 按钮仍渲染 | P3 executor M13 dogfooding 2026-05-13 | **FIX_DONE** ✅ → 详 FIX_DONE 池 | error 路径 callback 仍设 `isComplete=true` → `allLayersDone=true` → save button 误显示 | 04-bug-fixes/B-P4-cluster-4-mixed/ |
 | ~~B-P3-M17-ws-invalid-jwt-close-code~~ | WS 握手无效 JWT 不发 1008 close frame / 8s timeout | P3 executor M17 dogfooding 2026-05-13 | **FIX_DONE** ✅ → 详 FIX_DONE 池 | `close()` 在 `accept()` 之前 → Starlette 回 HTTP 403 / RFC 6455 close frame 未发 | 04-bug-fixes/B-P4-cluster-4-mixed/ |
-| ~~B-P2-M12-design-gap-comparison-page~~ | comparison/page.tsx 接错 M13 analyze 端点 / 不调 design §6/§7 6 endpoints | P2 spec M12 dogfooding 2026-05-12 | **PUNT** → Phase 2.x M-frontend sprint | Phase 2.2 前端继承漂移 | 详 04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md |
+| ~~B-P2-M12-design-gap-comparison-page~~ | comparison/page.tsx 接错 M13 analyze 端点 / 不调 design §6/§7 6 endpoints | P2 spec M12 dogfooding 2026-05-12 | **FIX_DONE** ✅ 5/15 cluster-M12 commit 521182d | Phase 2.2 前端继承漂移 / 子片 3b stub + 子片 3c 未补 `actions/comparison.ts` + page 仍接 M13 analyze | 04-bug-fixes/B-P4-cluster-M12/ / 重写 page.tsx 接 design §6/§7 6 endpoints / 新建 actions/comparison.ts + lib/validators/comparison.ts / analyze.ts 3 孤儿 stub LEFT AS-IS（M13 cluster 评估归宿）|
 | ~~B-P2-M11-design-gap-cold-start-page~~ | M11 cold-start/page.tsx 缺 / 真入口是 workspace 空状态 → /import | P2 spec M11 dogfooding 2026-05-12 | **SYNCED** → cluster-6 / design 加 dogfooding 实证段 | design vs UI 漂移 / backend 已实装 | 04-bug-fixes/B-P4-cluster-6-design-gap-and-spec-fix/ |
 | ~~B-P2-M14-design-gap-news-ui~~ | M14 行业动态全量 UI 未实现 / feed.ts NOT_IMPLEMENTED / /industry-news 404 | P2 spec M14 dogfooding 2026-05-12 | **FIX_DONE** ✅ 5/15 cluster-M14 commit 79f6204 | Phase 2.2 前端继承漂移 / 子片 3b stub + 子片 3c 未补 `industry-news.ts` | 04-bug-fixes/B-P4-cluster-M14/ / 新建 /industry-news page + 4 components + actions/industry-news.ts 接 8 endpoints / feed.ts LEFT AS-IS（feed≠news 双域并存 / 见 B-P4-cluster-M14-feed-cleanup-pending）|
 | B-P4-cluster-M14-feed-cleanup-pending | actions/feed.ts 8 个 NOT_IMPLEMENTED 签名仍被 workspace/overview/settings 3 caller 依赖 / prism-0420 design 无对应 feed_items+feed_sources 概念 / 实装与 prism v1 残留双域并存 | P4 cluster-M14 audit escalation 2026-05-15 | OPEN / 跨 cluster 候选 | feed 域 ≠ news 域 / 删除会破 3 caller / 超 cluster boundary | A/B/C 选项详 04-bug-fixes/B-P4-cluster-M14/rca.md §3.3+§5.1 |
@@ -128,7 +128,7 @@ sources:
 
 | ID | 现象 | 推 sprint | 报告 |
 |----|------|---------|------|
-| B-P2-M12-design-gap-comparison-page | comparison/page.tsx 接错 M13 analyze 端点 / 不调 design §6/§7 6 endpoints | Phase 2.x M-frontend | 04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md §M12 |
+| ~~B-P2-M12-design-gap-comparison-page~~ | comparison/page.tsx 接错 M13 analyze 端点 / 不调 design §6/§7 6 endpoints | Phase 2.x M-frontend | ✅ **FIX_DONE** 5/15 cluster-M12 commit 521182d / 04-bug-fixes/B-P4-cluster-M12/ |
 | B-P2-M13-sse-proxy-url-broken + actions-stub-puntresult + save-request-fields-gap + design-gap-drawer-vs-fullpage | M13 frontend 链路全 dead (4 OPEN bug 同根因群) | Phase 2.x M-frontend | 04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md §M13 |
 | ~~B-P2-M14-design-gap-news-ui~~ | M14 行业动态全量 UI 缺 / feed.ts NOT_IMPLEMENTED / /industry-news 404 | Phase 2.x M-frontend | ✅ **FIX_DONE** 5/15 cluster-M14 commit 79f6204 / 04-bug-fixes/B-P4-cluster-M14/ |
 | B-P2-M16-frontend-url-gap + frontend-no-polling | M16 同步范式 vs design 异步轮询架构 | Phase 2.x M-frontend | 04-bug-fixes/punt-frontend-gap-phase2x/PUNT-REPORT.md §M16 |

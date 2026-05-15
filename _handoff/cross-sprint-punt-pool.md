@@ -420,11 +420,11 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 
 ---
 
-### #11 Phase 2.2 拷贝层 vs design §6 范式漂移群 — 每 frontend cluster 启动必先 reconcile（2026-05-15 cluster-M17 + cluster-M14 双 RCA 沉淀）
+### #11 Phase 2.2 拷贝层 vs design §6 范式漂移群 — 每 frontend cluster 启动必先 reconcile（2026-05-15 cluster-M17 + cluster-M14 + cluster-M12 三 RCA 沉淀）
 
 **触发**：Phase 2.x M-frontend follow-up sprint 内 5 个 cluster 共享同根因：
-- **M11**（已闭 / sprint 内）/ **M17**（cluster commit cb27ac8 / RCA §5.2 首推）/ **M14**（cluster commit 79f6204 / RCA §5.3 再推 / 触发立元规则）
-- 待做：**M12** / **M16** / **M13**（PUNT-REPORT.md 清单 / 全同根因群）
+- **M11**（已闭 / sprint 内）/ **M17**（cluster commit cb27ac8 / RCA §5.2 首推）/ **M14**（cluster commit 79f6204 / RCA §5.3 再推 / 触发立元规则）/ **M12**（cluster commit 521182d / 4 栏 reconcile 全 clean / 实证元规则有效）
+- 待做：**M16** / **M13**（PUNT-REPORT.md 清单 / 全同根因群）
 
 **根因模式**（双 cluster 实证 / 不只是单 sprint 巧合）：
 1. **子片 3b 拷贝降级期**：把老 prism 业务 actions 整体 stub 为 `NOT_IMPLEMENTED` / `puntResult` / file header 注释承诺"子片 3c/5 接入"
@@ -445,9 +445,11 @@ reconcile pass A 栏首条预录这 4 项，避免漂移。
 - 真漏洞表 #28 候选 — **feed 域 stub 长期归宿决策**（M14 RCA §5.1 / A: 删 feed UI 树 + actions/feed.ts / B: feed UI 改 listNewsByNode 适配器 / C: 保留到 RSS sprint）。当前 STILL_PUNT / 待 next cluster (M12) 或独立 cleanup cluster 评估。
 
 **联动**：
-- 与 cluster-M17 RCA §5.2 / cluster-M14 RCA §5.3（直接来源）
+- 与 cluster-M17 RCA §5.2 / cluster-M14 RCA §5.3 / cluster-M12 RCA §5.4（直接来源 / cluster-M12 实证 4 栏 reconcile 加速 fact-finding 有效）
 - 与 punt-frontend-gap-phase2x/PUNT-REPORT.md 共同根因段（5 cluster 同根因）
 - 与 #1（高耦合触发点）—— Phase 2.2 子片 3b 是 ≥5 cluster 同根因的高耦合点，本元规则正是 #1 的应用
+
+**cluster-M12 增量元教训（subagent 综合范式偶发自洽性失误）**：cluster-M12 subagent RCA §7 字面声明"保留 + 添加竞品 button"与 audit F13 PARTIAL 矛盾；主 agent grep 实际 page.tsx 0 匹配 → audit F13 正确 / RCA §7 hallucination。**主 agent closeout 必须自验关键 finding**（特别是涉及 spec 反向断言这种"业务上不破但 e2e 会 FAIL"的边界 case）/ 不能 trust subagent 总结。与 [[feedback_fresh_verification.md]] + [[feedback_decision_codefirst_validation.md]] fact-finding 3 步同 spirit。
 
 ---
 
